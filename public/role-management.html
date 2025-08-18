@@ -1,0 +1,1522 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Rol İzinleri Yönetimi</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <script src="/assets/js/auth-new.js"></script>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <a href="/index.html" class="home-link">
+      <h1>WMS Yönetim Sistemi</h1>
+    </a>
+    <span class="header-subtitle">Rol İzinleri Yönetimi</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="btn-home">
+      <span class="btn-icon">🏠</span>
+      <span class="btn-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="container">
+  <!-- Rol Seçimi -->
+  <section class="card">
+    <h2>🔐 Rol İzinleri Yönetimi</h2>
+    <div class="role-selector">
+      <label for="selectedRole">Düzenlemek istediğiniz rolü seçin:</label>
+      <select id="selectedRole" class="role-select">
+        <option value="">Rol Seçin</option>
+        <option value="admin">Yönetici (Admin)</option>
+        <option value="operator">Operatör (Operator)</option>
+        <option value="service">Servis Teknisyeni (Service)</option>
+      </select>
+      <button id="loadRoleBtn" class="btn-primary" disabled>Rol İzinlerini Yükle</button>
+    </div>
+  </section>
+
+  <!-- İzinler Tablosu -->
+  <section class="card" id="permissionsSection" style="display: none;">
+    <div class="card-header">
+      <h2 id="currentRoleTitle">Rol İzinleri</h2>
+      <div class="permission-actions">
+        <button id="selectAllBtn" class="btn-secondary">Tümünü Seç</button>
+        <button id="deselectAllBtn" class="btn-secondary">Tümünü Kaldır</button>
+        <button id="savePermissionsBtn" class="btn-success">Değişiklikleri Kaydet</button>
+      </div>
+    </div>
+
+    <!-- Görsel rehber -->
+    <div class="permission-legend">
+      <h4>🎨 İzin Kategorileri</h4>
+      <div class="legend-items">
+        <div class="legend-item"><span class="legend-color" style="background: #3b82f6;"></span> Ürün Yönetimi</div>
+        <div class="legend-item"><span class="legend-color" style="background: #10b981;"></span> Sipariş Yönetimi</div>
+        <div class="legend-item"><span class="legend-color" style="background: #f59e0b;"></span> Raf Yönetimi</div>
+        <div class="legend-item"><span class="legend-color" style="background: #8b5cf6;"></span> Servis Hub</div>
+        <div class="legend-item"><span class="legend-color" style="background: #ef4444;"></span> Sistem Yönetimi</div>
+        <div class="legend-item"><span class="legend-color" style="background: #06b6d4;"></span> Analitik</div>
+      </div>
+    </div>
+
+    <div class="permissions-grid" id="permissionsGrid">
+      <!-- İzinler buraya yüklenecek -->
+    </div>
+
+    <div class="save-status" id="saveStatus" style="display: none;"></div>
+  </section>
+
+  <!-- İzin Ekleme -->
+  <section class="card" id="addPermissionSection" style="display: none;">
+    <h2>➕ Yeni İzin Ekle</h2>
+    <div class="add-permission-form">
+      <div class="form-group">
+        <label for="newPermissionKey">İzin Anahtar Kelimesi</label>
+        <input type="text" id="newPermissionKey" placeholder="Örnek: reports, analytics" />
+        <small>Küçük harf, tire ve alt çizgi kullanılabilir</small>
+      </div>
+      <button id="addPermissionBtn" class="btn-primary">İzin Ekle</button>
+    </div>
+  </section>
+
+  <!-- İzinler Özeti -->
+  <section class="card">
+    <h2>📊 Rol İzinleri Özeti</h2>
+    <div class="roles-summary" id="rolesSummary">
+      <div class="loading">Yükleniyor...</div>
+    </div>
+  </section>
+</main>
+
+<style>
+.role-selector {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.role-selector label {
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+}
+
+.role-select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 14px;
+  min-width: 200px;
+}
+
+.permission-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.permissions-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 20px 0;
+}
+
+/* Hiyerarşik Permission Stilleri */
+.permission-category-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+}
+
+.permission-category-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 12px rgba(77, 163, 255, 0.1);
+}
+
+.category-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px;
+  background: var(--hover);
+  border-bottom: 1px solid var(--border);
+}
+
+.category-info {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.category-icon {
+  font-size: 32px;
+  width: 48px;
+  height: 48px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.category-details {
+  flex: 1;
+}
+
+.category-title {
+  margin: 0 0 4px 0;
+  color: var(--fg);
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.category-description {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.category-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-expand {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s ease;
+}
+
+.btn-expand:hover {
+  background: var(--border);
+  color: var(--fg);
+}
+
+.expand-icon {
+  font-size: 12px;
+  transition: transform 0.2s ease;
+}
+
+.main-toggle .toggle-slider {
+  background-color: var(--border);
+  width: 56px;
+  height: 28px;
+}
+
+.main-toggle .toggle-slider:before {
+  width: 22px;
+  height: 22px;
+  left: 3px;
+  bottom: 3px;
+}
+
+.main-toggle input:checked + .toggle-slider:before {
+  transform: translateX(28px);
+}
+
+.sub-permissions {
+  background: var(--bg);
+  padding: 0;
+  margin: 0;
+  border-radius: 0 0 12px 12px;
+  overflow: hidden;
+}
+
+.sub-permissions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 1px;
+  background: var(--border);
+}
+
+.sub-permission-item {
+  background: var(--card);
+  padding: 16px;
+  transition: all 0.2s ease;
+  position: relative;
+}
+
+.sub-permission-item:hover {
+  background: var(--hover);
+}
+
+.sub-permission-item.enabled {
+  background: rgba(34, 197, 94, 0.05);
+  border-left: 3px solid var(--success);
+}
+
+.sub-permission-item.enabled:hover {
+  background: rgba(34, 197, 94, 0.08);
+}
+
+.sub-permission-item.disabled {
+  opacity: 0.7;
+}
+
+.sub-permission-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.sub-permission-info {
+  flex: 1;
+}
+
+.sub-permission-name {
+  display: block;
+  font-weight: 600;
+  color: var(--fg);
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.sub-permission-description {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.sub-toggle {
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+/* Kategori genişletildiğinde animasyon */
+.category-expanded .expand-icon {
+  transform: rotate(180deg);
+}
+
+.category-expanded {
+  border-color: var(--accent);
+  box-shadow: 0 4px 16px rgba(77, 163, 255, 0.15);
+}
+
+/* Ana kategori toggle büyütme */
+.main-toggle .toggle-slider {
+  background-color: var(--border);
+  width: 56px;
+  height: 28px;
+  border-radius: 28px;
+  position: relative;
+}
+
+.main-toggle .toggle-slider:before {
+  width: 22px;
+  height: 22px;
+  left: 3px;
+  bottom: 3px;
+  border-radius: 50%;
+}
+
+.main-toggle input:checked + .toggle-slider {
+  background-color: var(--accent);
+}
+
+.main-toggle input:checked + .toggle-slider:before {
+  transform: translateX(28px);
+}
+
+/* Indeterminate state için */
+.main-toggle input:indeterminate + .toggle-slider {
+  background-color: var(--warning);
+}
+
+.main-toggle input:indeterminate + .toggle-slider:before {
+  transform: translateX(14px); /* Orta pozisyon */
+}
+
+/* Disabled sub-permissions styling */
+.sub-permission-item.dependency-disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.sub-permission-item.dependency-disabled .sub-permission-name {
+  color: var(--muted);
+}
+
+.sub-permission-item.dependency-disabled .toggle-slider {
+  background-color: var(--border) !important;
+  cursor: not-allowed;
+}
+
+/* Sub permission toggle'lar için farklı renk */
+.sub-toggle input:checked + .toggle-slider {
+  background-color: var(--success);
+}
+
+/* Kategori durumu göstergesi */
+.category-status {
+  position: absolute;
+  top: 16px;
+  right: 80px;
+  background: var(--muted);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.category-status.full {
+  background: var(--success);
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.2);
+}
+
+.category-status.partial {
+  background: var(--warning);
+  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.2);
+}
+
+.category-status.none {
+  background: var(--muted);
+}
+
+/* Görsel kategorilendirme - renk kodlaması */
+.permission-category-card[data-category="products"] {
+  border-left: 4px solid #3b82f6; /* Blue */
+}
+
+.permission-category-card[data-category="products"] .category-icon {
+  background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+  color: white;
+}
+
+.permission-category-card[data-category="orders"] {
+  border-left: 4px solid #10b981; /* Green */
+}
+
+.permission-category-card[data-category="orders"] .category-icon {
+  background: linear-gradient(135deg, #10b981, #047857);
+  color: white;
+}
+
+.permission-category-card[data-category="shelf"] {
+  border-left: 4px solid #f59e0b; /* Amber */
+}
+
+.permission-category-card[data-category="shelf"] .category-icon {
+  background: linear-gradient(135deg, #f59e0b, #d97706);
+  color: white;
+}
+
+.permission-category-card[data-category="service"] {
+  border-left: 4px solid #8b5cf6; /* Purple */
+}
+
+.permission-category-card[data-category="service"] .category-icon {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+}
+
+.permission-category-card[data-category="system"] {
+  border-left: 4px solid #ef4444; /* Red */
+}
+
+.permission-category-card[data-category="system"] .category-icon {
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: white;
+}
+
+.permission-category-card[data-category="analytics"] {
+  border-left: 4px solid #06b6d4; /* Cyan */
+}
+
+.permission-category-card[data-category="analytics"] .category-icon {
+  background: linear-gradient(135deg, #06b6d4, #0891b2);
+  color: white;
+}
+
+/* Hover efektleri kategoriye göre */
+.permission-category-card[data-category="products"]:hover {
+  border-color: #1d4ed8;
+  box-shadow: 0 4px 16px rgba(59, 130, 246, 0.15);
+}
+
+.permission-category-card[data-category="orders"]:hover {
+  border-color: #047857;
+  box-shadow: 0 4px 16px rgba(16, 185, 129, 0.15);
+}
+
+.permission-category-card[data-category="shelf"]:hover {
+  border-color: #d97706;
+  box-shadow: 0 4px 16px rgba(245, 158, 11, 0.15);
+}
+
+.permission-category-card[data-category="service"]:hover {
+  border-color: #7c3aed;
+  box-shadow: 0 4px 16px rgba(139, 92, 246, 0.15);
+}
+
+.permission-category-card[data-category="system"]:hover {
+  border-color: #dc2626;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.15);
+}
+
+.permission-category-card[data-category="analytics"]:hover {
+  border-color: #0891b2;
+  box-shadow: 0 4px 16px rgba(6, 182, 212, 0.15);
+}
+
+/* İzin rozetleri */
+.permission-badge {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  margin-left: 8px;
+  margin-top: 2px;
+}
+
+.permission-badge.critical {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.permission-badge.priority {
+  background: #eff6ff;
+  color: #2563eb;
+  border: 1px solid #bfdbfe;
+}
+
+/* Priorite göstergeleri */
+.sub-permission-item.priority-high {
+  border-left: 3px solid #10b981;
+}
+
+.sub-permission-item.priority-medium {
+  border-left: 3px solid #f59e0b;
+}
+
+.sub-permission-item.priority-low {
+  border-left: 3px solid #6b7280;
+}
+
+/* Alt izinlerde kategori rengini yansıtma */
+.sub-permission-item[data-category="products"].enabled {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.05), rgba(59, 130, 246, 0.02));
+  border-left-color: #3b82f6;
+}
+
+.sub-permission-item[data-category="orders"].enabled {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.05), rgba(16, 185, 129, 0.02));
+  border-left-color: #10b981;
+}
+
+.sub-permission-item[data-category="shelf"].enabled {
+  background: linear-gradient(135deg, rgba(245, 158, 11, 0.05), rgba(245, 158, 11, 0.02));
+  border-left-color: #f59e0b;
+}
+
+.sub-permission-item[data-category="service"].enabled {
+  background: linear-gradient(135deg, rgba(139, 92, 246, 0.05), rgba(139, 92, 246, 0.02));
+  border-left-color: #8b5cf6;
+}
+
+.sub-permission-item[data-category="system"].enabled {
+  background: linear-gradient(135deg, rgba(239, 68, 68, 0.05), rgba(239, 68, 68, 0.02));
+  border-left-color: #ef4444;
+}
+
+.sub-permission-item[data-category="analytics"].enabled {
+  background: linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(6, 182, 212, 0.02));
+  border-left-color: #06b6d4;
+}
+
+/* Daha iyi hover efektleri */
+.sub-permission-item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+  transition: all 0.2s ease;
+}
+
+/* Görsel kategorilendirme - üst bar */
+.permissions-grid::before {
+  content: '';
+  display: block;
+  height: 4px;
+  background: linear-gradient(90deg, 
+    #3b82f6 0%, #3b82f6 16.66%, 
+    #10b981 16.66%, #10b981 33.32%,
+    #f59e0b 33.32%, #f59e0b 49.98%,
+    #8b5cf6 49.98%, #8b5cf6 66.64%,
+    #ef4444 66.64%, #ef4444 83.3%,
+    #06b6d4 83.3%, #06b6d4 100%);
+  border-radius: 2px;
+  margin-bottom: 20px;
+}
+
+/* Legend stilleri */
+.permission-legend {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.permission-legend h4 {
+  margin: 0 0 12px 0;
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.legend-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.legend-color {
+  width: 12px;
+  height: 12px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+/* Header navigation styles */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.home-link {
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s ease;
+}
+
+.home-link:hover {
+  opacity: 0.8;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-home {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-home:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-home .btn-icon {
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .legend-items {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  header {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .btn-home .btn-text {
+    display: none;
+  }
+}
+
+/* Eski permission card stilleri - geriye uyumluluk */
+.permission-card {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.permission-card {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  transition: all 0.2s ease;
+}
+
+.permission-card.enabled {
+  border-color: var(--success);
+  background: rgba(34, 197, 94, 0.1);
+}
+
+.permission-card.disabled {
+  border-color: var(--border);
+  opacity: 0.7;
+}
+
+.permission-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.permission-name {
+  font-weight: 600;
+  color: var(--fg);
+  font-size: 16px;
+}
+
+.permission-toggle {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+.permission-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--border);
+  transition: 0.3s;
+  border-radius: 24px;
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: 0.3s;
+  border-radius: 50%;
+}
+
+input:checked + .toggle-slider {
+  background-color: var(--success);
+}
+
+input:checked + .toggle-slider:before {
+  transform: translateX(26px);
+}
+
+.permission-description {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.4;
+}
+
+.add-permission-form {
+  display: flex;
+  align-items: end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.add-permission-form .form-group {
+  flex: 1;
+  min-width: 200px;
+}
+
+.add-permission-form small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.save-status {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.save-status.success {
+  background: rgba(34, 197, 94, 0.1);
+  color: var(--success);
+  border: 1px solid var(--success);
+}
+
+.save-status.error {
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
+  border: 1px solid var(--danger);
+}
+
+.roles-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.role-summary-card {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.role-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.role-summary-title {
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.permission-count {
+  background: var(--accent);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.permission-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.permission-tag {
+  background: var(--border);
+  color: var(--muted);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.permission-tag.enabled {
+  background: var(--success);
+  color: white;
+}
+
+.btn-success {
+  background: var(--success);
+  color: white;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 500;
+  transition: background 0.2s ease;
+}
+
+.btn-success:hover {
+  background: #16a34a;
+}
+
+.btn-success:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (max-width: 768px) {
+  .role-selector {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .permission-actions {
+    flex-direction: column;
+  }
+  
+  .permissions-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .add-permission-form {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+</style>
+
+<script>
+const API = {
+  getRolePermissions: () => fetch('/api/role-permissions', { credentials: 'include' }).then(r => r.json()),
+  getSpecificRolePermissions: (role) => fetch(`/api/role-permissions/${role}`, { credentials: 'include' }).then(r => r.json()),
+  updateRolePermissions: (role, permissions) => fetch(`/api/role-permissions/${role}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ permissions })
+  }).then(r => r.json()),
+  addPermission: (role, permission) => fetch(`/api/role-permissions/${role}/add`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({ permission })
+  }).then(r => r.json()),
+  getPermissionTypes: () => {
+    console.log('ROLE-MGMT: Making API call to /api/permission-types');
+    return fetch('/api/permission-types', { credentials: 'include' })
+      .then(r => {
+        console.log('ROLE-MGMT: API response status:', r.status);
+        return r.json();
+      })
+      .then(data => {
+        console.log('ROLE-MGMT: Raw API data:', data);
+        return data;
+      });
+  }
+};
+
+let currentPermissions = {};
+let permissionTypes = {};
+let permissionCategories = [];
+let currentRole = '';
+
+// Sayfa yüklendiğinde
+document.addEventListener('DOMContentLoaded', async () => {
+  console.log('Role management page loaded');
+  console.log('Auth API available:', !!window.AuthAPI);
+  console.log('checkPageAuthentication available:', !!window.checkPageAuthentication);
+  
+  // Manual auth check - auth.js auto-init might not be working
+  console.log('Manually calling checkPageAuthentication...');
+  const user = await window.checkPageAuthentication();
+  if (!user) {
+    console.log('Auth check failed, page should redirect');
+    return;
+  }
+  console.log('Auth check passed, user:', user);
+  
+  await loadPermissionTypes();
+  await loadRolesSummary();
+  setupEventListeners();
+});
+
+// Permission types ve categories yükle
+async function loadPermissionTypes() {
+  try {
+    console.log('ROLE-MGMT: Loading permission types...');
+    const result = await API.getPermissionTypes();
+    console.log('ROLE-MGMT: Permission types API response:', result);
+    console.log('ROLE-MGMT: API response keys:', Object.keys(result));
+    console.log('ROLE-MGMT: Has permissionCategories?', !!result.permissionCategories);
+    console.log('ROLE-MGMT: Has permissionTypes?', !!result.permissionTypes);
+    
+    if (result.success) {
+      if (result.permissionCategories) {
+        // Yeni hiyerarşik yapı
+        permissionCategories = result.permissionCategories;
+        console.log('ROLE-MGMT: Permission categories loaded:', permissionCategories);
+        
+        // Geriye uyumluluk için permissionTypes'ı da doldur
+        result.permissionCategories.forEach(category => {
+          permissionTypes[category.key] = {
+            key: category.key,
+            name: category.name,
+            description: category.description,
+            icon: category.icon
+          };
+          
+          // Alt izinleri de ekle
+          category.subPermissions.forEach(subPerm => {
+            permissionTypes[subPerm.key] = subPerm;
+            console.log('ROLE-MGMT: Added sub-permission:', subPerm.key);
+          });
+        });
+        
+        console.log('ROLE-MGMT: Final permissionTypes:', permissionTypes);
+      } else if (result.permissionTypes) {
+        // Eski basit yapı
+        console.log('ROLE-MGMT: Using old permission types structure');
+        result.permissionTypes.forEach(perm => {
+          permissionTypes[perm.key] = perm;
+        });
+      }
+    } else {
+      console.error('ROLE-MGMT: Permission types API failed:', result);
+    }
+  } catch (error) {
+    console.error('ROLE-MGMT: Permission types load error:', error);
+  }
+}
+
+// Event listeners
+function setupEventListeners() {
+  document.getElementById('selectedRole').addEventListener('change', (e) => {
+    const loadBtn = document.getElementById('loadRoleBtn');
+    loadBtn.disabled = !e.target.value;
+  });
+
+  document.getElementById('loadRoleBtn').addEventListener('click', loadRolePermissions);
+  document.getElementById('selectAllBtn').addEventListener('click', selectAllPermissions);
+  document.getElementById('deselectAllBtn').addEventListener('click', deselectAllPermissions);
+  document.getElementById('savePermissionsBtn').addEventListener('click', savePermissions);
+  document.getElementById('addPermissionBtn').addEventListener('click', addNewPermission);
+}
+
+// Rol izinlerini yükle
+async function loadRolePermissions() {
+  const role = document.getElementById('selectedRole').value;
+  if (!role) return;
+
+  currentRole = role;
+  
+  try {
+    const result = await API.getSpecificRolePermissions(role);
+    console.log('ROLE-MGMT: Loaded permissions for role:', role, result);
+    
+    if (result.success) {
+      currentPermissions = result.permissions;
+      
+      // Alt izinlerin eksik olması durumunda default false yap
+      if (permissionCategories && permissionCategories.length > 0) {
+        permissionCategories.forEach(category => {
+          // Ana kategori yoksa false yap
+          if (!(category.key in currentPermissions)) {
+            currentPermissions[category.key] = false;
+            console.log('ROLE-MGMT: Added missing main permission:', category.key, 'as false');
+          }
+          
+          // Alt izinler yoksa false yap
+          category.subPermissions.forEach(subPerm => {
+            if (!(subPerm.key in currentPermissions)) {
+              currentPermissions[subPerm.key] = false;
+              console.log('ROLE-MGMT: Added missing sub-permission:', subPerm.key, 'as false');
+            }
+          });
+        });
+      }
+      
+      console.log('ROLE-MGMT: Final permissions after filling missing:', currentPermissions);
+      displayPermissions(role);
+    } else {
+      alert(`Hata: ${result.message}`);
+    }
+  } catch (error) {
+    alert(`Rol izinleri yüklenirken hata: ${error.message}`);
+  }
+}
+
+// İzinleri hiyerarşik yapıda göster
+function displayPermissions(role) {
+  const section = document.getElementById('permissionsSection');
+  const title = document.getElementById('currentRoleTitle');
+  const grid = document.getElementById('permissionsGrid');
+  const addSection = document.getElementById('addPermissionSection');
+
+  console.log('ROLE-MGMT: Displaying permissions for role:', role);
+  console.log('ROLE-MGMT: Permission categories available:', permissionCategories);
+  console.log('ROLE-MGMT: Current permissions:', currentPermissions);
+
+  title.textContent = `${getRoleDisplayName(role)} Rol İzinleri`;
+  section.style.display = 'block';
+  addSection.style.display = 'block';
+
+  if (permissionCategories && permissionCategories.length > 0) {
+    console.log('ROLE-MGMT: Using hierarchical permission structure');
+    // Hiyerarşik yapı - kategoriler ve alt izinler
+    grid.innerHTML = permissionCategories.map(category => {
+      // Ana kategori izni var mı kontrol et
+      const mainCategoryEnabled = currentPermissions[category.key] || false;
+      
+      // Alt izinlerin durumunu kontrol et
+      const enabledSubPermissions = category.subPermissions.filter(sub => 
+        currentPermissions[sub.key]
+      );
+      const categoryStatus = getCategoryStatus(enabledSubPermissions.length, category.subPermissions.length);
+      
+      return `
+        <div class="permission-category-card category-expanded" data-category="${category.key}">
+          <div class="category-header">
+            <div class="category-info">
+              <span class="category-icon">${category.icon}</span>
+              <div class="category-details">
+                <h3 class="category-title">${category.name}</h3>
+                <p class="category-description">${category.description}</p>
+              </div>
+            </div>
+            <div class="category-actions">
+              <span class="category-status ${categoryStatus.class}">${categoryStatus.text}</span>
+              <button class="btn-expand" onclick="toggleCategory('${category.key}')">
+                <span class="expand-icon">▲</span>
+              </button>
+              <label class="permission-toggle main-toggle">
+                <input type="checkbox" ${mainCategoryEnabled ? 'checked' : ''} 
+                       data-permission="${category.key}" data-type="main">
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
+          
+          <div class="sub-permissions" id="category-${category.key}" style="display: block;">
+            <div class="sub-permissions-grid">
+              ${category.subPermissions.map((subPerm, index) => {
+                const isEnabled = currentPermissions[subPerm.key] || false;
+                const priorityClass = index < 3 ? 'priority-high' : index < 6 ? 'priority-medium' : 'priority-low';
+                return `
+                  <div class="sub-permission-item ${isEnabled ? 'enabled' : 'disabled'} ${priorityClass}" data-category="${category.key}">
+                    <div class="sub-permission-header">
+                      <div class="sub-permission-info">
+                        <span class="sub-permission-name">${subPerm.name}</span>
+                        <span class="sub-permission-description">${subPerm.description}</span>
+                        ${subPerm.critical ? '<span class="permission-badge critical">Kritik</span>' : ''}
+                        ${index < 3 ? '<span class="permission-badge priority">Temel</span>' : ''}
+                      </div>
+                      <label class="permission-toggle sub-toggle">
+                        <input type="checkbox" ${isEnabled ? 'checked' : ''} 
+                               data-permission="${subPerm.key}" data-type="sub" data-parent="${category.key}">
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+  } else {
+    // Fallback - eski basit yapı
+    const allPermissions = new Set([
+      ...Object.keys(permissionTypes),
+      ...Object.keys(currentPermissions)
+    ]);
+
+    grid.innerHTML = Array.from(allPermissions).map(permission => {
+      const isEnabled = currentPermissions[permission] || false;
+      const permInfo = permissionTypes[permission] || { 
+        name: permission, 
+        description: 'Özel izin' 
+      };
+
+      return `
+        <div class="permission-card ${isEnabled ? 'enabled' : 'disabled'}">
+          <div class="permission-header">
+            <span class="permission-name">${permInfo.name}</span>
+            <label class="permission-toggle">
+              <input type="checkbox" ${isEnabled ? 'checked' : ''} data-permission="${permission}">
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+          <div class="permission-description">
+            ${permInfo.description}
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  // Event listeners ekle
+  setupPermissionEventListeners();
+  
+  // Bağımlılık mantığını başlangıçta uygula
+  applyInitialDependencyLogic();
+
+  // Save button'u başlangıçta pasif yap
+  document.getElementById('savePermissionsBtn').disabled = true;
+}
+
+// Kategori genişletme/daraltma
+function toggleCategory(categoryKey) {
+  const categoryElement = document.getElementById(`category-${categoryKey}`);
+  const categoryCard = categoryElement.closest('.permission-category-card');
+  const expandIcon = document.querySelector(`[onclick="toggleCategory('${categoryKey}')"] .expand-icon`);
+  
+  if (categoryElement.style.display === 'none') {
+    categoryElement.style.display = 'block';
+    expandIcon.textContent = '▲';
+    categoryCard.classList.add('category-expanded');
+  } else {
+    categoryElement.style.display = 'none';
+    expandIcon.textContent = '▼';
+    categoryCard.classList.remove('category-expanded');
+  }
+}
+
+// Kategori durumu hesaplama
+function getCategoryStatus(enabledCount, totalCount) {
+  if (enabledCount === 0) {
+    return { class: 'none', text: 'Yok' };
+  } else if (enabledCount === totalCount) {
+    return { class: 'full', text: 'Tam' };
+  } else {
+    return { class: 'partial', text: `${enabledCount}/${totalCount}` };
+  }
+}
+
+// Permission event listeners kurulumu
+function setupPermissionEventListeners() {
+  // Tüm checkbox'lar için event listener (hem ana hem alt izinler)
+  document.querySelectorAll('#permissionsGrid input[type="checkbox"]').forEach(checkbox => {
+    console.log('Setting up listener for permission:', checkbox.dataset.permission, 'type:', checkbox.dataset.type);
+    checkbox.addEventListener('change', handlePermissionChange);
+  });
+  
+  console.log('Total permission checkboxes found:', document.querySelectorAll('#permissionsGrid input[type="checkbox"]').length);
+}
+
+// Permission değişiklik handler'ı
+function handlePermissionChange(e) {
+  const permission = e.target.dataset.permission;
+  const type = e.target.dataset.type;
+  const isChecked = e.target.checked;
+  
+  console.log('Permission change:', permission, type, isChecked);
+  console.log('Current permissions before change:', currentPermissions);
+  
+  if (type === 'main') {
+    // Ana kategori toggle - tüm alt izinleri etkiler
+    console.log('Handling main category toggle:', permission);
+    handleMainCategoryToggle(permission, isChecked);
+  } else if (type === 'sub') {
+    // Alt izin toggle
+    console.log('Handling sub permission toggle:', permission, 'parent:', e.target.dataset.parent);
+    handleSubPermissionToggle(permission, isChecked, e.target.dataset.parent);
+  } else {
+    // Eski basit yapı
+    console.log('Handling simple permission toggle:', permission);
+    currentPermissions[permission] = isChecked;
+    updatePermissionUI(permission, isChecked);
+  }
+  
+  console.log('Current permissions after change:', currentPermissions);
+  
+  // Save button'u aktif et
+  document.getElementById('savePermissionsBtn').disabled = false;
+}
+
+// Ana kategori toggle handler - Granular control için değiştirildi
+function handleMainCategoryToggle(categoryKey, isEnabled) {
+  const mainCheckbox = document.querySelector(`input[data-permission="${categoryKey}"][data-type="main"]`);
+  
+  // Indeterminate durumunu temizle
+  if (mainCheckbox) {
+    mainCheckbox.indeterminate = false;
+  }
+  
+  currentPermissions[categoryKey] = isEnabled;
+  
+  // Granular kontrol için: Ana kategori sadece kendi durumunu kontrol eder
+  // Alt izinleri otomatik değiştirmez, kullanıcı manuel seçer
+  console.log('Main category toggled:', categoryKey, 'to:', isEnabled);
+  
+  const category = permissionCategories.find(cat => cat.key === categoryKey);
+  if (category) {
+    // Sadece kategori durumu göstergesini güncelle
+    updateCategoryStatus(categoryKey, category);
+  }
+}
+
+// Alt izin toggle handler - Basitleştirildi
+function handleSubPermissionToggle(permissionKey, isEnabled, parentKey) {
+  console.log('Sub permission toggle:', permissionKey, 'to:', isEnabled, 'parent:', parentKey);
+  
+  currentPermissions[permissionKey] = isEnabled;
+  updatePermissionUI(permissionKey, isEnabled);
+  
+  // Ana kategorinin durumunu kontrol et
+  const category = permissionCategories.find(cat => cat.key === parentKey);
+  if (category) {
+    // Kategori durumu göstergesini güncelle
+    updateCategoryStatus(parentKey, category);
+    
+    // Ana kategoriyi otomatik değiştirmek yerine sadece görsel feedback ver
+    const enabledSubPermissions = category.subPermissions.filter(sub => 
+      currentPermissions[sub.key]
+    );
+    
+    const mainCheckbox = document.querySelector(`input[data-permission="${parentKey}"][data-type="main"]`);
+    if (mainCheckbox) {
+      // Görsel feedback için indeterminate state
+      if (enabledSubPermissions.length > 0 && enabledSubPermissions.length < category.subPermissions.length) {
+        mainCheckbox.indeterminate = true;
+        console.log('Setting main category to indeterminate:', parentKey);
+      } else {
+        mainCheckbox.indeterminate = false;
+      }
+    }
+  }
+}
+
+// Kategori durumu göstergesini güncelle
+function updateCategoryStatus(categoryKey, category) {
+  const enabledSubPermissions = category.subPermissions.filter(sub => 
+    currentPermissions[sub.key]
+  );
+  
+  const statusElement = document.querySelector(`[onclick="toggleCategory('${categoryKey}')"]`).parentElement.querySelector('.category-status');
+  if (statusElement) {
+    const status = getCategoryStatus(enabledSubPermissions.length, category.subPermissions.length);
+    statusElement.className = `category-status ${status.class}`;
+    statusElement.textContent = status.text;
+  }
+}
+
+// Başlangıç bağımlılık mantığını uygula - Granular control için basitleştirildi
+function applyInitialDependencyLogic() {
+  if (!permissionCategories) return;
+  
+  console.log('ROLE-MGMT: Applying initial dependency logic...');
+  
+  permissionCategories.forEach(category => {
+    const mainCategoryEnabled = currentPermissions[category.key] || false;
+    const mainCheckbox = document.querySelector(`input[data-permission="${category.key}"][data-type="main"]`);
+    
+    // Alt izinlerin durumunu kontrol et
+    const enabledSubPermissions = category.subPermissions.filter(sub => 
+      currentPermissions[sub.key]
+    );
+    
+    console.log(`ROLE-MGMT: Category ${category.key}: main=${mainCategoryEnabled}, enabled subs=${enabledSubPermissions.length}/${category.subPermissions.length}`);
+    
+    // Granular control - tüm izinler bağımsız edit edilebilir
+    // Hiçbir alt izni disable etme
+    
+    // Sadece görsel feedback için indeterminate state ayarla
+    if (mainCheckbox && enabledSubPermissions.length > 0 && enabledSubPermissions.length < category.subPermissions.length) {
+      mainCheckbox.indeterminate = true;
+      console.log(`ROLE-MGMT: Set ${category.key} to indeterminate`);
+    }
+    
+    // Kategori durumu göstergesini güncelle
+    updateCategoryStatus(category.key, category);
+  });
+}
+
+// Permission UI güncelleme
+function updatePermissionUI(permission, isEnabled) {
+  const element = document.querySelector(`[data-permission="${permission}"]`)?.closest('.permission-card, .sub-permission-item');
+  if (element) {
+    if (isEnabled) {
+      element.classList.remove('disabled');
+      element.classList.add('enabled');
+    } else {
+      element.classList.remove('enabled');
+      element.classList.add('disabled');
+    }
+  }
+}
+
+// Alt izin durumu güncelleme (disabled/enabled state)
+function updateSubPermissionState(permissionKey, isDisabled) {
+  const element = document.querySelector(`[data-permission="${permissionKey}"]`)?.closest('.sub-permission-item');
+  if (element) {
+    if (isDisabled) {
+      element.classList.add('disabled');
+      element.style.opacity = '0.5';
+      element.style.pointerEvents = 'none';
+    } else {
+      element.style.opacity = '';
+      element.style.pointerEvents = '';
+    }
+  }
+}
+
+// Tümünü seç
+function selectAllPermissions() {
+  const checkboxes = document.querySelectorAll('#permissionsGrid input[type="checkbox"]');
+  checkboxes.forEach(checkbox => {
+    if (!checkbox.checked) {
+      checkbox.checked = true;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+  });
+}
+
+// Tümünü kaldır
+function deselectAllPermissions() {
+  const checkboxes = document.querySelectorAll('#permissionsGrid input[type="checkbox"]');
+  checkboxes.forEach(checkbox => {
+    if (checkbox.checked) {
+      checkbox.checked = false;
+      checkbox.dispatchEvent(new Event('change'));
+    }
+  });
+}
+
+// İzinleri kaydet
+async function savePermissions() {
+  const saveBtn = document.getElementById('savePermissionsBtn');
+  const saveStatus = document.getElementById('saveStatus');
+  
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Kaydediliyor...';
+
+  try {
+    const result = await API.updateRolePermissions(currentRole, currentPermissions);
+    
+    if (result.success) {
+      saveStatus.className = 'save-status success';
+      saveStatus.textContent = `✅ ${result.message}`;
+      saveStatus.style.display = 'block';
+      
+      // Özeti yenile
+      await loadRolesSummary();
+      
+      setTimeout(() => {
+        saveStatus.style.display = 'none';
+      }, 3000);
+    } else {
+      throw new Error(result.message);
+    }
+  } catch (error) {
+    saveStatus.className = 'save-status error';
+    saveStatus.textContent = `❌ Hata: ${error.message}`;
+    saveStatus.style.display = 'block';
+    
+    setTimeout(() => {
+      saveStatus.style.display = 'none';
+    }, 5000);
+  } finally {
+    saveBtn.textContent = 'Değişiklikleri Kaydet';
+  }
+}
+
+// Yeni izin ekle
+async function addNewPermission() {
+  const permissionKey = document.getElementById('newPermissionKey').value.trim();
+  if (!permissionKey) {
+    alert('Lütfen izin anahtar kelimesini girin.');
+    return;
+  }
+
+  // Geçerli format kontrolü
+  if (!/^[a-z][a-z0-9_-]*$/.test(permissionKey)) {
+    alert('İzin adı küçük harfle başlamalı ve sadece küçük harf, sayı, tire ve alt çizgi içermelidir.');
+    return;
+  }
+
+  try {
+    const result = await API.addPermission(currentRole, permissionKey);
+    
+    if (result.success) {
+      alert(result.message);
+      document.getElementById('newPermissionKey').value = '';
+      
+      // İzinleri yeniden yükle
+      await loadRolePermissions();
+    } else {
+      alert(`Hata: ${result.message}`);
+    }
+  } catch (error) {
+    alert(`İzin eklenirken hata: ${error.message}`);
+  }
+}
+
+// Roller özetini yükle
+async function loadRolesSummary() {
+  try {
+    const result = await API.getRolePermissions();
+    if (result.success) {
+      displayRolesSummary(result.permissions);
+    }
+  } catch (error) {
+    console.error('Roles summary load error:', error);
+    document.getElementById('rolesSummary').innerHTML = '<div class="error">Özet yüklenemedi</div>';
+  }
+}
+
+// Roller özetini göster
+function displayRolesSummary(allPermissions) {
+  const summaryDiv = document.getElementById('rolesSummary');
+  
+  const roles = Object.keys(allPermissions);
+  
+  summaryDiv.innerHTML = roles.map(role => {
+    const permissions = allPermissions[role];
+    const enabledPermissions = Object.entries(permissions).filter(([key, enabled]) => enabled);
+    
+    return `
+      <div class="role-summary-card">
+        <div class="role-summary-header">
+          <span class="role-summary-title">${getRoleDisplayName(role)}</span>
+          <span class="permission-count">${enabledPermissions.length}</span>
+        </div>
+        <div class="permission-list">
+          ${Object.entries(permissions).map(([permission, enabled]) => `
+            <span class="permission-tag ${enabled ? 'enabled' : ''}">${permission}</span>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// Utility functions
+function getRoleDisplayName(role) {
+  const roleNames = {
+    admin: 'Yönetici',
+    operator: 'Operatör',
+    service: 'Servis Teknisyeni'
+  };
+  return roleNames[role] || role;
+}
+</script>
+</body>
+</html>

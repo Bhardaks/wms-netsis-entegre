@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>WMS Netsis Entegre Login</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      min-height: 100vh;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    }
+
+    .login-container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+      padding: 40px;
+      width: 100%;
+      max-width: 400px;
+      margin: 20px;
+    }
+
+    .login-header {
+      text-align: center;
+      margin-bottom: 40px;
+    }
+
+    .login-logo {
+      font-size: 48px;
+      margin-bottom: 10px;
+    }
+
+    .login-title {
+      font-size: 24px;
+      font-weight: 600;
+      color: #333;
+      margin: 0;
+    }
+
+    .login-subtitle {
+      color: #666;
+      margin-top: 5px;
+      font-size: 14px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      margin-bottom: 8px;
+      color: #333;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    .form-input {
+      width: 100%;
+      padding: 12px 16px;
+      border: 2px solid #e1e5e9;
+      border-radius: 8px;
+      font-size: 16px;
+      transition: all 0.3s ease;
+      box-sizing: border-box;
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: #667eea;
+      box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+    }
+
+    .login-btn {
+      width: 100%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 20px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      margin-top: 10px;
+    }
+
+    .login-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+    }
+
+    .login-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    .error-message {
+      background: #fee;
+      color: #c33;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      border: 1px solid #fcc;
+      display: none;
+    }
+
+    .success-message {
+      background: #efe;
+      color: #363;
+      padding: 12px;
+      border-radius: 6px;
+      margin-bottom: 20px;
+      font-size: 14px;
+      border: 1px solid #cfc;
+      display: none;
+    }
+
+    .admin-note {
+      text-align: center;
+      margin-top: 30px;
+      padding: 15px;
+      background: #f8f9fa;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #666;
+    }
+
+    .admin-note strong {
+      color: #333;
+    }
+
+    .loading-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(255, 255, 255, 0.9);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+    }
+
+    .spinner {
+      width: 40px;
+      height: 40px;
+      border: 4px solid #f3f3f3;
+      border-top: 4px solid #667eea;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+  </div>
+
+  <div class="login-container">
+    <div class="login-header">
+      <div class="login-logo">🏭</div>
+      <h1 class="login-title">WMS Sistemi</h1>
+      <p class="login-subtitle">Depo Yönetim Sistemi</p>
+    </div>
+
+    <form id="loginForm">
+      <div class="error-message" id="errorMessage"></div>
+      <div class="success-message" id="successMessage"></div>
+
+      <div class="form-group">
+        <label for="username" class="form-label">Kullanıcı Adı</label>
+        <input 
+          type="text" 
+          id="username" 
+          name="username" 
+          class="form-input" 
+          placeholder="Kullanıcı adınızı girin"
+          required
+          autocomplete="username"
+        />
+      </div>
+
+      <div class="form-group">
+        <label for="password" class="form-label">Şifre</label>
+        <input 
+          type="password" 
+          id="password" 
+          name="password" 
+          class="form-input" 
+          placeholder="Şifrenizi girin"
+          required
+          autocomplete="current-password"
+        />
+      </div>
+
+      <button type="submit" class="login-btn" id="loginBtn">
+        Giriş Yap
+      </button>
+    </form>
+
+  </div>
+
+  <script>
+    const API = {
+      login: (credentials) => fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(credentials)
+      }).then(r => r.json()),
+      
+      checkAuth: () => fetch('/api/auth/check', {
+        credentials: 'include'
+      }).then(r => r.json())
+    };
+
+    // Sayfa yüklendiğinde zaten giriş yapılmış mı kontrol et
+    document.addEventListener('DOMContentLoaded', async () => {
+      try {
+        const authCheck = await API.checkAuth();
+        if (authCheck.authenticated) {
+          // Zaten giriş yapılmış, ana sayfaya yönlendir
+          window.location.href = '/index.html';
+        }
+      } catch (error) {
+        // Auth check başarısız, login sayfasında kal
+        console.log('No active session, staying on login page');
+      }
+    });
+
+    // Login form submit
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      
+      const username = document.getElementById('username').value.trim();
+      const password = document.getElementById('password').value;
+      const errorMsg = document.getElementById('errorMessage');
+      const successMsg = document.getElementById('successMessage');
+      const loginBtn = document.getElementById('loginBtn');
+      const loadingOverlay = document.getElementById('loadingOverlay');
+
+      // Mesajları temizle
+      errorMsg.style.display = 'none';
+      successMsg.style.display = 'none';
+
+      if (!username || !password) {
+        errorMsg.textContent = 'Lütfen tüm alanları doldurun.';
+        errorMsg.style.display = 'block';
+        return;
+      }
+
+      // Loading durumu
+      loginBtn.disabled = true;
+      loginBtn.textContent = 'Giriş yapılıyor...';
+      loadingOverlay.style.display = 'flex';
+
+      try {
+        const result = await API.login({ username, password });
+        
+        if (result.success) {
+          successMsg.textContent = 'Giriş başarılı! Yönlendiriliyorsunuz...';
+          successMsg.style.display = 'block';
+          
+          // Kısa bir bekleme sonrası yönlendir
+          setTimeout(() => {
+            window.location.href = '/index.html';
+          }, 1000);
+        } else {
+          errorMsg.textContent = result.message || 'Giriş başarısız. Lütfen bilgilerinizi kontrol edin.';
+          errorMsg.style.display = 'block';
+        }
+      } catch (error) {
+        console.error('Login error:', error);
+        errorMsg.textContent = 'Sunucu hatası. Lütfen daha sonra tekrar deneyin.';
+        errorMsg.style.display = 'block';
+      } finally {
+        // Loading durumunu kapat
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Giriş Yap';
+        loadingOverlay.style.display = 'none';
+      }
+    });
+
+    // Enter tuşu ile form submit
+    document.addEventListener('keypress', (e) => {
+      if (e.key === 'Enter') {
+        document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+      }
+    });
+  </script>
+</body>
+</html>

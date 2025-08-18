@@ -1,0 +1,22 @@
+{
+  "name": "wms-netsis-entegre",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "dev": "NODE_ENV=development node backend/server.js",
+    "start": "NODE_ENV=production node backend/server.js",
+    "migrate": "node backend/db/migrate.js",
+    "seed": "node backend/db/seed.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.2",
+    "bcryptjs": "^3.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "express-session": "^1.18.2",
+    "pdfkit": "^0.13.0",
+    "sqlite3": "^5.1.6"
+  }
+}

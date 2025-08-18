@@ -1,0 +1,790 @@
+
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Ürünler</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <script src="/assets/js/auth.js"></script>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">Ürün Yönetimi</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="grid" style="max-width:1100px;margin:auto;padding:16px">
+
+  <!-- Filtreler ve Arama -->
+  <section class="card">
+    <h2>Arama ve Filtreler</h2>
+    <div class="filters-grid">
+      <input id="searchInput" placeholder="SKU, ad veya barkod ile ara..." />
+      <select id="statusFilter">
+        <option value="">Tüm Durumlar</option>
+        <option value="stocked">Stokta Var</option>
+        <option value="out-of-stock">Stok Yok</option>
+        <option value="no-packages">Paket Tanımlı Değil</option>
+        <option value="no-location">Konum Tanımlı Değil</option>
+      </select>
+      <select id="sortBy">
+        <option value="name">Ada Göre</option>
+        <option value="sku">SKU'ya Göre</option>
+        <option value="price">Fiyata Göre</option>
+        <option value="created">Eklenme Tarihine Göre</option>
+      </select>
+      <button id="clearFilters">Filtreleri Temizle</button>
+    </div>
+  </section>
+
+  <!-- Toplu İşlemler -->
+  <section class="card">
+    <h2>Toplu İşlemler</h2>
+    <div class="bulk-actions">
+      <button id="syncWix" class="action-btn">
+        <span class="btn-icon">🔄</span>
+        <span class="btn-text">Wix'ten Ürün Çek</span>
+      </button>
+      <button id="exportProducts" class="action-btn">
+        <span class="btn-icon">📤</span>
+        <span class="btn-text">CSV İndir</span>
+      </button>
+      <button id="bulkLocationAssign" class="action-btn">
+        <span class="btn-icon">📍</span>
+        <span class="btn-text">Toplu Konum Ata</span>
+      </button>
+      <span class="badge" id="syncOut"></span>
+    </div>
+  </section>
+
+  <!-- Ürün Listesi -->
+  <section class="card">
+    <h2>Ürün Listesi 
+      <span class="list-count">(<span id="productCount">0</span> ürün)</span>
+    </h2>
+    <div class="table-container">
+      <table id="prodTable">
+        <thead>
+          <tr>
+            <th><input type="checkbox" id="selectAll"></th>
+            <th>Görsel</th>
+            <th>SKU</th>
+            <th>Ad</th>
+            <th>Fiyat</th>
+            <th>Stok</th>
+            <th>Renk</th>
+            <th>Konum</th>
+            <th>Paketler</th>
+            <th>Son Güncelleme</th>
+            <th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="pagination" id="pagination"></div>
+  </section>
+</main>
+
+<div class="modal" id="pkgModal">
+  <div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0;"><span id="pkgModalTitle">Paket Yönetimi</span>: <span id="pkgProdName" style="color: var(--accent);"></span></h3>
+      <button onclick="document.getElementById('pkgModal').classList.remove('show')" style="background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer;">×</button>
+    </div>
+    
+    <!-- Paket Ekleme Formu -->
+    <div class="card" style="margin-bottom: 20px;">
+      <h4 style="margin: 0 0 15px 0;">Yeni Paket Ekle</h4>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 15px;">
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: var(--muted);">Paket No *</label>
+          <input id="pkgNumber" placeholder="Örn: PKG001" required style="width: 100%;" />
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: var(--muted);">Barkod *</label>
+          <input id="pkgBarcode" placeholder="Örn: 1234567890123" required style="width: 100%;" />
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: var(--muted);">Paket İçeriği</label>
+          <input id="pkgContent" placeholder="Örn: Ana parça seti" style="width: 100%;" />
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: var(--muted);">Adet</label>
+          <input id="pkgQty" type="number" value="1" min="1" placeholder="1" style="width: 100%;" />
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: var(--muted);">Ağırlık (Kg)</label>
+          <input id="pkgWeight" type="number" step="0.01" min="0" placeholder="0.00" style="width: 100%;" />
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em; color: var(--muted);">Hacim (m³)</label>
+          <input id="pkgVolume" type="number" step="0.001" min="0" placeholder="0.000" style="width: 100%;" />
+        </div>
+      </div>
+      <div style="display: flex; gap: 10px;">
+        <button id="addPkgBtn" class="btn-primary" style="flex: 1;">
+          <span id="addPkgBtnText">📦 Paket Ekle</span>
+        </button>
+        <button id="cancelPkgBtn" style="display:none; background: var(--muted);" onclick="cancelPackageEdit()">İptal</button>
+      </div>
+    </div>
+    
+    <!-- Paket Listesi -->
+    <div class="card">
+      <h4 style="margin: 0 0 15px 0;">Mevcut Paketler</h4>
+      <div style="overflow-x: auto;">
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="background: var(--hover);">
+              <th style="padding: 12px 8px; text-align: left; border-bottom: 1px solid var(--border);">Paket No</th>
+              <th style="padding: 12px 8px; text-align: left; border-bottom: 1px solid var(--border);">İçerik</th>
+              <th style="padding: 12px 8px; text-align: left; border-bottom: 1px solid var(--border);">Barkod</th>
+              <th style="padding: 12px 8px; text-align: center; border-bottom: 1px solid var(--border);">Adet</th>
+              <th style="padding: 12px 8px; text-align: center; border-bottom: 1px solid var(--border);">Ağırlık</th>
+              <th style="padding: 12px 8px; text-align: center; border-bottom: 1px solid var(--border);">Hacim</th>
+              <th style="padding: 12px 8px; text-align: center; border-bottom: 1px solid var(--border);">İşlemler</th>
+            </tr>
+          </thead>
+          <tbody id="pkgList"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="locModal">
+  <div class="panel">
+    <h3>Konum Ata: <span id="locProdName"></span></h3>
+    <div class="grid" style="grid-template-columns: 1fr 1fr 100px;">
+      <input id="locCode" placeholder="Raf/Adres Kodu (örn. A-01-03)" />
+      <input id="locQty" type="number" value="0" placeholder="Stok (opsiyonel)" />
+      <button id="assignLocBtn">Kaydet</button>
+    </div>
+    <table style="margin-top:10px">
+      <thead><tr><th>Konum</th><th>Stok</th></tr></thead>
+      <tbody id="locList"></tbody>
+    </table>
+    <div class="flex" style="justify-content:flex-end;margin-top:10px">
+      <button onclick="document.getElementById('locModal').classList.remove('show')">Kapat</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal" id="editProductModal">
+  <div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0;">Ürün Düzenle: <span id="editProdName" style="color: var(--accent);"></span></h3>
+      <button onclick="closeEditModal()" style="background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer;">×</button>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">SKU *</label>
+        <input id="editSku" required style="width: 100%;" />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Fiyat</label>
+        <input id="editPrice" type="number" step="0.01" style="width: 100%;" />
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Ürün Adı *</label>
+        <input id="editName" required style="width: 100%;" />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Ana Barkod</label>
+        <input id="editBarcode" style="width: 100%;" />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Renk</label>
+        <div style="position: relative;">
+          <input 
+            id="editColor" 
+            list="colorOptions" 
+            placeholder="Renk yazın veya listeden seçin" 
+            style="width: 100%;"
+          />
+          <datalist id="colorOptions">
+            <option value="BEYAZ">
+            <option value="SİYAH">
+            <option value="KAHVE">
+            <option value="GRİ">
+            <option value="ANTRASIT">
+            <option value="KREM">
+            <option value="LACİVERT">
+            <option value="BORDO">
+            <option value="YEŞİL">
+            <option value="MAVİ">
+            <option value="MOR">
+            <option value="PEMBE">
+            <option value="TURUNCU">
+            <option value="SARI">
+          </datalist>
+        </div>
+        <small style="color: var(--muted); font-size: 11px;">Önerilen renkler: BEYAZ, SİYAH, KAHVE, GRİ, ANTRASIT</small>
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Açıklama</label>
+        <textarea id="editDesc" rows="3" style="width: 100%; resize: vertical;"></textarea>
+      </div>
+    </div>
+    
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button onclick="closeEditModal()" style="background: var(--muted); color: var(--fg);">İptal</button>
+      <button id="saveProductBtn" onclick="saveProduct()" class="btn-primary">Kaydet</button>
+    </div>
+  </div>
+</div>
+
+
+<script type="module">
+const $ = (s)=>document.querySelector(s);
+const API = {
+  async listProducts(){ return fetch('/api/products').then(r=>r.json()) },
+  async listPackages(id){ return fetch('/api/products/'+id+'/packages').then(r=>r.json()) },
+  async addPackage(id,p){ 
+    const response = await fetch('/api/products/'+id+'/packages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Paket eklenirken hata oluştu');
+    return result;
+  },
+  async updatePackage(id,p){ 
+    const response = await fetch('/api/packages/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Paket güncellenirken hata oluştu');
+    return result;
+  },
+  async delPackage(id){ return fetch('/api/packages/'+id,{method:'DELETE'}).then(r=>r.json()) },
+  async updateProduct(id,p){ return fetch('/api/products/'+id,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)}).then(r=>r.json()) },
+  async deleteProduct(id){ return fetch('/api/products/'+id,{method:'DELETE'}).then(r=>r.json()) },
+  async syncWix(){ return fetch('/api/sync/wix/products',{method:'POST'}).then(r=>r.json()) },
+  async listLocations(){ return fetch('/api/locations').then(r=>r.json()) },
+  async assignLocation(id, payload){ return fetch('/api/products/'+id+'/assign-location',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()) },
+};
+
+let products=[], filteredProducts=[], currentPage = 1, itemsPerPage = 20;
+
+// Package editing state
+let editingPackageId = null;
+let currentProductId = null;
+let currentEditingProduct = null;
+
+// Renk için background color belirleme
+function getColorBg(color) {
+  if (!color) return '#f8f9fa';
+  const c = color.toUpperCase();
+  if (c.includes('BEYAZ') || c.includes('WHITE')) return '#f8f9fa';
+  if (c.includes('SİYAH') || c.includes('BLACK')) return '#212529';
+  if (c.includes('KAHVE') || c.includes('BROWN')) return '#8B4513';
+  if (c.includes('GRİ') || c.includes('GRAY')) return '#6c757d';
+  if (c.includes('ANTRASIT') || c.includes('ANTHRACITE')) return '#343a40';
+  return '#17a2b8'; // default
+}
+
+// Renk için text color belirleme
+function getColorText(color) {
+  if (!color) return '#000';
+  const c = color.toUpperCase();
+  if (c.includes('BEYAZ') || c.includes('WHITE')) return '#000';
+  return '#fff'; // dark backgrounds için white text
+}
+
+// Clear package form
+function clearPackageForm() {
+  $('#pkgNumber').value = '';
+  $('#pkgContent').value = '';
+  $('#pkgBarcode').value = '';
+  $('#pkgQty').value = 1;
+  $('#pkgWeight').value = '';
+  $('#pkgVolume').value = '';
+  editingPackageId = null;
+  $('#addPkgBtnText').textContent = '📦 Paket Ekle';
+  $('#cancelPkgBtn').style.display = 'none';
+}
+
+// Cancel package editing
+function cancelPackageEdit() {
+  clearPackageForm();
+}
+
+// Edit product modal functions
+function openEditModal(product) {
+  currentEditingProduct = product;
+  $('#editProdName').textContent = `${product.name} (${product.sku})`;
+  $('#editSku').value = product.sku || '';
+  $('#editName').value = product.name || '';
+  $('#editPrice').value = product.price || '';
+  $('#editBarcode').value = product.main_barcode || '';
+  $('#editColor').value = product.color || '';
+  $('#editDesc').value = product.description || '';
+  
+  document.getElementById('editProductModal').classList.add('show');
+}
+
+function closeEditModal() {
+  currentEditingProduct = null;
+  document.getElementById('editProductModal').classList.remove('show');
+}
+
+// Global scope için window'a ekle
+window.closeEditModal = closeEditModal;
+window.openEditModal = openEditModal;
+
+async function saveProduct() {
+  if (!currentEditingProduct) return;
+  
+  const sku = $('#editSku').value.trim();
+  const name = $('#editName').value.trim();
+  
+  if (!sku || !name) {
+    alert('SKU ve Ürün Adı zorunludur!');
+    return;
+  }
+  
+  const saveBtn = $('#saveProductBtn');
+  const originalText = saveBtn.textContent;
+  saveBtn.textContent = 'Kaydediliyor...';
+  saveBtn.disabled = true;
+  
+  try {
+    const updatedData = {
+      sku: sku,
+      name: name,
+      price: parseFloat($('#editPrice').value) || 0,
+      main_barcode: $('#editBarcode').value.trim() || null,
+      color: $('#editColor').value || null,
+      description: $('#editDesc').value.trim() || null
+    };
+    
+    await API.updateProduct(currentEditingProduct.id, updatedData);
+    await refresh();
+    closeEditModal();
+  } catch (error) {
+    alert('Güncelleme hatası: ' + error.message);
+  } finally {
+    saveBtn.textContent = originalText;
+    saveBtn.disabled = false;
+  }
+}
+
+// saveProduct'ı da global scope'a ekle
+window.saveProduct = saveProduct;
+
+// Load package data for editing
+function loadPackageForEdit(pkg) {
+  $('#pkgNumber').value = pkg.package_number || '';
+  $('#pkgContent').value = pkg.package_content || pkg.package_name || '';
+  $('#pkgBarcode').value = pkg.barcode || '';
+  $('#pkgQty').value = pkg.quantity || 1;
+  $('#pkgWeight').value = pkg.weight_kg || '';
+  $('#pkgVolume').value = pkg.volume_m3 || '';
+  editingPackageId = pkg.id;
+  $('#addPkgBtnText').textContent = '✏️ Paketi Güncelle';
+  $('#cancelPkgBtn').style.display = 'inline-block';
+}
+
+// Filtreleme ve arama fonksiyonu
+function filterProducts() {
+  const searchTerm = $('#searchInput').value.toLowerCase();
+  const statusFilter = $('#statusFilter').value;
+  const sortBy = $('#sortBy').value;
+
+  // Arama filtresi
+  filteredProducts = products.filter(p => {
+    const matchesSearch = !searchTerm || 
+      p.sku.toLowerCase().includes(searchTerm) ||
+      p.name.toLowerCase().includes(searchTerm) ||
+      (p.main_barcode && p.main_barcode.toLowerCase().includes(searchTerm));
+    
+    // Durum filtresi
+    let matchesStatus = true;
+    if (statusFilter === 'no-packages') {
+      matchesStatus = !p.packages || p.packages.length === 0;
+    } else if (statusFilter === 'no-location') {
+      matchesStatus = !p.location_codes || p.location_codes.length === 0;
+    } else if (statusFilter === 'stocked') {
+      matchesStatus = p.location_codes && p.location_codes.length > 0;
+    } else if (statusFilter === 'out-of-stock') {
+      matchesStatus = !p.location_codes || p.location_codes.length === 0;
+    }
+    
+    return matchesSearch && matchesStatus;
+  });
+
+  // Sıralama
+  filteredProducts.sort((a, b) => {
+    switch(sortBy) {
+      case 'sku': return a.sku.localeCompare(b.sku);
+      case 'price': return (a.price || 0) - (b.price || 0);
+      case 'created': return new Date(b.created_at) - new Date(a.created_at);
+      default: return a.name.localeCompare(b.name);
+    }
+  });
+
+  currentPage = 1;
+  renderProducts();
+}
+
+// Ürünleri render et
+function renderProducts() {
+  const startIdx = (currentPage - 1) * itemsPerPage;
+  const endIdx = startIdx + itemsPerPage;
+  const pageProducts = filteredProducts.slice(startIdx, endIdx);
+  
+  const tb = $('#prodTable tbody');
+  tb.innerHTML = pageProducts.map(p => {
+    // Wix stok miktarına göre durumu belirle
+    const wixStock = p.inventory_quantity || 0;
+    const stockInfo = wixStock > 0 ? `✅ Stok: ${wixStock}` : '❌ Stok Yok';
+    const stockClass = wixStock > 0 ? 'in-stock' : 'out-of-stock';
+    
+    return `<tr>
+      <td><input type="checkbox" class="product-select" value="${p.id}"></td>
+      <td>
+        <div class="product-image">📦</div>
+      </td>
+      <td>
+        <code class="proper-sku">${p.sku}</code>
+      </td>
+      <td>
+        <div class="product-name">${p.name}</div>
+        ${p.description ? `<small>${p.description}</small>` : ''}
+      </td>
+      <td><strong>₺${(p.price||0).toFixed(2)}</strong></td>
+      <td>
+        <span class="stock-status ${stockClass}">
+          ${stockInfo}
+        </span>
+      </td>
+      <td>
+        ${p.color ? `<span style="background: ${getColorBg(p.color)}; color: ${getColorText(p.color)}; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 500;">${p.color}</span>` : '<span class="no-color">-</span>'}
+      </td>
+      <td>
+        <div class="locations">
+          ${(p.location_codes||[]).map(loc => `<span class="location-tag">${loc}</span>`).join('') || '<span class="no-location">Konum Yok</span>'}
+        </div>
+      </td>
+      <td>
+        <span class="badge package-count">${(p.packages||[]).length} paket</span>
+      </td>
+      <td>
+        <small>${new Date(p.updated_at || p.created_at).toLocaleDateString('tr-TR')}</small>
+      </td>
+      <td class="actions">
+        <button class="btn-sm" data-pkg="${p.id}" title="Paketleri Yönet">📦</button>
+        <button class="btn-sm" data-loc="${p.id}" title="Konum Ata">📍</button>
+        <button class="btn-sm" data-edit="${p.id}" title="Düzenle">✏️</button>
+        <button class="btn-sm btn-danger" data-del="${p.id}" title="Sil">🗑️</button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Sayfa bilgisini güncelle
+  $('#productCount').textContent = filteredProducts.length;
+  
+  // Pagination render et
+  renderPagination();
+}
+
+// Pagination
+function renderPagination() {
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  const pagination = $('#pagination');
+  
+  if (totalPages <= 1) {
+    pagination.innerHTML = '';
+    return;
+  }
+  
+  let paginationHtml = '';
+  
+  // Önceki sayfa
+  if (currentPage > 1) {
+    paginationHtml += `<button class="page-btn" onclick="changePage(${currentPage - 1})">&laquo; Önceki</button>`;
+  }
+  
+  // Sayfa numaraları
+  for (let i = 1; i <= totalPages; i++) {
+    if (i === currentPage) {
+      paginationHtml += `<button class="page-btn active">${i}</button>`;
+    } else if (i === 1 || i === totalPages || Math.abs(i - currentPage) <= 2) {
+      paginationHtml += `<button class="page-btn" onclick="changePage(${i})">${i}</button>`;
+    } else if (i === currentPage - 3 || i === currentPage + 3) {
+      paginationHtml += `<span class="page-dots">...</span>`;
+    }
+  }
+  
+  // Sonraki sayfa
+  if (currentPage < totalPages) {
+    paginationHtml += `<button class="page-btn" onclick="changePage(${currentPage + 1})">Sonraki &raquo;</button>`;
+  }
+  
+  pagination.innerHTML = paginationHtml;
+}
+
+// Sayfa değiştirme (global scope'ta tanımlanmalı)
+window.changePage = function(page) {
+  currentPage = page;
+  renderProducts();
+}
+
+// Ana refresh fonksiyonu
+async function refresh(){
+  products = await API.listProducts();
+  filteredProducts = [...products];
+  renderProducts();
+}
+
+
+// Event listeners
+document.addEventListener('DOMContentLoaded', () => {
+  // Arama ve filtreler
+  $('#searchInput').addEventListener('input', filterProducts);
+  $('#statusFilter').addEventListener('change', filterProducts);
+  $('#sortBy').addEventListener('change', filterProducts);
+  
+  // Filtreleri temizle
+  $('#clearFilters').addEventListener('click', () => {
+    $('#searchInput').value = '';
+    $('#statusFilter').value = '';
+    $('#sortBy').value = 'name';
+    filterProducts();
+  });
+  
+  // Tümünü seç/kaldır
+  $('#selectAll').addEventListener('change', (e) => {
+    const checkboxes = document.querySelectorAll('.product-select');
+    checkboxes.forEach(cb => cb.checked = e.target.checked);
+  });
+  
+  // CSV export
+  $('#exportProducts').addEventListener('click', () => {
+    const selected = getSelectedProducts();
+    const dataToExport = selected.length > 0 ? selected : filteredProducts;
+    exportToCSV(dataToExport);
+  });
+  
+  // Package form cancel button
+  $('#cancelPkgBtn').addEventListener('click', () => {
+    clearPackageForm();
+  });
+  
+});
+
+// Seçili ürünleri al
+function getSelectedProducts() {
+  const selected = [];
+  document.querySelectorAll('.product-select:checked').forEach(cb => {
+    const product = filteredProducts.find(p => p.id == cb.value);
+    if (product) selected.push(product);
+  });
+  return selected;
+}
+
+// CSV export fonksiyonu
+function exportToCSV(products) {
+  const headers = [
+    'SKU', 
+    'Ad', 
+    'Fiyat', 
+    'Stok', 
+    'Konum', 
+    'Paket Sayısı',
+    'Paket Detayları',
+    'Son Güncelleme'
+  ];
+  
+  const csvContent = [
+    headers.join(','),
+    ...products.map(p => {
+      // Paket detaylarını formatted string olarak hazırla
+      const packageDetails = (p.packages || []).map(pkg => {
+        const parts = [];
+        if (pkg.package_name) parts.push(`Ad:${pkg.package_name}`);
+        if (pkg.barcode) parts.push(`Barkod:${pkg.barcode}`);
+        if (pkg.quantity) parts.push(`Adet:${pkg.quantity}`);
+        if (pkg.package_number) parts.push(`No:${pkg.package_number}`);
+        if (pkg.package_content) parts.push(`İçerik:${pkg.package_content}`);
+        if (pkg.weight_kg) parts.push(`Ağırlık:${pkg.weight_kg}kg`);
+        if (pkg.volume_m3) parts.push(`Hacim:${pkg.volume_m3}m³`);
+        return parts.join('|');
+      }).join('; ');
+      
+      return [
+        p.sku,
+        `"${p.name}"`,
+        p.price || 0,
+        p.inventory_quantity || 0,
+        (p.location_codes || []).join(';'),
+        (p.packages || []).length,
+        `"${packageDetails}"`,
+        p.updated_at || p.created_at
+      ].join(',');
+    })
+  ].join('\n');
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8' });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `urunler_detayli_${new Date().toISOString().split('T')[0]}.csv`;
+  a.click();
+  window.URL.revokeObjectURL(url);
+}
+
+
+document.body.addEventListener('click', async (e)=>{
+  const pkgId = e.target.getAttribute('data-pkg');
+  const delId = e.target.getAttribute('data-del');
+  const editId = e.target.getAttribute('data-edit');
+  
+  if(e.target.id==='syncWix'){ 
+    const btn = e.target;
+    const originalText = btn.innerHTML;
+    btn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Senkronize Ediliyor...</span>';
+    btn.disabled = true;
+    
+    try {
+      const r = await API.syncWix(); 
+      document.getElementById('syncOut').textContent = r.ok ? ('+'+r.imported+' ürün') : (r.error || 'Hata'); 
+      await refresh();
+    } finally {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+  if(pkgId){
+    currentProductId = pkgId;
+    const prod = products.find(x=>x.id==pkgId);
+    $('#pkgProdName').textContent = `${prod.name} (${prod.sku})`;
+    const list = await API.listPackages(pkgId);
+    const tb = $('#pkgList');
+    
+    // Clear form first
+    clearPackageForm();
+    
+    tb.innerHTML = list.length ? list.map(pp=>`
+      <tr>
+        <td><strong>${pp.package_number || '-'}</strong></td>
+        <td>${pp.package_content || pp.package_name || '-'}</td>
+        <td><code style="background: var(--hover); padding: 2px 6px; border-radius: 4px; font-size: 0.9em;">${pp.barcode}</code></td>
+        <td style="text-align: center;"><span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">${pp.quantity}</span></td>
+        <td style="text-align: center;">${pp.weight_kg ? pp.weight_kg + ' kg' : '-'}</td>
+        <td style="text-align: center;">${pp.volume_m3 ? pp.volume_m3 + ' m³' : '-'}</td>
+        <td style="text-align: center;">
+          <button data-pkedit="${pp.id}" style="background: var(--warning); color: white; border: none; border-radius: 4px; margin-right: 5px;">✏️ Düzenle</button>
+          <button data-pkdel="${pp.id}" style="background: var(--danger); color: white; border: none; border-radius: 4px;">🗑️ Sil</button>
+        </td>
+      </tr>
+    `).join('') : '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--muted);"><em>Henüz paket tanımlanmamış</em></td></tr>';
+    $('#pkgModal').classList.add('show');
+    
+    $('#addPkgBtn').onclick = async ()=>{
+      // Zorunlu alan kontrolü
+      const packageNumber = $('#pkgNumber').value?.trim();
+      const barcode = $('#pkgBarcode').value?.trim();
+      
+      if (!packageNumber) {
+        alert('Paket numarası zorunludur!');
+        $('#pkgNumber').focus();
+        return;
+      }
+      
+      if (!barcode) {
+        alert('Barkod zorunludur!');
+        $('#pkgBarcode').focus();
+        return;
+      }
+      
+      const p = { 
+        package_number: packageNumber,
+        package_content: $('#pkgContent').value?.trim() || null,
+        barcode: barcode, 
+        quantity: parseInt($('#pkgQty').value||1,10),
+        weight_kg: parseFloat($('#pkgWeight').value) || null,
+        volume_m3: parseFloat($('#pkgVolume').value) || null
+      };
+      
+      try {
+        if (editingPackageId) {
+          // Update existing package
+          await API.updatePackage(editingPackageId, p);
+        } else {
+          // Add new package
+          await API.addPackage(pkgId, p);
+        }
+      } catch (error) {
+        alert(error.message || 'Bir hata oluştu');
+        return;
+      }
+      
+      await refresh();
+      const list2 = await API.listPackages(pkgId);
+      tb.innerHTML = list2.length ? list2.map(pp=>`
+        <tr>
+          <td><strong>${pp.package_number || '-'}</strong></td>
+          <td>${pp.package_content || pp.package_name || '-'}</td>
+          <td><code style="background: var(--hover); padding: 2px 6px; border-radius: 4px; font-size: 0.9em;">${pp.barcode}</code></td>
+          <td style="text-align: center;"><span style="background: var(--accent); color: white; padding: 2px 8px; border-radius: 12px; font-size: 0.85em;">${pp.quantity}</span></td>
+          <td style="text-align: center;">${pp.weight_kg ? pp.weight_kg + ' kg' : '-'}</td>
+          <td style="text-align: center;">${pp.volume_m3 ? pp.volume_m3 + ' m³' : '-'}</td>
+          <td style="text-align: center;">
+            <button data-pkedit="${pp.id}" style="background: var(--warning); color: white; border: none; border-radius: 4px; margin-right: 5px;">✏️ Düzenle</button>
+            <button data-pkdel="${pp.id}" style="background: var(--danger); color: white; border: none; border-radius: 4px;">🗑️ Sil</button>
+          </td>
+        </tr>
+      `).join('') : '<tr><td colspan="7" style="text-align: center; padding: 20px; color: var(--muted);"><em>Henüz paket tanımlanmamış</em></td></tr>';
+      clearPackageForm();
+    };
+  }
+  if(delId){ await API.deleteProduct(delId); await refresh(); }
+  const locId = e.target.getAttribute('data-loc');
+  if(locId){
+    const prodObj = products.find(x=>x.id==locId);
+    document.getElementById('locProdName').textContent = `${prodObj.name} (${prodObj.sku})`;
+    const list = await fetch('/api/products/'+locId+'/locations').then(r=>r.json());
+    document.getElementById('locList').innerHTML = list.map(l=>`<tr><td>${l.code}</td><td>${l.on_hand}</td></tr>`).join('');
+    document.getElementById('locModal').classList.add('show');
+    document.getElementById('assignLocBtn').onclick = async ()=>{
+      const code = document.getElementById('locCode').value.trim();
+      const qty = parseInt(document.getElementById('locQty').value||'0',10);
+      if(!code) return alert('Kod lazım');
+      await API.assignLocation(locId, { code, on_hand: qty });
+      const list2 = await fetch('/api/products/'+locId+'/locations').then(r=>r.json());
+      document.getElementById('locList').innerHTML = list2.map(l=>`<tr><td>${l.code}</td><td>${l.on_hand}</td></tr>`).join('');
+      document.getElementById('locCode').value=''; document.getElementById('locQty').value=0;
+      await refresh();
+    };
+  }
+  if(editId){
+    const p = products.find(x=>x.id==editId);
+    openEditModal(p);
+  }
+  const pkedit = e.target.getAttribute('data-pkedit');
+  if(pkedit){
+    // Find the package data and load for editing
+    const list = await API.listPackages(currentProductId);
+    const pkg = list.find(p => p.id == pkedit);
+    if(pkg) {
+      loadPackageForEdit(pkg);
+    }
+  }
+  const pkdel = e.target.getAttribute('data-pkdel');
+  if(pkdel){ await API.delPackage(pkdel); await refresh(); }
+});
+
+
+refresh();
+</script>
+</body>
+</html>

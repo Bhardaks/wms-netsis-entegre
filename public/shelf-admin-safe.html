@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Raf Yönetimi (Safe)</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+</head>
+<body>
+<header>
+  <h1>🏗️ Raf Yönetimi</h1>
+  <nav>
+    <a href="/index.html">Ana Sayfa</a>
+    <a href="/products.html">Ürünler</a>
+    <a href="/orders.html">Siparişler</a>
+    <a href="/shelf-scanner.html">Raf Tarayıcı</a>
+    <a href="/shelf-locations.html">Raf Lokasyonları</a>
+    <a href="/shelf-admin.html" class="active">Raf Yönetimi</a>
+  </nav>
+</header>
+
+<main class="grid" style="max-width:1400px;margin:auto;padding:16px">
+  
+  <section class="card">
+    <h2>📊 Test Durumu</h2>
+    <div id="loadStatus">Sayfa yükleniyor...</div>
+  </section>
+
+  <section class="card">
+    <h2>🔧 Hızlı Test</h2>
+    <button onclick="testShelfAPI()" class="btn-primary">Rafları Getir</button>
+    <div id="testResults" style="margin-top: 10px;"></div>
+  </section>
+
+</main>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    document.getElementById('loadStatus').innerHTML = '✅ Sayfa başarıyla yüklendi!';
+    console.log('✅ Safe shelf admin page loaded');
+});
+
+async function testShelfAPI() {
+    const resultDiv = document.getElementById('testResults');
+    try {
+        resultDiv.innerHTML = '🔄 API test ediliyor...';
+        const response = await fetch('/api/shelves');
+        const data = await response.json();
+        resultDiv.innerHTML = '<strong>✅ API çalışıyor!</strong><br>Raf sayısı: ' + (data.shelves ? data.shelves.length : 0);
+    } catch (error) {
+        resultDiv.innerHTML = '<strong>❌ API Hatası:</strong><br>' + error.message;
+    }
+}
+</script>
+
+<style>
+.card {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.btn-primary {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.btn-primary:hover {
+  background: #0056b3;
+}
+</style>
+
+</body>
+</html>

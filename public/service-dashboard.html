@@ -1,0 +1,856 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>SSH Servis Dashboard</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <script src="/assets/js/auth-new.js"></script>
+  <style>
+    /* Global mobile overflow fix */
+    html, body {
+      max-width: 100%;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+    
+    *, *:before, *:after {
+      box-sizing: border-box;
+    }
+    
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 1rem;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 12px 20px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-weight: 500;
+      color: var(--muted);
+    }
+    .tab-btn:hover {
+      background-color: var(--hover);
+      color: var(--fg);
+    }
+    .tab-btn.active {
+      border-bottom-color: var(--accent);
+      color: var(--accent);
+    }
+    .table-container {
+      overflow-x: auto;
+    }
+    
+    /* Stats cards */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    
+    .stat-card {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      border-left: 4px solid;
+    }
+    
+    .stat-card.urgent { border-left-color: var(--danger); }
+    .stat-card.pending { border-left-color: var(--warning); }
+    .stat-card.in-progress { border-left-color: var(--accent); }
+    .stat-card.completed { border-left-color: var(--success); }
+    
+    .stat-icon { font-size: 2rem; }
+    .stat-content h3 { margin: 0; font-size: 2rem; color: var(--fg); }
+    .stat-content p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    
+    /* Priority and status badges */
+    .priority-badge, .status-badge {
+      padding: 0.25rem 0.5rem;
+      border-radius: 12px;
+      font-size: 0.8rem;
+      font-weight: 500;
+      text-align: center;
+      display: inline-block;
+      min-width: 70px;
+    }
+    
+    .priority-urgent { background: var(--danger); color: white; }
+    .priority-high { background: #f97316; color: white; }
+    .priority-normal { background: var(--muted); color: white; }
+    .priority-low { background: var(--success); color: white; }
+    
+    .status-new { background: var(--muted); color: white; }
+    .status-pending { background: var(--warning); color: var(--bg); }
+    .status-sourcing { background: var(--accent); color: white; }
+    .status-package_opening { background: #8b5cf6; color: white; }
+    .status-ssh_storage { background: #ec4899; color: white; }
+    .status-factory_order { background: #f97316; color: white; }
+    .status-completed { background: var(--success); color: white; }
+    .status-cancelled { background: var(--danger); color: white; }
+    
+    /* Mobile cards */
+    .mobile-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .mobile-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+    
+    .mobile-card-header {
+      padding: 1rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .mobile-card-title {
+      font-weight: 600;
+      color: var(--fg);
+    }
+    
+    .mobile-card-content {
+      padding: 1rem;
+    }
+    
+    .mobile-card-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+    
+    .mobile-card-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .mobile-label {
+      font-weight: 500;
+      color: var(--muted);
+    }
+    
+    .mobile-card-actions {
+      padding: 1rem;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 0.5rem;
+    }
+    
+    /* Modal styling */
+    .detail-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 1.5rem;
+    }
+    
+    .detail-section {
+      background: var(--bg);
+      padding: 1rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+    }
+    
+    .detail-section.full-width {
+      grid-column: 1 / -1;
+    }
+    
+    .detail-section h4 {
+      margin: 0 0 1rem 0;
+      color: var(--accent);
+      font-size: 1.1rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 0.5rem;
+    }
+    
+    .detail-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+      padding: 0.5rem 0;
+    }
+    
+    .detail-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .detail-label {
+      font-weight: 500;
+      color: var(--muted);
+      min-width: 120px;
+    }
+    
+    .detail-value {
+      color: var(--fg);
+      text-align: right;
+      flex: 1;
+    }
+    
+    .issue-description {
+      background: var(--card);
+      padding: 1rem;
+      border-radius: 6px;
+      border-left: 4px solid var(--accent);
+      line-height: 1.6;
+      color: var(--fg);
+    }
+    
+    .required-part {
+      color: var(--accent);
+      font-weight: 600;
+    }
+    
+    .package-info {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    
+    .package-info small {
+      color: var(--muted);
+      font-size: 0.8rem;
+      margin-top: 0.25rem;
+    }
+    
+    .package-badge {
+      background: var(--accent);
+      color: white;
+      padding: 0.2rem 0.4rem;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      font-weight: 500;
+      display: inline-block;
+      margin-top: 0.25rem;
+    }
+    
+    /* Desktop/Mobile responsive display */
+    .desktop-table { display: block; }
+    .mobile-cards { display: none; }
+    
+    @media (max-width: 768px) {
+      .desktop-table { display: none; }
+      .mobile-cards { display: block; }
+      .stats-grid { grid-template-columns: repeat(2, 1fr); }
+      
+      .detail-grid {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+      
+      .detail-row {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 0.25rem;
+      }
+      
+      .detail-value {
+        text-align: left;
+      }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">SSH Servis Dashboard</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="main-content">
+  <div class="content-header">
+    <h2>🔧 SSH Servis Dashboard</h2>
+    <p>Aktif servis talepleri ve durum takibi</p>
+  </div>
+
+  <!-- Tabs for filtering -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="filterByStatus('')">Tümü</button>
+    <button class="tab-btn" onclick="filterByStatus('new')">Yeni</button>
+    <button class="tab-btn" onclick="filterByStatus('pending')">Beklemede</button>
+    <button class="tab-btn" onclick="filterByStatus('sourcing')">Parça Temin</button>
+    <button class="tab-btn" onclick="filterByStatus('completed')">Tamamlandı</button>
+  </div>
+
+  <!-- Statistics Cards -->
+  <div class="stats-grid">
+    <div class="stat-card urgent">
+      <div class="stat-icon">🚨</div>
+      <div class="stat-content">
+        <h3 id="urgentCount">0</h3>
+        <p>Acil Talepler</p>
+      </div>
+    </div>
+    <div class="stat-card pending">
+      <div class="stat-icon">⏳</div>
+      <div class="stat-content">
+        <h3 id="pendingCount">0</h3>
+        <p>Beklemede</p>
+      </div>
+    </div>
+    <div class="stat-card in-progress">
+      <div class="stat-icon">🔄</div>
+      <div class="stat-content">
+        <h3 id="inProgressCount">0</h3>
+        <p>İşlemde</p>
+      </div>
+    </div>
+    <div class="stat-card completed">
+      <div class="stat-icon">✅</div>
+      <div class="stat-content">
+        <h3 id="completedCount">0</h3>
+        <p>Tamamlandı</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Service Requests Table - Desktop -->
+  <div class="table-container desktop-table">
+    <table id="requestsTable">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Müşteri</th>
+          <th>Ürün</th>
+          <th>Sorun</th>
+          <th>Öncelik</th>
+          <th>Durum</th>
+          <th>Tarih</th>
+          <th>İşlemler</th>
+        </tr>
+      </thead>
+      <tbody id="requestsTableBody">
+        <!-- Dynamic content will be loaded here -->
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Service Requests Cards - Mobile -->
+  <div class="mobile-cards" id="mobileRequestCards">
+    <!-- Dynamic mobile cards will be loaded here -->
+  </div>
+
+  <!-- Loading indicator -->
+  <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+    <div class="loading-spinner"></div>
+    <p>Servis talepleri yükleniyor...</p>
+  </div>
+
+  <!-- Empty state -->
+  <div id="emptyState" class="empty-state" style="display: none;">
+    <div class="empty-icon">📋</div>
+    <h3>Henüz servis talebi yok</h3>
+    <p>İlk servis talebini oluşturmak için "Servis Talep" sayfasını kullanın.</p>
+    <a href="/service-request.html" class="action-btn primary">Yeni Servis Talebi</a>
+  </div>
+</main>
+
+<!-- Service Request Detail Modal -->
+<div id="serviceModal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Servis Talebi Detayları</h3>
+      <button class="modal-close" onclick="closeServiceModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="serviceModalBody">
+      <!-- Dynamic content -->
+    </div>
+    <div class="modal-footer">
+      <button class="action-btn secondary" onclick="closeServiceModal()">Kapat</button>
+      <button class="action-btn primary" onclick="showStatusUpdate()">Durum Güncelle</button>
+      <button class="action-btn success" onclick="openPackageStation()" id="packageOpeningBtn" style="display: none;">📂 Paket Açma</button>
+    </div>
+  </div>
+</div>
+
+<!-- Status Update Modal -->
+<div id="statusModal" class="modal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Servis Durumu Güncelle</h3>
+      <button class="modal-close" onclick="closeStatusModal()">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="statusUpdateForm">
+        <div class="form-group">
+          <label for="newStatus">Yeni Durum:</label>
+          <select id="newStatus" required>
+            <option value="">Seçiniz</option>
+            <option value="new">Yeni</option>
+            <option value="pending">Beklemede</option>
+            <option value="sourcing">Parça Temin</option>
+            <option value="package_opening">Paket Açma</option>
+            <option value="ssh_storage">SSH Depolama</option>
+            <option value="factory_order">Fabrika Sipariş</option>
+            <option value="completed">Tamamlandı</option>
+            <option value="cancelled">İptal</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="statusNote">Durum Notu:</label>
+          <textarea id="statusNote" rows="3" placeholder="İsteğe bağlı not..."></textarea>
+        </div>
+      </form>
+    </div>
+    <div class="modal-footer">
+      <button class="action-btn secondary" onclick="closeStatusModal()">İptal</button>
+      <button class="action-btn primary" onclick="updateServiceStatus()">Güncelle</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let allRequests = [];
+let filteredRequests = [];
+let currentRequest = null;
+let currentStatusFilter = '';
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('🔧 SSH Servis Dashboard yüklendi');
+    loadServiceRequests();
+    
+    // Auto-refresh every 30 seconds
+    setInterval(loadServiceRequests, 30000);
+});
+
+
+// Load service requests from API
+async function loadServiceRequests() {
+    try {
+        document.getElementById('loadingIndicator').style.display = 'block';
+        
+        const response = await fetch('/api/service-requests');
+        const data = await response.json();
+        
+        if (data.success) {
+            allRequests = data.requests;
+            filterByStatus(currentStatusFilter);
+            updateStatistics();
+        } else {
+            throw new Error(data.error || 'Servis talepleri yüklenemedi');
+        }
+    } catch (error) {
+        console.error('❌ Servis talepleri yükleme hatası:', error);
+        showError('Servis talepleri yüklenirken hata oluştu: ' + error.message);
+    } finally {
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+// Update statistics cards
+function updateStatistics() {
+    const stats = {
+        urgent: allRequests.filter(r => r.priority === 'urgent').length,
+        pending: allRequests.filter(r => r.status === 'new' || r.status === 'pending').length,
+        inProgress: allRequests.filter(r => ['sourcing', 'package_opening', 'ssh_storage', 'factory_order'].includes(r.status)).length,
+        completed: allRequests.filter(r => r.status === 'completed').length
+    };
+    
+    document.getElementById('urgentCount').textContent = stats.urgent;
+    document.getElementById('pendingCount').textContent = stats.pending;
+    document.getElementById('inProgressCount').textContent = stats.inProgress;
+    document.getElementById('completedCount').textContent = stats.completed;
+}
+
+// Filter by status (tab-based)
+function filterByStatus(status) {
+    currentStatusFilter = status;
+    
+    // Update active tab
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    event?.target?.classList.add('active');
+    
+    // Filter requests
+    filteredRequests = status ? allRequests.filter(r => r.status === status) : [...allRequests];
+    displayRequests();
+}
+
+// Display filtered requests in table and mobile cards
+function displayRequests() {
+    const tbody = document.getElementById('requestsTableBody');
+    const mobileCards = document.getElementById('mobileRequestCards');
+    const emptyState = document.getElementById('emptyState');
+    
+    if (filteredRequests.length === 0) {
+        tbody.innerHTML = '';
+        mobileCards.innerHTML = '';
+        emptyState.style.display = 'block';
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    
+    // Desktop table
+    tbody.innerHTML = filteredRequests.map(request => `
+        <tr onclick="showRequestDetail(${request.id})" style="cursor: pointer;">
+            <td><strong>#${request.id}</strong></td>
+            <td>
+                <strong>${request.customer_name}</strong>
+                ${request.customer_phone ? `<br><small>${request.customer_phone}</small>` : ''}
+            </td>
+            <td>
+                <strong>${request.product_name}</strong>
+                <br><small>${request.product_sku}</small>
+                ${request.package_number ? `<br><span class="package-badge">📦 ${request.package_number}</span>` : ''}
+            </td>
+            <td>${truncateText(request.issue_description, 30)}</td>
+            <td>
+                <span class="priority-badge priority-${request.priority}">
+                    ${getPriorityText(request.priority)}
+                </span>
+            </td>
+            <td>
+                <span class="status-badge status-${request.status}">
+                    ${getStatusText(request.status)}
+                </span>
+            </td>
+            <td>${formatDate(request.created_at)}</td>
+            <td>
+                ${request.status === 'completed' ? 
+                    '<span style="color: var(--success); font-weight: 600;">✅ Tamamlandı</span>' :
+                    `<button class="action-btn primary small" onclick="event.stopPropagation(); startProcessing(${request.id})">
+                        İşleme Başla
+                    </button>`
+                }
+            </td>
+        </tr>
+    `).join('');
+    
+    // Mobile cards
+    mobileCards.innerHTML = filteredRequests.map(request => `
+        <div class="mobile-card" onclick="showRequestDetail(${request.id})">
+            <div class="mobile-card-header">
+                <div class="mobile-card-title">
+                    <strong>#${request.id}</strong> - ${request.customer_name}
+                </div>
+                <span class="status-badge status-${request.status}">
+                    ${getStatusText(request.status)}
+                </span>
+            </div>
+            <div class="mobile-card-content">
+                <div class="mobile-card-row">
+                    <span class="mobile-label">Ürün:</span>
+                    <span>${request.product_name}</span>
+                </div>
+                <div class="mobile-card-row">
+                    <span class="mobile-label">SKU:</span>
+                    <span>${request.product_sku}</span>
+                </div>
+                ${request.package_number ? `
+                    <div class="mobile-card-row">
+                        <span class="mobile-label">Paket No:</span>
+                        <span class="package-badge">${request.package_number}</span>
+                    </div>
+                ` : ''}
+                <div class="mobile-card-row">
+                    <span class="mobile-label">Sorun:</span>
+                    <span>${truncateText(request.issue_description, 40)}</span>
+                </div>
+                <div class="mobile-card-row">
+                    <span class="mobile-label">Öncelik:</span>
+                    <span class="priority-badge priority-${request.priority}">
+                        ${getPriorityText(request.priority)}
+                    </span>
+                </div>
+                <div class="mobile-card-row">
+                    <span class="mobile-label">Tarih:</span>
+                    <span>${formatDate(request.created_at)}</span>
+                </div>
+            </div>
+            <div class="mobile-card-actions">
+                ${request.status === 'completed' ? 
+                    '<span style="color: var(--success); font-weight: 600;">✅ Tamamlandı</span>' :
+                    `<button class="action-btn primary small" onclick="event.stopPropagation(); startProcessing(${request.id})">
+                        İşleme Başla
+                    </button>
+                    ${request.status !== 'cancelled' ? `
+                        <button class="action-btn secondary small" onclick="event.stopPropagation(); quickStatusUpdate(${request.id})">
+                            Güncelle
+                        </button>
+                    ` : ''}`
+                }
+            </div>
+        </div>
+    `).join('');
+}
+
+// Show request detail modal
+async function showRequestDetail(requestId) {
+    currentRequest = allRequests.find(r => r.id === requestId);
+    if (!currentRequest) return;
+    
+    const modalBody = document.getElementById('serviceModalBody');
+    modalBody.innerHTML = `
+        <div class="detail-grid">
+            <div class="detail-section">
+                <h4>📋 Talep Bilgileri</h4>
+                <div class="detail-row">
+                    <span class="detail-label">Talep ID:</span>
+                    <span class="detail-value"><strong>#${currentRequest.id}</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Durum:</span>
+                    <span class="status-badge status-${currentRequest.status}">
+                        ${getStatusText(currentRequest.status)}
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Öncelik:</span>
+                    <span class="priority-badge priority-${currentRequest.priority}">
+                        ${getPriorityText(currentRequest.priority)}
+                    </span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Oluşturma Tarihi:</span>
+                    <span class="detail-value">${formatDateTime(currentRequest.created_at)}</span>
+                </div>
+            </div>
+            
+            <div class="detail-section">
+                <h4>👤 Müşteri Bilgileri</h4>
+                <div class="detail-row">
+                    <span class="detail-label">Müşteri Adı:</span>
+                    <span class="detail-value"><strong>${currentRequest.customer_name}</strong></span>
+                </div>
+                ${currentRequest.customer_phone ? `
+                    <div class="detail-row">
+                        <span class="detail-label">Telefon:</span>
+                        <span class="detail-value">${currentRequest.customer_phone}</span>
+                    </div>
+                ` : ''}
+                ${currentRequest.customer_email ? `
+                    <div class="detail-row">
+                        <span class="detail-label">E-mail:</span>
+                        <span class="detail-value">${currentRequest.customer_email}</span>
+                    </div>
+                ` : ''}
+                ${currentRequest.order_number ? `
+                    <div class="detail-row">
+                        <span class="detail-label">Sipariş No:</span>
+                        <span class="detail-value">${currentRequest.order_number}</span>
+                    </div>
+                ` : ''}
+            </div>
+            
+            <div class="detail-section">
+                <h4>📦 Ürün Bilgileri</h4>
+                <div class="detail-row">
+                    <span class="detail-label">Ürün Adı:</span>
+                    <span class="detail-value"><strong>${currentRequest.product_name}</strong></span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">SKU:</span>
+                    <span class="detail-value">${currentRequest.product_sku}</span>
+                </div>
+                ${currentRequest.package_number ? `
+                    <div class="detail-row">
+                        <span class="detail-label">Paket No:</span>
+                        <span class="detail-value package-info">
+                            <strong>${currentRequest.package_number}</strong>
+                            <small>(İçerik: ${currentRequest.package_name}, Barkod: ${currentRequest.package_barcode})</small>
+                        </span>
+                    </div>
+                ` : ''}
+                <div class="detail-row">
+                    <span class="detail-label">Gerekli Parça:</span>
+                    <span class="detail-value required-part">${currentRequest.required_part || '-'}</span>
+                </div>
+            </div>
+            
+            <div class="detail-section full-width">
+                <h4>🔧 Sorun Detayları</h4>
+                <div class="issue-description">
+                    ${currentRequest.issue_description}
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Show package opening button if status allows
+    const packageBtn = document.getElementById('packageOpeningBtn');
+    if (currentRequest.status === 'sourcing' || currentRequest.status === 'pending') {
+        packageBtn.style.display = 'inline-block';
+    } else {
+        packageBtn.style.display = 'none';
+    }
+    
+    document.getElementById('serviceModal').style.display = 'block';
+}
+
+// Close service detail modal
+function closeServiceModal() {
+    document.getElementById('serviceModal').style.display = 'none';
+    currentRequest = null;
+}
+
+// Show status update modal
+function showStatusUpdate() {
+    if (!currentRequest) return;
+    
+    document.getElementById('newStatus').value = currentRequest.status;
+    document.getElementById('statusNote').value = '';
+    document.getElementById('statusModal').style.display = 'block';
+}
+
+// Close status update modal
+function closeStatusModal() {
+    document.getElementById('statusModal').style.display = 'none';
+}
+
+// Open package opening station for selected request
+function openPackageStation() {
+    if (!currentRequest) return;
+    
+    // Set the request ID in localStorage for the package opening page to use
+    localStorage.setItem('preselected_request_id', currentRequest.id);
+    
+    // Open package opening page in new tab
+    window.open('/package-opening.html', '_blank');
+    
+    closeServiceModal();
+}
+
+// Start processing request - direct to package opening
+function startProcessing(requestId) {
+    // Set the request ID in localStorage for the package opening page to use
+    localStorage.setItem('preselected_request_id', requestId);
+    
+    // Open package opening page in new tab
+    window.open('/package-opening.html', '_blank');
+}
+
+// Quick status update
+async function quickStatusUpdate(requestId) {
+    currentRequest = allRequests.find(r => r.id === requestId);
+    if (!currentRequest) return;
+    
+    showStatusUpdate();
+}
+
+// Update service status
+async function updateServiceStatus() {
+    if (!currentRequest) return;
+    
+    const newStatus = document.getElementById('newStatus').value;
+    const statusNote = document.getElementById('statusNote').value;
+    
+    if (!newStatus) {
+        alert('Lütfen yeni durum seçiniz');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/service-requests/${currentRequest.id}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                status: newStatus,
+                note: statusNote
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            console.log('✅ Durum güncellendi:', data);
+            closeStatusModal();
+            closeServiceModal();
+            loadServiceRequests(); // Refresh data
+            showSuccess('Servis durumu başarıyla güncellendi');
+        } else {
+            throw new Error(data.error || 'Durum güncellenemedi');
+        }
+    } catch (error) {
+        console.error('❌ Durum güncelleme hatası:', error);
+        showError('Durum güncellenirken hata oluştu: ' + error.message);
+    }
+}
+
+// Utility functions
+function truncateText(text, maxLength) {
+    if (!text) return '-';
+    return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+}
+
+function getPriorityText(priority) {
+    const priorities = {
+        urgent: 'Acil',
+        high: 'Yüksek', 
+        normal: 'Normal',
+        low: 'Düşük'
+    };
+    return priorities[priority] || priority;
+}
+
+function getStatusText(status) {
+    const statuses = {
+        new: 'Yeni',
+        pending: 'Beklemede',
+        sourcing: 'Parça Temin',
+        package_opening: 'Paket Açma',
+        ssh_storage: 'SSH Depolama',
+        factory_order: 'Fabrika Sipariş',
+        completed: 'Tamamlandı',
+        cancelled: 'İptal'
+    };
+    return statuses[status] || status;
+}
+
+function formatDate(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('tr-TR');
+}
+
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('tr-TR');
+}
+
+function showSuccess(message) {
+    alert('✅ ' + message);
+}
+
+function showError(message) {
+    alert('❌ ' + message);
+}
+
+// Modal click outside to close
+window.onclick = function(event) {
+    const serviceModal = document.getElementById('serviceModal');
+    const statusModal = document.getElementById('statusModal');
+    
+    if (event.target === serviceModal) {
+        closeServiceModal();
+    }
+    if (event.target === statusModal) {
+        closeStatusModal();
+    }
+}
+</script>
+</body>
+</html>

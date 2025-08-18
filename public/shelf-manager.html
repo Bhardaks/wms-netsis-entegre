@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raf Yönetimi</title>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <style>
+        body { font-family: Arial, sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .card { background: white; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 20px; }
+        .form-group { display: flex; flex-direction: column; }
+        .form-group label { font-weight: bold; margin-bottom: 5px; }
+        .form-group input, .form-group select { padding: 10px; border: 2px solid #ddd; border-radius: 4px; }
+        .form-group input:focus, .form-group select:focus { border-color: #007bff; outline: none; }
+        .form-group small { color: #666; font-size: 12px; margin-top: 3px; }
+        .barcode-display { display: flex; gap: 8px; }
+        .barcode-display input { flex: 1; }
+        .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; padding-top: 20px; border-top: 1px solid #eee; }
+        .btn { border: none; padding: 12px 24px; border-radius: 4px; cursor: pointer; font-weight: bold; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-sm { padding: 6px 12px; font-size: 12px; }
+        .btn:hover { opacity: 0.9; }
+        .stats-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; }
+        .stat-card { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; border-radius: 8px; text-align: center; }
+        .stat-number { font-size: 2em; font-weight: bold; }
+        .stat-label { font-size: 0.9em; opacity: 0.9; }
+        .table-container { overflow-x: auto; border: 1px solid #ddd; border-radius: 4px; margin-top: 20px; }
+        table { width: 100%; border-collapse: collapse; }
+        table th, table td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        table th { background: #f8f9fa; font-weight: bold; }
+        .zone-badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+        .zone-A { background: #e3f2fd; color: #1976d2; }
+        .zone-B { background: #f3e5f5; color: #7b1fa2; }
+        .zone-C { background: #e8f5e8; color: #388e3c; }
+        .zone-D { background: #fff3e0; color: #f57c00; }
+        .zone-PICK { background: #e8eaf6; color: #3f51b5; }
+        .zone-RETURN { background: #fce4ec; color: #c2185b; }
+        .zone-QUARANTINE { background: #ffebee; color: #d32f2f; }
+        .action-buttons { display: flex; gap: 5px; }
+        .loading { text-align: center; padding: 40px; color: #666; }
+        .empty-state { text-align: center; padding: 40px; color: #666; }
+        .empty-icon { font-size: 48px; margin-bottom: 10px; }
+        .filters-row { display: grid; grid-template-columns: 200px 1fr auto; gap: 10px; margin-bottom: 20px; align-items: center; }
+        @media (max-width: 768px) {
+            .form-grid { grid-template-columns: 1fr; }
+            .filters-row { grid-template-columns: 1fr; }
+            .form-actions { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">Raf Yönetimi</span>
+  </div>
+  <nav class="main-nav">
+    <div class="nav-group">
+      <span class="nav-group-label">Ana Modüller</span>
+      <a href="/index.html" class="nav-link">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-text">Ana Sayfa</span>
+      </a>
+      <a href="/products.html" class="nav-link">
+        <span class="nav-icon">📦</span>
+        <span class="nav-text">Ürünler</span>
+      </a>
+      <a href="/orders.html" class="nav-link">
+        <span class="nav-icon">📋</span>
+        <span class="nav-text">Siparişler</span>
+      </a>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">Raf Yönetimi</span>
+      <a href="/shelf-scanner.html" class="nav-link">
+        <span class="nav-icon">🔍</span>
+        <span class="nav-text">Raf Tarayıcı</span>
+      </a>
+      <a href="/shelf-locations.html" class="nav-link">
+        <span class="nav-icon">📍</span>
+        <span class="nav-text">Lokasyonlar</span>
+      </a>
+      <a href="/shelf-admin.html" class="nav-link active">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-text">Raf Yönetimi</span>
+      </a>
+    </div>
+  </nav>
+  <div id="mobileNav" class="mobile-nav">
+    <button id="mobileNavToggle" class="mobile-nav-toggle">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </button>
+    <div id="mobileNavMenu" class="mobile-nav-menu">
+      <div class="mobile-nav-header">
+        <h3>WMS Sistemi</h3>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-group-label">Ana Modüller</span>
+        <a href="/index.html" class="mobile-nav-link">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-text">Ana Sayfa</span>
+        </a>
+        <a href="/products.html" class="mobile-nav-link">
+          <span class="nav-icon">📦</span>
+          <span class="nav-text">Ürünler</span>
+        </a>
+        <a href="/orders.html" class="mobile-nav-link">
+          <span class="nav-icon">📋</span>
+          <span class="nav-text">Siparişler</span>
+        </a>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-group-label">Raf Yönetimi</span>
+        <a href="/shelf-scanner.html" class="mobile-nav-link">
+          <span class="nav-icon">🔍</span>
+          <span class="nav-text">Raf Tarayıcı</span>
+        </a>
+        <a href="/shelf-locations.html" class="mobile-nav-link">
+          <span class="nav-icon">📍</span>
+          <span class="nav-text">Lokasyonlar</span>
+        </a>
+        <a href="/shelf-admin.html" class="mobile-nav-link">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">Raf Yönetimi</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="container">
+    <h1>🏗️ Raf Yönetimi</h1>
+
+    <!-- İstatistikler -->
+    <div class="card">
+        <h2>📊 Raf İstatistikleri</h2>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-number" id="totalShelves">-</div>
+                <div class="stat-label">Toplam Raf</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalZones">-</div>
+                <div class="stat-label">Toplam Bölge</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="occupiedShelves">-</div>
+                <div class="stat-label">Dolu Raf</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-number" id="totalCapacity">-</div>
+                <div class="stat-label">Toplam Kapasite</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Raf Ekleme Formu -->
+    <div class="card">
+        <h2>➕ Yeni Raf Ekle</h2>
+        <form id="shelfForm">
+            <div class="form-grid">
+                <div class="form-group">
+                    <label for="shelfName">Raf Adı *</label>
+                    <input type="text" id="shelfName" name="shelf_name" required maxlength="100" placeholder="A Bölgesi 1. Koridor Seviye 1">
+                    <small>Raf için açıklayıcı isim</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="zone">Bölge *</label>
+                    <select id="zone" name="zone" required>
+                        <option value="">Bölge Seçin</option>
+                        <option value="A">A Bölgesi</option>
+                        <option value="B">B Bölgesi</option>
+                        <option value="C">C Bölgesi</option>
+                        <option value="D">D Bölgesi</option>
+                        <option value="PICK">Toplama Alanı</option>
+                        <option value="RETURN">İade Alanı</option>
+                        <option value="QUARANTINE">Karantina</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="aisle">Koridor *</label>
+                    <select id="aisle" name="aisle" required>
+                        <option value="">Koridor Seçin</option>
+                        <option value="1">1. Koridor</option>
+                        <option value="2">2. Koridor</option>
+                        <option value="3">3. Koridor</option>
+                        <option value="4">4. Koridor</option>
+                        <option value="5">5. Koridor</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="level">Seviye *</label>
+                    <select id="level" name="level" required>
+                        <option value="">Seviye Seçin</option>
+                        <option value="1">Seviye 1 (Alt)</option>
+                        <option value="2">Seviye 2 (Orta)</option>
+                        <option value="3">Seviye 3 (Üst)</option>
+                        <option value="4">Seviye 4</option>
+                        <option value="5">Seviye 5</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label for="capacity">Kapasite</label>
+                    <input type="number" id="capacity" name="capacity" value="100" min="1" max="1000">
+                    <small>Maksimum paket kapasitesi</small>
+                </div>
+                
+                <div class="form-group">
+                    <label for="generatedBarcode">Otomatik Raf Barkodu</label>
+                    <div class="barcode-display">
+                        <input type="text" id="generatedBarcode" name="shelf_code" readonly placeholder="Bölge, koridor ve seviye seçin">
+                        <button type="button" onclick="regenerateBarcode()" class="btn btn-secondary btn-sm">🔄 Yenile</button>
+                    </div>
+                    <small>Sistem otomatik olarak benzersiz barkod üretir</small>
+                </div>
+            </div>
+            
+            <div class="form-actions">
+                <button type="button" onclick="clearForm()" class="btn btn-secondary">🗑️ Temizle</button>
+                <button type="submit" class="btn btn-success">💾 Rafı Kaydet</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Raf Listesi -->
+    <div class="card">
+        <h2>📋 Mevcut Raflar (<span id="shelfCount">0</span> raf)</h2>
+        
+        <div class="filters-row">
+            <select id="zoneFilter">
+                <option value="">Tüm Bölgeler</option>
+            </select>
+            <input id="searchInput" placeholder="Raf kodu, raf adı ara...">
+            <button onclick="loadShelves()" class="btn btn-primary">🔄 Yenile</button>
+        </div>
+        
+        <div class="table-container">
+            <table id="shelvesTable">
+                <thead>
+                    <tr>
+                        <th>Raf Barkodu</th>
+                        <th>Raf Adı</th>
+                        <th>Bölge</th>
+                        <th>Konum</th>
+                        <th>Kapasite</th>
+                        <th>İşlemler</th>
+                    </tr>
+                </thead>
+                <tbody id="shelvesTableBody">
+                </tbody>
+            </table>
+        </div>
+        
+        <div class="loading" id="loading" style="display:none">
+            Raflar yükleniyor...
+        </div>
+        
+        <div class="empty-state" id="emptyState" style="display:none">
+            <div class="empty-icon">📭</div>
+            <div class="empty-text">Henüz raf eklenmemiş</div>
+        </div>
+    </div>
+</div>
+</main>
+
+<script>
+let allShelves = [];
+let filteredShelves = [];
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('✅ Raf Yönetimi sayfası yüklendi');
+    
+    // Mobile navigation functionality
+    const mobileNavToggle = document.getElementById('mobileNavToggle');
+    const mobileNavMenu = document.getElementById('mobileNavMenu');
+    
+    if (mobileNavToggle && mobileNavMenu) {
+        mobileNavToggle.addEventListener('click', function() {
+            mobileNavMenu.classList.toggle('show');
+        });
+        
+        // Close mobile menu when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!mobileNavToggle.contains(e.target) && !mobileNavMenu.contains(e.target)) {
+                mobileNavMenu.classList.remove('show');
+            }
+        });
+    }
+    
+    loadShelves();
+    loadStats();
+    setupEventListeners();
+});
+
+function setupEventListeners() {
+    document.getElementById('shelfForm').addEventListener('submit', saveShelf);
+    document.getElementById('zone').addEventListener('change', generateBarcode);
+    document.getElementById('aisle').addEventListener('change', generateBarcode);
+    document.getElementById('level').addEventListener('change', generateBarcode);
+    document.getElementById('zoneFilter').addEventListener('change', filterShelves);
+    document.getElementById('searchInput').addEventListener('input', debounce(filterShelves, 300));
+}
+
+function generateBarcode() {
+    const zone = document.getElementById('zone').value;
+    const aisle = document.getElementById('aisle').value;
+    const level = document.getElementById('level').value;
+    
+    if (zone && aisle && level) {
+        const timestamp = Date.now().toString().slice(-3);
+        const barcode = zone + aisle + '-' + level.padStart(2, '0') + '-' + timestamp;
+        document.getElementById('generatedBarcode').value = barcode;
+    } else {
+        document.getElementById('generatedBarcode').value = '';
+    }
+}
+
+function regenerateBarcode() {
+    generateBarcode();
+}
+
+function clearForm() {
+    document.getElementById('shelfForm').reset();
+    document.getElementById('generatedBarcode').value = '';
+}
+
+async function loadStats() {
+    try {
+        const response = await fetch('/api/shelves/stats');
+        const data = await response.json();
+        
+        document.getElementById('totalShelves').textContent = data.totals.total_shelves || 0;
+        document.getElementById('totalZones').textContent = data.totals.total_zones || 0;
+        document.getElementById('occupiedShelves').textContent = data.totals.occupied_shelves || 0;
+        document.getElementById('totalCapacity').textContent = data.totals.total_capacity || 0;
+    } catch (error) {
+        console.error('İstatistik yükleme hatası:', error);
+    }
+}
+
+async function loadShelves() {
+    try {
+        document.getElementById('loading').style.display = 'block';
+        
+        const response = await fetch('/api/shelves');
+        const data = await response.json();
+        
+        allShelves = data.shelves || [];
+        populateZoneFilter();
+        filterShelves();
+        
+    } catch (error) {
+        console.error('Raf yükleme hatası:', error);
+        showError('Raflar yüklenirken hata oluştu');
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+
+function populateZoneFilter() {
+    const zones = [...new Set(allShelves.map(s => s.zone))].filter(Boolean).sort();
+    const zoneFilter = document.getElementById('zoneFilter');
+    
+    zoneFilter.innerHTML = '<option value="">Tüm Bölgeler</option>' + 
+        zones.map(zone => '<option value="' + zone + '">' + zone + ' Bölgesi</option>').join('');
+}
+
+function filterShelves() {
+    const zoneValue = document.getElementById('zoneFilter').value;
+    const searchValue = document.getElementById('searchInput').value.toLowerCase();
+    
+    filteredShelves = allShelves.filter(shelf => {
+        if (zoneValue && shelf.zone !== zoneValue) return false;
+        
+        if (searchValue) {
+            const searchText = (shelf.shelf_code + ' ' + shelf.shelf_name).toLowerCase();
+            if (!searchText.includes(searchValue)) return false;
+        }
+        
+        return true;
+    });
+    
+    displayShelves(filteredShelves);
+}
+
+function displayShelves(shelves) {
+    document.getElementById('shelfCount').textContent = shelves.length;
+    const tbody = document.getElementById('shelvesTableBody');
+    
+    if (shelves.length === 0) {
+        tbody.innerHTML = '';
+        document.getElementById('emptyState').style.display = 'block';
+        return;
+    }
+    
+    document.getElementById('emptyState').style.display = 'none';
+    
+    tbody.innerHTML = shelves.map(shelf => 
+        '<tr>' +
+            '<td><strong>' + shelf.shelf_code + '</strong></td>' +
+            '<td>' + shelf.shelf_name + '</td>' +
+            '<td><span class="zone-badge zone-' + shelf.zone + '">' + shelf.zone + '</span></td>' +
+            '<td>Koridor ' + shelf.aisle + ', Seviye ' + shelf.level + '</td>' +
+            '<td>' + shelf.capacity + '</td>' +
+            '<td>' +
+                '<div class="action-buttons">' +
+                    '<button onclick="printShelfBarcode(\'' + shelf.shelf_code + '\')" class="btn btn-primary btn-sm">🖨️ Barkod</button> ' +
+                    '<button onclick="deleteShelf(' + shelf.id + ')" class="btn btn-secondary btn-sm">🗑️ Sil</button>' +
+                '</div>' +
+            '</td>' +
+        '</tr>'
+    ).join('');
+}
+
+async function saveShelf(e) {
+    e.preventDefault();
+    
+    const formData = new FormData(e.target);
+    const shelfData = Object.fromEntries(formData.entries());
+    
+    shelfData.level = parseInt(shelfData.level);
+    shelfData.capacity = parseInt(shelfData.capacity);
+    
+    if (!shelfData.shelf_code) {
+        showError('Önce bölge, koridor ve seviye seçin');
+        return;
+    }
+    
+    try {
+        const submitBtn = e.target.querySelector('button[type="submit"]');
+        submitBtn.disabled = true;
+        submitBtn.textContent = '💾 Kaydediliyor...';
+        
+        const response = await fetch('/api/shelves', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(shelfData)
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error);
+        }
+        
+        showSuccess('Raf başarıyla kaydedildi!');
+        clearForm();
+        await loadShelves();
+        await loadStats();
+        
+        if (confirm('Raf kaydedildi! Barkod etiketi yazdırmak ister misiniz?')) {
+            printShelfBarcode(data.shelf.shelf_code);
+        }
+        
+    } catch (error) {
+        console.error('Raf kaydetme hatası:', error);
+        showError('Raf kaydedilemedi: ' + error.message);
+    } finally {
+        const submitBtn = document.getElementById('shelfForm').querySelector('button[type="submit"]');
+        submitBtn.disabled = false;
+        submitBtn.textContent = '💾 Rafı Kaydet';
+    }
+}
+
+async function deleteShelf(shelfId) {
+    const shelf = allShelves.find(s => s.id === shelfId);
+    if (!shelf) return;
+    
+    if (!confirm('Bu rafı silmek istediğinizden emin misiniz?\n\nRaf: ' + shelf.shelf_code + '\n' + shelf.shelf_name)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/shelves/' + shelfId, {
+            method: 'DELETE'
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error);
+        }
+        
+        showSuccess(data.message);
+        await loadShelves();
+        await loadStats();
+        
+    } catch (error) {
+        console.error('Raf silme hatası:', error);
+        showError('Raf silinemedi: ' + error.message);
+    }
+}
+
+function printShelfBarcode(shelfCode) {
+    const shelf = allShelves.find(s => s.shelf_code === shelfCode);
+    if (!shelf) {
+        showError('Raf bulunamadı');
+        return;
+    }
+    
+    const printWindow = window.open('', '_blank');
+    const htmlContent = '<!DOCTYPE html>' +
+        '<html><head><title>Raf Barkod Etiketi - ' + shelfCode + '</title>' +
+        '<style>' +
+        'body { font-family: Arial, sans-serif; margin: 20px; text-align: center; }' +
+        '.barcode-label { width: 10cm; height: 5cm; border: 2px solid #000; padding: 20px; margin: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; }' +
+        '.barcode-code { font-size: 28px; font-weight: bold; margin-bottom: 15px; letter-spacing: 2px; }' +
+        '.barcode-lines { width: 80%; height: 40px; background: repeating-linear-gradient(90deg, #000 0px, #000 2px, #fff 2px, #fff 4px); margin: 15px 0; }' +
+        '.barcode-name { font-size: 14px; margin-bottom: 8px; }' +
+        '.barcode-location { font-size: 12px; color: #666; }' +
+        '.instructions { margin-top: 30px; font-size: 14px; color: #333; }' +
+        '@media print { .instructions { display: none; } }' +
+        '</style></head><body>' +
+        '<div class="barcode-label">' +
+            '<div class="barcode-code">' + shelf.shelf_code + '</div>' +
+            '<div class="barcode-lines"></div>' +
+            '<div class="barcode-name">' + shelf.shelf_name + '</div>' +
+            '<div class="barcode-location">' + shelf.zone + ' Bölgesi - Koridor ' + shelf.aisle + ' - Seviye ' + shelf.level + '</div>' +
+        '</div>' +
+        '<div class="instructions">' +
+            '<p>Bu etiketi rafa yapıştırın ve barkod okuyucunuzla test edin.</p>' +
+            '<p>Yazdırmak için <strong>Ctrl+P</strong> tuşlarına basın.</p>' +
+        '</div>' +
+        '<script>setTimeout(function() { window.print(); }, 500);</script>' +
+        '</body></html>';
+    
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+}
+
+function debounce(func, wait) {
+    let timeout;
+    return function executedFunction(...args) {
+        const later = () => {
+            clearTimeout(timeout);
+            func(...args);
+        };
+        clearTimeout(timeout);
+        timeout = setTimeout(later, wait);
+    };
+}
+
+function showError(message) {
+    alert('❌ Hata: ' + message);
+}
+
+function showSuccess(message) {
+    alert('✅ ' + message);
+}
+</script>
+
+</body>
+</html>

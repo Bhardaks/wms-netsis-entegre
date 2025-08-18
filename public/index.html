@@ -1,0 +1,661 @@
+
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>WMS Netsis Entegre Dashboard</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Netsis Entegre</h1>
+    <span class="header-subtitle">Depo Yönetim + ERP Entegrasyon Paneli</span>
+  </div>
+  <div class="header-user">
+    <div class="user-info" id="userInfo" style="display: none;">
+      <span class="user-name" id="userName"></span>
+      <span class="user-role" id="userRole"></span>
+      <button class="logout-btn" id="logoutBtn">Çıkış</button>
+    </div>
+  </div>
+  <nav class="main-nav">
+    <div class="nav-group">
+      <span class="nav-group-label">Ana Modüller</span>
+      <a href="/index.html" class="nav-link">
+        <span class="nav-icon">🏠</span>
+        <span class="nav-text">Ana Sayfa</span>
+      </a>
+      <a href="/products.html" class="nav-link">
+        <span class="nav-icon">📦</span>
+        <span class="nav-text">Ürünler</span>
+      </a>
+      <a href="/orders.html" class="nav-link">
+        <span class="nav-icon">📋</span>
+        <span class="nav-text">Siparişler</span>
+      </a>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">Raf Yönetimi</span>
+      <a href="/shelf-scanner.html" class="nav-link">
+        <span class="nav-icon">🔍</span>
+        <span class="nav-text">Rafa Dizim</span>
+      </a>
+      <a href="/shelf-locations.html" class="nav-link">
+        <span class="nav-icon">📍</span>
+        <span class="nav-text">Lokasyonlar</span>
+      </a>
+      <a href="/shelf-admin.html" class="nav-link">
+        <span class="nav-icon">⚙️</span>
+        <span class="nav-text">Raf Yönetimi</span>
+      </a>
+      <a href="/shelf-transfer.html" class="nav-link">
+        <span class="nav-icon">🔄</span>
+        <span class="nav-text">Raf Transferi</span>
+      </a>
+      <a href="/inventory-count.html" class="nav-link">
+        <span class="nav-icon">📊</span>
+        <span class="nav-text">Depo Sayım</span>
+      </a>
+      <a href="/stock-management.html" class="nav-link">
+        <span class="nav-icon">📈</span>
+        <span class="nav-text">Stok Yönetimi</span>
+      </a>
+    </div>
+    <div class="nav-group">
+      <span class="nav-group-label">SSH Servis</span>
+      <a href="/service-request.html" class="nav-link">
+        <span class="nav-icon">🔧</span>
+        <span class="nav-text">Servis Talep</span>
+      </a>
+      <a href="/service-dashboard.html" class="nav-link">
+        <span class="nav-icon">📊</span>
+        <span class="nav-text">Servis Dashboard</span>
+      </a>
+      <a href="/ssh-inventory.html" class="nav-link">
+        <span class="nav-icon">📋</span>
+        <span class="nav-text">SSH Envanter</span>
+      </a>
+    </div>
+  </nav>
+  <div id="mobileNav" class="mobile-nav">
+    <button id="mobileNavToggle" class="mobile-nav-toggle">
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+      <span class="hamburger-line"></span>
+    </button>
+    <div id="mobileNavMenu" class="mobile-nav-menu">
+      <div class="mobile-nav-header">
+        <h3>WMS Sistemi</h3>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-group-label">Ana Modüller</span>
+        <a href="/index.html" class="mobile-nav-link">
+          <span class="nav-icon">🏠</span>
+          <span class="nav-text">Ana Sayfa</span>
+        </a>
+        <a href="/products.html" class="mobile-nav-link">
+          <span class="nav-icon">📦</span>
+          <span class="nav-text">Ürünler</span>
+        </a>
+        <a href="/orders.html" class="mobile-nav-link">
+          <span class="nav-icon">📋</span>
+          <span class="nav-text">Siparişler</span>
+        </a>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-group-label">Raf Yönetimi</span>
+        <a href="/shelf-scanner.html" class="mobile-nav-link">
+          <span class="nav-icon">🔍</span>
+          <span class="nav-text">Rafa Dizim</span>
+        </a>
+        <a href="/shelf-locations.html" class="mobile-nav-link">
+          <span class="nav-icon">📍</span>
+          <span class="nav-text">Lokasyonlar</span>
+        </a>
+        <a href="/shelf-admin.html" class="mobile-nav-link">
+          <span class="nav-icon">⚙️</span>
+          <span class="nav-text">Raf Yönetimi</span>
+        </a>
+        <a href="/shelf-transfer.html" class="mobile-nav-link">
+          <span class="nav-icon">🔄</span>
+          <span class="nav-text">Raf Transferi</span>
+        </a>
+        <a href="/inventory-count.html" class="mobile-nav-link">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Depo Sayım</span>
+        </a>
+      </div>
+      <div class="mobile-nav-group">
+        <span class="mobile-nav-group-label">SSH Servis</span>
+        <a href="/service-request.html" class="mobile-nav-link">
+          <span class="nav-icon">🔧</span>
+          <span class="nav-text">Servis Talep</span>
+        </a>
+        <a href="/service-dashboard.html" class="mobile-nav-link">
+          <span class="nav-icon">📊</span>
+          <span class="nav-text">Servis Dashboard</span>
+        </a>
+        <a href="/ssh-inventory.html" class="mobile-nav-link">
+          <span class="nav-icon">📋</span>
+          <span class="nav-text">SSH Envanter</span>
+        </a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main class="dashboard">
+  <!-- İstatistikler -->
+  <section class="stats-grid">
+    <div class="stat-card">
+      <h3>Toplam Ürün</h3>
+      <div class="stat-number" id="totalProducts">-</div>
+      <div class="stat-label">Adet</div>
+    </div>
+    <div class="stat-card">
+      <h3>Bekleyen Siparişler</h3>
+      <div class="stat-number" id="pendingOrders">-</div>
+      <div class="stat-label">Sipariş</div>
+    </div>
+    <div class="stat-card">
+      <h3>Toplam Raf</h3>
+      <div class="stat-number" id="totalShelves">-</div>
+      <div class="stat-label">Raf</div>
+    </div>
+    <div class="stat-card">
+      <h3>Sistem Durumu</h3>
+      <div class="stat-number" id="systemStatus">-</div>
+      <div class="stat-label">Status</div>
+    </div>
+  </section>
+
+  <!-- Modül Grupları -->
+  <section class="modules-grid">
+    <!-- Ana Modüller -->
+    <div class="module-group">
+      <h2>📊 Ana Modüller</h2>
+      <div class="module-cards">
+        <a href="/products.html" class="module-card">
+          <div class="module-icon">📦</div>
+          <div class="module-info">
+            <h3>Ürün Yönetimi</h3>
+            <p>Ürün kayıt, güncelleme ve stok takibi</p>
+          </div>
+        </a>
+        <a href="/orders.html" class="module-card">
+          <div class="module-icon">📋</div>
+          <div class="module-info">
+            <h3>Sipariş Yönetimi</h3>
+            <p>Sipariş işleme ve durum takibi</p>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- Raf Yönetimi -->
+    <div class="module-group">
+      <h2>🏬 Raf Yönetimi</h2>
+      <div class="module-cards">
+        <a href="/shelf-scanner.html" class="module-card">
+          <div class="module-icon">🔍</div>
+          <div class="module-info">
+            <h3>Rafa Dizim</h3>
+            <p>Barkod okuma ve raf sorguları</p>
+          </div>
+        </a>
+        <a href="/shelf-locations.html" class="module-card">
+          <div class="module-icon">📍</div>
+          <div class="module-info">
+            <h3>Lokasyon Haritası</h3>
+            <p>Raf konumları ve analitik dashboard</p>
+          </div>
+        </a>
+        <a href="/shelf-admin.html" class="module-card">
+          <div class="module-icon">⚙️</div>
+          <div class="module-info">
+            <h3>Raf Yönetimi</h3>
+            <p>Raf oluşturma ve düzenleme</p>
+          </div>
+        </a>
+        <a href="/shelf-transfer.html" class="module-card">
+          <div class="module-icon">🔄</div>
+          <div class="module-info">
+            <h3>Raf Transferi</h3>
+            <p>Raflar arası stok aktarımı</p>
+          </div>
+        </a>
+        <a href="/inventory-count.html" class="module-card">
+          <div class="module-icon">📊</div>
+          <div class="module-info">
+            <h3>Depo Sayım</h3>
+            <p>Stok sayım ve envanter kontrolü</p>
+          </div>
+        </a>
+        <a href="/stock-management.html" class="module-card">
+          <div class="module-icon">📈</div>
+          <div class="module-info">
+            <h3>Stok Yönetimi</h3>
+            <p>Stok seviyeleri ve hareket takibi</p>
+          </div>
+        </a>
+      </div>
+    </div>
+
+    <!-- SSH Servis -->
+    <div class="module-group">
+      <h2>🔧 SSH Servis Hub</h2>
+      <div class="module-cards">
+        <a href="/service-request.html" class="module-card">
+          <div class="module-icon">🔧</div>
+          <div class="module-info">
+            <h3>Servis Talep</h3>
+            <p>Müşteri servis taleplerini oluştur</p>
+          </div>
+        </a>
+        <a href="/service-dashboard.html" class="module-card">
+          <div class="module-icon">📊</div>
+          <div class="module-info">
+            <h3>Servis Dashboard</h3>
+            <p>Servis talep durumları ve işlemler</p>
+          </div>
+        </a>
+        <a href="/ssh-inventory.html" class="module-card">
+          <div class="module-icon">📋</div>
+          <div class="module-info">
+            <h3>SSH Envanter</h3>
+            <p>SSH alanı stok takibi</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sistem Yönetimi -->
+  <section class="card">
+    <h2>🛠️ Sistem Yönetimi</h2>
+    <div class="system-management">
+      <div class="management-actions">
+        <a href="/admin-panel.html" class="action-btn admin-panel-link">
+          <span class="btn-icon">👥</span>
+          <span class="btn-text">Admin Panel</span>
+        </a>
+        <a href="/role-management.html" class="action-btn admin-panel-link">
+          <span class="btn-icon">🔐</span>
+          <span class="btn-text">Rol İzinleri</span>
+        </a>
+        <button class="action-btn" id="syncAllBtn">
+          <span class="btn-icon">🔄</span>
+          <span class="btn-text">Wix Senkronizasyonu</span>
+        </button>
+        <button class="action-btn" id="checkHealth">
+          <span class="btn-icon">🏥</span>
+          <span class="btn-text">Sistem Durumu</span>
+        </button>
+      </div>
+      <div class="sync-status">
+        <h4>Senkronizasyon Durumu</h4>
+        <div id="syncStatus" class="sync-info">
+          <div>Son Ürün Sync: <span id="lastProductSync">-</span></div>
+          <div>Son Sipariş Sync: <span id="lastOrderSync">-</span></div>
+        </div>
+      </div>
+      <pre id="healthOut" class="health-output" style="display: none;"></pre>
+    </div>
+  </section>
+
+  <!-- Son İşlemler -->
+  <section class="card">
+    <h2>📋 Son İşlemler</h2>
+    <div class="recent-activities">
+      <div id="recentOrders" class="activity-section">
+        <h3>Son Siparişler</h3>
+        <div class="activity-list" id="recentOrdersList">Yükleniyor...</div>
+      </div>
+      <div id="recentShelves" class="activity-section">
+        <h3>Raf İstatistikleri</h3>
+        <div class="activity-list" id="recentShelvesList">Yükleniyor...</div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+const API = {
+  health: () => fetch('/api/health').then(r => r.json()),
+  products: () => fetch('/api/products').then(r => r.json()),
+  orders: () => fetch('/api/orders').then(r => r.json()),
+  syncWixAll: () => fetch('/api/sync/wix/all', {method: 'POST'}).then(r => r.json()),
+  
+  // Auth API
+  checkAuth: () => fetch('/api/auth/check', { credentials: 'include' }).then(r => r.json()),
+  logout: () => fetch('/api/auth/logout', { 
+    method: 'POST', 
+    credentials: 'include' 
+  }).then(r => r.json()),
+  getRolePermissions: (role) => fetch(`/api/role-permissions/${role}`, { credentials: 'include' }).then(r => r.json())
+};
+
+// Role permissions
+const ROLE_PERMISSIONS = {
+  admin: ['products', 'orders', 'shelf', 'service', 'system'],
+  operator: ['products', 'orders', 'shelf'],
+  service: ['service']
+};
+
+// Authentication kontrolü
+async function checkAuthentication() {
+  try {
+    const authCheck = await API.checkAuth();
+    if (!authCheck.authenticated) {
+      window.location.href = '/login.html';
+      return false;
+    }
+    
+    // Dynamic role permissions yükle
+    await loadDynamicRolePermissions(authCheck.user.role);
+    
+    // User bilgilerini göster
+    document.getElementById('userName').textContent = authCheck.user.full_name || authCheck.user.username;
+    document.getElementById('userRole').textContent = getRoleDisplayName(authCheck.user.role);
+    document.getElementById('userInfo').style.display = 'flex';
+    
+    // Role bazında menü kontrolü
+    applyRoleBasedAccess(authCheck.user.role);
+    
+    return authCheck.user;
+  } catch (error) {
+    console.error('Auth check error:', error);
+    window.location.href = '/login.html';
+    return false;
+  }
+}
+
+// Dynamic role permissions yükle
+async function loadDynamicRolePermissions(role) {
+  try {
+    console.log('INDEX: Loading dynamic permissions for role:', role);
+    const result = await API.getRolePermissions(role);
+    console.log('INDEX: API response:', result);
+    
+    if (result.success) {
+      // Convert {permission: boolean} to [permission] array for enabled permissions
+      const enabledPermissions = Object.entries(result.permissions)
+        .filter(([permission, enabled]) => enabled)
+        .map(([permission]) => permission);
+      
+      ROLE_PERMISSIONS[role] = enabledPermissions;
+      console.log('INDEX: Dynamic permissions loaded:', enabledPermissions);
+    } else {
+      console.error('Failed to load role permissions:', result.message);
+      // Keep existing static permissions as fallback
+    }
+  } catch (error) {
+    console.error('Error loading dynamic role permissions:', error);
+    // Keep existing static permissions as fallback
+  }
+}
+
+function getRoleDisplayName(role) {
+  const roleNames = {
+    admin: 'Yönetici',
+    operator: 'Operatör',
+    service: 'Servis Teknisyeni'
+  };
+  return roleNames[role] || role;
+}
+
+// Role bazında menü erişim kontrolü - Hiyerarşik izinlerle güncellendi
+function applyRoleBasedAccess(userRole) {
+  const permissions = ROLE_PERMISSIONS[userRole] || [];
+  
+  // Detailed permission mapping for menu items - Granular SSH control
+  const menuPermissionMap = {
+    '/products.html': ['products', 'products.view', 'products.create', 'products.edit'],
+    '/orders.html': ['orders', 'orders.view', 'orders.create', 'orders.edit'],
+    '/shelf-scanner.html': ['shelf', 'shelf.scanner', 'shelf.assign'],
+    '/shelf-locations.html': ['shelf', 'shelf.locations', 'shelf.view'],
+    '/shelf-admin.html': ['shelf', 'shelf.admin', 'shelf.manage'],
+    '/shelf-transfer.html': ['shelf', 'shelf.transfer', 'shelf.move'],
+    '/inventory-count.html': ['shelf', 'shelf.inventory', 'shelf.count'],
+    '/stock-management.html': ['shelf', 'shelf.stock', 'shelf.analytics'],
+    
+    // SSH Servis - Alt bölüm bazında kontrol
+    '/service-request.html': ['service.requests', 'service.create'], // Sadece servis talepleri iznine bakacak
+    '/service-dashboard.html': ['service.dashboard', 'service.view'], // Sadece dashboard iznine bakacak
+    '/ssh-inventory.html': ['service.ssh_inventory', 'service.inventory'] // Sadece SSH envanter iznine bakacak
+  };
+  
+  // Check each menu link with granular permission control
+  Object.entries(menuPermissionMap).forEach(([href, requiredPerms]) => {
+    const links = document.querySelectorAll(`a[href="${href}"]`);
+    links.forEach(link => {
+      const parent = link.closest('.module-card') || link.closest('.nav-link') || link.closest('.mobile-nav-link');
+      if (parent) {
+        const hasAccess = requiredPerms.some(perm => permissions.includes(perm));
+        parent.style.display = hasAccess ? '' : 'none';
+        
+        // Debug için log
+        if (href.includes('service') || href.includes('ssh')) {
+          console.log(`SSH Menu Check - ${href}: Required [${requiredPerms.join(', ')}], Has Access: ${hasAccess}`, permissions);
+        }
+      }
+    });
+  });
+  
+  // SSH Servis Modül Grubu - En az bir SSH alt iznine sahipse göster
+  const sshServiceGroup = document.querySelector('.module-group:has(a[href*="service"], a[href*="ssh"])');
+  if (sshServiceGroup) {
+    const sshPermissions = ['service.requests', 'service.create', 'service.dashboard', 'service.view', 'service.ssh_inventory', 'service.inventory'];
+    const hasSshAccess = sshPermissions.some(perm => permissions.includes(perm));
+    
+    // SSH modül grubunu göster/gizle
+    sshServiceGroup.style.display = hasSshAccess ? '' : 'none';
+    console.log('SSH Group Access Check:', hasSshAccess, sshPermissions, permissions);
+  }
+  
+  // Sistem Yönetimi kontrolü (detaylı alt izinlerle)
+  const systemManagement = document.querySelector('.system-management');
+  if (systemManagement) {
+    const systemPermissions = ['system', 'system.admin_panel', 'system.manage_users', 'system.manage_roles'];
+    const hasSystemAccess = systemPermissions.some(perm => permissions.includes(perm));
+    systemManagement.style.display = hasSystemAccess ? '' : 'none';
+    
+    // Admin panel link kontrolü
+    const adminPanelLink = systemManagement.querySelector('.admin-panel-link[href="/admin-panel.html"]');
+    if (adminPanelLink) {
+      const adminPerms = ['system', 'system.admin_panel', 'system.manage_users'];
+      const hasAdminAccess = adminPerms.some(perm => permissions.includes(perm));
+      adminPanelLink.style.display = hasAdminAccess ? '' : 'none';
+    }
+    
+    // Role management link kontrolü
+    const roleManagementLink = systemManagement.querySelector('.admin-panel-link[href="/role-management.html"]');
+    if (roleManagementLink) {
+      const rolePerms = ['system', 'system.manage_roles', 'system.manage_permissions'];
+      const hasRoleAccess = rolePerms.some(perm => permissions.includes(perm));
+      roleManagementLink.style.display = hasRoleAccess ? '' : 'none';
+    }
+  }
+  
+  // Modül gruplarını gizle/göster (SSH özel kontrolü hariç)
+  const moduleGroups = document.querySelectorAll('.module-group');
+  moduleGroups.forEach(group => {
+    // SSH servis grubu için özel kontrol yapıldı yukarıda, diğerleri için normal kontrol
+    const isSSHGroup = group.querySelector('a[href*="service"], a[href*="ssh"]');
+    if (!isSSHGroup) {
+      const visibleCards = group.querySelectorAll('.module-card:not([style*="display: none"])');
+      if (visibleCards.length === 0) {
+        group.style.display = 'none';
+      } else {
+        group.style.display = '';
+      }
+    }
+  });
+  
+  // Nav gruplarını gizle/göster (SSH özel kontrolü)
+  const navGroups = document.querySelectorAll('.nav-group, .mobile-nav-group');
+  navGroups.forEach(group => {
+    const isSSHNavGroup = group.querySelector('a[href*="service"], a[href*="ssh"]');
+    if (isSSHNavGroup) {
+      // SSH nav grubu için - en az bir SSH alt iznine sahipse göster
+      const sshPermissions = ['service.requests', 'service.create', 'service.dashboard', 'service.view', 'service.ssh_inventory', 'service.inventory'];
+      const hasSshAccess = sshPermissions.some(perm => permissions.includes(perm));
+      group.style.display = hasSshAccess ? '' : 'none';
+    } else {
+      // Diğer nav grupları için normal kontrol
+      const visibleLinks = group.querySelectorAll('.nav-link:not([style*="display: none"]), .mobile-nav-link:not([style*="display: none"])');
+      if (visibleLinks.length === 0) {
+        group.style.display = 'none';
+      } else {
+        group.style.display = '';
+      }
+    }
+  });
+}
+
+// Dashboard verilerini yükle
+async function loadDashboard() {
+  try {
+    // İstatistikleri yükle
+    const [health, products, orders] = await Promise.all([
+      API.health(),
+      API.products(),
+      API.orders()
+    ]);
+
+    // Toplam ürün sayısı
+    document.getElementById('totalProducts').textContent = products.length;
+
+    // Bekleyen siparişler (open, approved durumunda olanlar)
+    const pendingCount = orders.filter(o => ['open', 'approved'].includes(o.status)).length;
+    document.getElementById('pendingOrders').textContent = pendingCount;
+
+    // Sistem durumu
+    document.getElementById('systemStatus').textContent = health.status === 'ok' ? '✅' : '❌';
+
+    // Toplam raf sayısı (şimdilik 0 - raflar API'si yoksa)
+    document.getElementById('totalShelves').textContent = '12';
+
+    // Son siparişleri göster
+    const recentOrdersHtml = orders.slice(0, 5).map(order => `
+      <div class="activity-item">
+        <div class="activity-text">
+          <strong>${order.order_number}</strong> - ${order.customer_name || 'Anonim'}
+        </div>
+        <div class="activity-status status-${order.status}">${order.status}</div>
+      </div>
+    `).join('');
+    document.getElementById('recentOrdersList').innerHTML = recentOrdersHtml;
+
+    // Raf istatistikleri
+    document.getElementById('recentShelvesList').innerHTML = `
+      <div class="activity-item">
+        <div class="activity-text">Dolu Raflar: 8</div>
+        <div class="activity-status status-active">Aktif</div>
+      </div>
+      <div class="activity-item">
+        <div class="activity-text">Boş Raflar: 4</div>
+        <div class="activity-status status-pending">Bekleyen</div>
+      </div>
+    `;
+
+  } catch (error) {
+    console.error('Dashboard yükleme hatası:', error);
+    document.getElementById('totalProducts').textContent = 'Hata';
+    document.getElementById('pendingOrders').textContent = 'Hata';
+    document.getElementById('systemStatus').textContent = '❌';
+  }
+}
+
+// Sunucu durumu kontrolü
+document.getElementById('checkHealth').addEventListener('click', async () => {
+  try {
+    const health = await API.health();
+    const healthOut = document.getElementById('healthOut');
+    healthOut.textContent = JSON.stringify(health, null, 2);
+    healthOut.style.display = 'block';
+    document.getElementById('systemStatus').textContent = health.status === 'ok' ? '✅' : '❌';
+  } catch (error) {
+    const healthOut = document.getElementById('healthOut');
+    healthOut.textContent = 'Sunucu erişilemez: ' + error.message;
+    healthOut.style.display = 'block';
+    document.getElementById('systemStatus').textContent = '❌';
+  }
+});
+
+// Wix senkronizasyonu
+document.getElementById('syncAllBtn').addEventListener('click', async () => {
+  const btn = document.getElementById('syncAllBtn');
+  const originalText = btn.innerHTML;
+  
+  btn.innerHTML = '<span class="btn-icon">⏳</span><span class="btn-text">Senkronize Ediliyor...</span>';
+  btn.disabled = true;
+
+  try {
+    const result = await API.syncWixAll();
+    console.log('Sync result:', result);
+    
+    // Başarı mesajı
+    if (result.products?.ok && result.orders?.ok) {
+      alert(`Senkronizasyon başarılı!\nÜrünler: +${result.products.imported}\nSiparişler: +${result.orders.importedOrders}`);
+      
+      // Sync zamanlarını güncelle
+      const now = new Date().toLocaleString('tr-TR');
+      document.getElementById('lastProductSync').textContent = now;
+      document.getElementById('lastOrderSync').textContent = now;
+      
+      // Dashboard'u yenile
+      await loadDashboard();
+    } else {
+      alert('Senkronizasyonda sorun var. Detaylar için konsolu kontrol edin.');
+    }
+  } catch (error) {
+    alert('Senkronizasyon hatası: ' + error.message);
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+});
+
+// Mobile navigation toggle
+document.getElementById('mobileNavToggle').addEventListener('click', () => {
+  const menu = document.getElementById('mobileNavMenu');
+  menu.classList.toggle('show');
+});
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('mobileNav');
+  const menu = document.getElementById('mobileNavMenu');
+  if (!nav.contains(e.target)) {
+    menu.classList.remove('show');
+  }
+});
+
+// Logout işlemi
+document.getElementById('logoutBtn').addEventListener('click', async () => {
+  try {
+    await API.logout();
+    window.location.href = '/login.html';
+  } catch (error) {
+    console.error('Logout error:', error);
+    window.location.href = '/login.html';
+  }
+});
+
+// Sayfa yüklendiğinde authentication kontrolü ve dashboard'u yükle
+document.addEventListener('DOMContentLoaded', async () => {
+  const user = await checkAuthentication();
+  if (user) {
+    await loadDashboard();
+  }
+});
+
+// Her 30 saniyede bir otomatik yenile
+setInterval(loadDashboard, 30000);
+</script>
+</body>
+</html>

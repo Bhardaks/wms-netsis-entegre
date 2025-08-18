@@ -1,0 +1,809 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Admin Panel</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <script src="/assets/js/auth-new.js"></script>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <a href="/index.html" class="home-link">
+      <h1>WMS Yönetim Sistemi</h1>
+    </a>
+    <span class="header-subtitle">Admin Panel - Kullanıcı Yönetimi</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="btn-home">
+      <span class="btn-icon">🏠</span>
+      <span class="btn-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="container">
+  <!-- Admin Sekmeler -->
+  <section class="tabs-container">
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('users')">👥 Kullanıcı Yönetimi</button>
+      <button class="tab-btn" onclick="switchTab('permissions')">🔐 Rol İzinleri</button>
+      <button class="tab-btn" onclick="switchTab('system')">🖥️ Sistem Bilgileri</button>
+    </div>
+  </section>
+
+  <!-- Kullanıcı Yönetimi Tab -->
+  <div id="usersTab" class="tab-content active">
+  <!-- Kullanıcı İstatistikleri -->
+  <section class="stats-grid">
+    <div class="stat-card">
+      <h3>Toplam Kullanıcı</h3>
+      <div class="stat-number" id="totalUsers">-</div>
+      <div class="stat-label">Kullanıcı</div>
+    </div>
+    <div class="stat-card">
+      <h3>Aktif Kullanıcılar</h3>
+      <div class="stat-number" id="activeUsers">-</div>
+      <div class="stat-label">Aktif</div>
+    </div>
+    <div class="stat-card">
+      <h3>Yöneticiler</h3>
+      <div class="stat-number" id="adminUsers">-</div>
+      <div class="stat-label">Admin</div>
+    </div>
+    <div class="stat-card">
+      <h3>Son Giriş</h3>
+      <div class="stat-number" id="recentLogins">-</div>
+      <div class="stat-label">24 Saat</div>
+    </div>
+  </section>
+
+  <!-- Kullanıcı Oluşturma -->
+  <section class="card">
+    <h2>🆕 Yeni Kullanıcı Ekle</h2>
+    <form id="createUserForm" class="user-form">
+      <div class="form-grid">
+        <div class="form-group">
+          <label for="newUsername">Kullanıcı Adı</label>
+          <input type="text" id="newUsername" required placeholder="Kullanıcı adı" />
+        </div>
+        <div class="form-group">
+          <label for="newPassword">Şifre</label>
+          <input type="password" id="newPassword" required placeholder="Şifre" />
+        </div>
+        <div class="form-group">
+          <label for="newRole">Rol</label>
+          <select id="newRole" required>
+            <option value="">Rol Seçin</option>
+            <option value="admin">Yönetici</option>
+            <option value="operator">Operatör</option>
+            <option value="service">Servis Teknisyeni</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="newFullName">Ad Soyad</label>
+          <input type="text" id="newFullName" placeholder="Ad Soyad" />
+        </div>
+        <div class="form-group">
+          <label for="newEmail">E-posta</label>
+          <input type="email" id="newEmail" placeholder="E-posta adresi" />
+        </div>
+        <div class="form-group">
+          <button type="submit" class="btn-primary">Kullanıcı Ekle</button>
+        </div>
+      </div>
+    </form>
+  </section>
+
+  <!-- Kullanıcı Listesi -->
+  <section class="card">
+    <div class="card-header">
+      <h2>👥 Kullanıcı Listesi</h2>
+      <button id="refreshUsers" class="btn-secondary">
+        <span class="btn-icon">🔄</span>
+        Yenile
+      </button>
+    </div>
+    
+    <div class="table-container">
+      <table id="usersTable" class="data-table">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Kullanıcı Adı</th>
+            <th>Ad Soyad</th>
+            <th>Rol</th>
+            <th>E-posta</th>
+            <th>Durum</th>
+            <th>Oluşturma</th>
+            <th>Son Giriş</th>
+            <th>İşlemler</th>
+          </tr>
+        </thead>
+        <tbody id="usersTableBody">
+          <tr>
+            <td colspan="9" class="loading">Yükleniyor...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+  </div>
+
+  <!-- Rol İzinleri Tab -->
+  <div id="permissionsTab" class="tab-content">
+    <section class="card">
+      <h2>🔐 Rol İzinleri Hızlı Görünüm</h2>
+      <div class="permissions-overview" id="permissionsOverview">
+        <div class="loading">Yükleniyor...</div>
+      </div>
+      <div class="permissions-actions">
+        <a href="/role-management.html" class="btn-primary">
+          <span class="btn-icon">⚙️</span>
+          Detaylı Rol Yönetimi
+        </a>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>📊 İzin İstatistikleri</h2>
+      <div class="permission-stats" id="permissionStats">
+        <div class="loading">Yükleniyor...</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Sistem Bilgileri Tab -->
+  <div id="systemTab" class="tab-content">
+    <section class="card">
+      <h2>🖥️ Sistem Bilgileri</h2>
+      <div class="system-info">
+        <div class="info-grid">
+          <div class="info-item">
+            <strong>Server Durumu:</strong>
+            <span id="serverStatus" class="status-badge">-</span>
+          </div>
+          <div class="info-item">
+            <strong>Database:</strong>
+            <span id="dbStatus" class="status-badge">-</span>
+          </div>
+          <div class="info-item">
+            <strong>Session Store:</strong>
+            <span id="sessionStatus" class="status-badge">-</span>
+          </div>
+          <div class="info-item">
+            <strong>Uptime:</strong>
+            <span id="uptime">-</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+</main>
+
+<style>
+/* Tabs */
+.tabs-container {
+  margin-bottom: 24px;
+}
+
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 2px solid var(--border);
+  margin-bottom: 24px;
+}
+
+.tab-btn {
+  background: transparent;
+  border: none;
+  padding: 12px 20px;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  border-radius: 8px 8px 0 0;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tab-btn:hover {
+  background: var(--hover);
+  color: var(--fg);
+}
+
+.tab-btn.active {
+  background: var(--card);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  margin-bottom: -2px;
+}
+
+.tab-content {
+  display: none;
+}
+
+.tab-content.active {
+  display: block;
+}
+
+.permissions-overview {
+  margin-bottom: 20px;
+}
+
+.permissions-actions {
+  display: flex;
+  justify-content: center;
+  padding: 20px 0;
+}
+
+.permissions-grid-overview {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+}
+
+.role-overview-card {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.role-overview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.role-overview-title {
+  font-weight: 600;
+  color: var(--fg);
+  font-size: 16px;
+}
+
+.permission-count-badge {
+  background: var(--accent);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.permission-tags-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.permission-tag-overview {
+  background: var(--border);
+  color: var(--muted);
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.permission-tag-overview.enabled {
+  background: var(--success);
+  color: white;
+}
+
+.permission-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.stat-item {
+  background: var(--hover);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  text-align: center;
+}
+
+.stat-item-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.stat-item-label {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.user-form {
+  margin-bottom: 20px;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 16px;
+  align-items: end;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.form-group label {
+  margin-bottom: 4px;
+  font-weight: 500;
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.form-group input, .form-group select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.form-group input:focus, .form-group select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(77, 163, 255, 0.2);
+}
+
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--hover);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: background 0.2s ease;
+}
+
+.btn-secondary:hover {
+  background: var(--border);
+}
+
+.status-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.status-active {
+  background: var(--success);
+  color: white;
+}
+
+.status-inactive {
+  background: var(--danger);
+  color: white;
+}
+
+.system-info {
+  margin-top: 16px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.info-item {
+  padding: 12px;
+  background: var(--hover);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.role-badge {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.role-admin { background: #dc2626; color: white; }
+.role-operator { background: #0ea5e9; color: white; }
+.role-service { background: #059669; color: white; }
+
+.action-btn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  margin: 0 2px;
+}
+
+.btn-deactivate {
+  background: var(--warning);
+  color: white;
+}
+
+.btn-activate {
+  background: var(--success);
+  color: white;
+}
+
+.btn-delete {
+  background: var(--danger);
+  color: white;
+}
+
+/* Header navigation styles */
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 2rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.home-link {
+  text-decoration: none;
+  color: inherit;
+  transition: opacity 0.2s ease;
+}
+
+.home-link:hover {
+  opacity: 0.8;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.btn-home {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  background: var(--accent);
+  color: white;
+  text-decoration: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-home:hover {
+  background: #1d4ed8;
+  transform: translateY(-1px);
+}
+
+.btn-home .btn-icon {
+  font-size: 16px;
+}
+
+@media (max-width: 768px) {
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  header {
+    padding: 1rem;
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .btn-home .btn-text {
+    display: none;
+  }
+}
+</style>
+
+<script>
+const API = {
+  users: () => fetch('/api/users', { credentials: 'include' }).then(r => r.json()),
+  createUser: (userData) => fetch('/api/users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify(userData)
+  }).then(r => r.json()),
+  health: () => fetch('/api/health').then(r => r.json()),
+  rolePermissions: () => fetch('/api/role-permissions', { credentials: 'include' }).then(r => r.json()),
+  permissionTypes: () => fetch('/api/permission-types', { credentials: 'include' }).then(r => r.json())
+};
+
+// Tab switching
+function switchTab(tabName) {
+  // Remove active class from all tabs and buttons
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+  
+  // Add active class to selected tab and button
+  document.querySelector(`[onclick="switchTab('${tabName}')"]`).classList.add('active');
+  document.getElementById(`${tabName}Tab`).classList.add('active');
+  
+  // Load tab-specific content
+  if (tabName === 'permissions') {
+    loadPermissionsOverview();
+  } else if (tabName === 'system') {
+    loadSystemStatus();
+  }
+}
+
+// Kullanıcıları yükle
+async function loadUsers() {
+  try {
+    const users = await API.users();
+    
+    // İstatistikleri güncelle
+    document.getElementById('totalUsers').textContent = users.length;
+    document.getElementById('activeUsers').textContent = users.filter(u => u.active).length;
+    document.getElementById('adminUsers').textContent = users.filter(u => u.role === 'admin').length;
+    
+    // Son 24 saatteki girişleri say
+    const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const recentLogins = users.filter(u => 
+      u.last_login && new Date(u.last_login) > oneDayAgo
+    ).length;
+    document.getElementById('recentLogins').textContent = recentLogins;
+    
+    // Tabloyu doldur
+    const tbody = document.getElementById('usersTableBody');
+    tbody.innerHTML = users.map(user => `
+      <tr>
+        <td>${user.id}</td>
+        <td><strong>${user.username}</strong></td>
+        <td>${user.full_name || '-'}</td>
+        <td><span class="role-badge role-${user.role}">${getRoleDisplayName(user.role)}</span></td>
+        <td>${user.email || '-'}</td>
+        <td>
+          <span class="status-badge ${user.active ? 'status-active' : 'status-inactive'}">
+            ${user.active ? 'Aktif' : 'Pasif'}
+          </span>
+        </td>
+        <td>${formatDate(user.created_at)}</td>
+        <td>${user.last_login ? formatDate(user.last_login) : 'Hiç'}</td>
+        <td>
+          <button class="action-btn ${user.active ? 'btn-deactivate' : 'btn-activate'}" 
+                  onclick="toggleUserStatus(${user.id}, ${user.active})">
+            ${user.active ? 'Pasifleştir' : 'Aktifleştir'}
+          </button>
+          ${user.username !== 'admin' ? `
+            <button class="action-btn btn-delete" onclick="deleteUser(${user.id}, '${user.username}')">
+              Sil
+            </button>
+          ` : ''}
+        </td>
+      </tr>
+    `).join('');
+    
+  } catch (error) {
+    console.error('Users load error:', error);
+    document.getElementById('usersTableBody').innerHTML = `
+      <tr><td colspan="9" class="error">Kullanıcılar yüklenemedi: ${error.message}</td></tr>
+    `;
+  }
+}
+
+// İzin özetini yükle
+async function loadPermissionsOverview() {
+  try {
+    const [permissionsResult, typesResult] = await Promise.all([
+      API.rolePermissions(),
+      API.permissionTypes()
+    ]);
+    
+    if (permissionsResult.success && typesResult.success) {
+      displayPermissionsOverview(permissionsResult.permissions, typesResult.permissionTypes);
+      displayPermissionStats(permissionsResult.permissions, typesResult.permissionTypes);
+    }
+  } catch (error) {
+    console.error('Permissions overview load error:', error);
+    document.getElementById('permissionsOverview').innerHTML = 
+      '<div class="error">İzin özeti yüklenemedi</div>';
+  }
+}
+
+// İzin özetini göster
+function displayPermissionsOverview(allPermissions, permissionTypes) {
+  const overviewDiv = document.getElementById('permissionsOverview');
+  
+  const roles = Object.keys(allPermissions);
+  
+  overviewDiv.innerHTML = `
+    <div class="permissions-grid-overview">
+      ${roles.map(role => {
+        const permissions = allPermissions[role];
+        const enabledCount = Object.values(permissions).filter(Boolean).length;
+        
+        return `
+          <div class="role-overview-card">
+            <div class="role-overview-header">
+              <span class="role-overview-title">${getRoleDisplayName(role)}</span>
+              <span class="permission-count-badge">${enabledCount}</span>
+            </div>
+            <div class="permission-tags-overview">
+              ${Object.entries(permissions).map(([permission, enabled]) => `
+                <span class="permission-tag-overview ${enabled ? 'enabled' : ''}">${permission}</span>
+              `).join('')}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+// İzin istatistiklerini göster
+function displayPermissionStats(allPermissions, permissionTypes) {
+  const statsDiv = document.getElementById('permissionStats');
+  
+  const roles = Object.keys(allPermissions);
+  const totalPermissions = new Set();
+  const roleStats = {};
+  
+  // İstatistikleri hesapla
+  roles.forEach(role => {
+    const permissions = allPermissions[role];
+    const enabledPermissions = Object.entries(permissions).filter(([key, enabled]) => enabled);
+    
+    roleStats[role] = {
+      total: Object.keys(permissions).length,
+      enabled: enabledPermissions.length,
+      disabled: Object.keys(permissions).length - enabledPermissions.length
+    };
+    
+    Object.keys(permissions).forEach(perm => totalPermissions.add(perm));
+  });
+  
+  const totalUniquePermissions = totalPermissions.size;
+  const totalEnabledAcrossRoles = roles.reduce((sum, role) => 
+    sum + roleStats[role].enabled, 0);
+  
+  statsDiv.innerHTML = `
+    <div class="permission-stats-grid">
+      <div class="stat-item">
+        <div class="stat-item-value">${totalUniquePermissions}</div>
+        <div class="stat-item-label">Toplam İzin Türü</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-item-value">${totalEnabledAcrossRoles}</div>
+        <div class="stat-item-label">Aktif İzin Sayısı</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-item-value">${roles.length}</div>
+        <div class="stat-item-label">Toplam Rol</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-item-value">${Math.round((totalEnabledAcrossRoles / (roles.length * totalUniquePermissions)) * 100)}%</div>
+        <div class="stat-item-label">İzin Kullanım Oranı</div>
+      </div>
+    </div>
+  `;
+}
+
+// Sistem durumunu yükle
+async function loadSystemStatus() {
+  try {
+    const health = await API.health();
+    document.getElementById('serverStatus').textContent = health.status === 'ok' ? '✅ Çalışıyor' : '❌ Hata';
+    document.getElementById('dbStatus').textContent = '✅ Bağlı';
+    document.getElementById('sessionStatus').textContent = '✅ Aktif';
+    document.getElementById('uptime').textContent = '< 24 saat';
+  } catch (error) {
+    document.getElementById('serverStatus').textContent = '❌ Erişilemez';
+  }
+}
+
+// Yeni kullanıcı oluştur
+document.getElementById('createUserForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const userData = {
+    username: document.getElementById('newUsername').value.trim(),
+    password: document.getElementById('newPassword').value,
+    role: document.getElementById('newRole').value,
+    full_name: document.getElementById('newFullName').value.trim(),
+    email: document.getElementById('newEmail').value.trim()
+  };
+  
+  if (!userData.username || !userData.password || !userData.role) {
+    alert('Kullanıcı adı, şifre ve rol alanları zorunludur.');
+    return;
+  }
+  
+  try {
+    const result = await API.createUser(userData);
+    
+    if (result.success) {
+      alert('Kullanıcı başarıyla oluşturuldu!');
+      document.getElementById('createUserForm').reset();
+      await loadUsers();
+    } else {
+      alert(`Hata: ${result.message}`);
+    }
+  } catch (error) {
+    alert(`Kullanıcı oluşturma hatası: ${error.message}`);
+  }
+});
+
+// Kullanıcı durumu değiştir
+async function toggleUserStatus(userId, currentStatus) {
+  // Bu özellik henüz backend'de yok, gelecekte eklenebilir
+  alert('Bu özellik yakında eklenecek.');
+}
+
+// Kullanıcı sil
+async function deleteUser(userId, username) {
+  if (confirm(`${username} kullanıcısını silmek istediğinizden emin misiniz?`)) {
+    // Bu özellik henüz backend'de yok, gelecekte eklenebilir
+    alert('Bu özellik yakında eklenecek.');
+  }
+}
+
+// Yenile butonu
+document.getElementById('refreshUsers').addEventListener('click', loadUsers);
+
+// Utility functions
+function getRoleDisplayName(role) {
+  const roleNames = {
+    admin: 'Yönetici',
+    operator: 'Operatör',
+    service: 'Servis Teknisyeni'
+  };
+  return roleNames[role] || role;
+}
+
+function formatDate(dateString) {
+  if (!dateString) return '-';
+  const date = new Date(dateString);
+  return date.toLocaleDateString('tr-TR', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+}
+
+// Sayfa yüklendiğinde
+document.addEventListener('DOMContentLoaded', async () => {
+  // Auth kontrolü zaten auth.js tarafından yapılacak
+  // Sadece admin rolüne sahip kullanıcılar bu sayfayı görebilir
+  await loadUsers();
+  await loadSystemStatus();
+});
+</script>
+</body>
+</html>

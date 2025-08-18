@@ -1,0 +1,820 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Raf Barkod Tarayıcı</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">Raf Barkod Tarayıcı</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="grid" style="max-width:800px;margin:auto;padding:16px">
+
+  <!-- Durum Göstergesi -->
+  <section class="card">
+    <div class="status-indicator" id="statusIndicator">
+      <div class="status-icon">📦</div>
+      <div class="status-text">
+        <strong>Adım 1:</strong> Ürün barkodunu okutun
+      </div>
+      <div class="progress-bar">
+        <div class="progress" id="progressBar" style="width: 0%"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Barkod Okuma Alanı -->
+  <section class="card">
+    <h2>🔍 Barkod Okuyucu</h2>
+    <div class="scanner-container">
+      <input 
+        type="text" 
+        id="barcodeInput" 
+        placeholder="Ürün barkodunu okutun..."
+        class="barcode-input"
+        autocomplete="off"
+      />
+      <div class="scanner-status" id="scannerStatus">
+        Ürün barkodu bekleniyor...
+      </div>
+    </div>
+  </section>
+
+  <!-- Ürün Bilgisi -->
+  <section class="card" id="productInfo" style="display:none">
+    <h3>📦 Taranmış Ürün</h3>
+    <div class="info-grid" id="productDetails">
+      <!-- Ürün bilgileri burada gösterilecek -->
+    </div>
+  </section>
+
+  <!-- Önerilen Raf -->
+  <section class="card" id="suggestedShelf" style="display:none">
+    <h3>🎯 Önerilen Raf</h3>
+    <div class="shelf-suggestion" id="shelfSuggestion">
+      <!-- Önerilen raf bilgisi -->
+    </div>
+    <div class="shelf-actions">
+      <div class="info-message" id="suggestionMessage">
+        Bu raf önerilir çünkü aynı ürün daha önce bu rafta saklandı.
+      </div>
+    </div>
+  </section>
+
+  <!-- Raf Onayı -->
+  <section class="card" id="shelfConfirmation" style="display:none">
+    <h3>📍 Raf Onayı</h3>
+    <div class="confirmation-container">
+      <div class="confirmation-message">
+        Şimdi <strong id="targetShelfCode"></strong> rafına gidin ve raf barkodunu okutun:
+      </div>
+      <input 
+        type="text" 
+        id="shelfBarcodeInput" 
+        placeholder="Raf barkodunu okutun..."
+        class="barcode-input"
+        autocomplete="off"
+        style="display:none"
+      />
+      <div class="shelf-actions">
+        <button id="shelfFullBtn" class="btn-warning" style="display:none">
+          🚫 Raf Dolu
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Manuel Raf Seçimi -->
+  <section class="card" id="manualShelfSelection" style="display:none">
+    <h3>🎛️ Manuel Raf Seçimi</h3>
+    <div class="manual-selection">
+      <p>Boş raf bulunamadı. Lütfen ürünün gireceği rafı manuel olarak seçin:</p>
+      <div class="shelf-grid" id="availableShelvesGrid">
+        <!-- Mevcut raflar burada listelenecek -->
+      </div>
+    </div>
+  </section>
+
+  <!-- İşlem Geçmişi -->
+  <section class="card">
+    <h3>📋 Son İşlemler</h3>
+    <div class="history-list" id="operationHistory">
+      <div class="history-item">
+        <em>İşlem geçmişi burada görünecek...</em>
+      </div>
+    </div>
+  </section>
+
+
+</main>
+
+<script>
+// Yeni İş Akışı Değişkenleri
+let currentProduct = null;
+let suggestedShelf = null;
+let targetShelf = null;
+let workflowStep = 1; // 1=ürün, 2=raf onayı, 3=manuel seçim
+let allShelves = [];
+let isProcessing = false; // Çift tıklama önleme
+
+// DOM Elements
+const barcodeInput = document.getElementById('barcodeInput');
+const statusIndicator = document.getElementById('statusIndicator');
+const scannerStatus = document.getElementById('scannerStatus');
+const progressBar = document.getElementById('progressBar');
+const productInfo = document.getElementById('productInfo');
+const productDetails = document.getElementById('productDetails');
+const suggestedShelfSection = document.getElementById('suggestedShelf');
+const shelfSuggestion = document.getElementById('shelfSuggestion');
+const suggestionMessage = document.getElementById('suggestionMessage');
+const shelfConfirmation = document.getElementById('shelfConfirmation');
+const shelfBarcodeInput = document.getElementById('shelfBarcodeInput');
+const targetShelfCode = document.getElementById('targetShelfCode');
+const shelfFullBtn = document.getElementById('shelfFullBtn');
+const manualShelfSelection = document.getElementById('manualShelfSelection');
+const availableShelvesGrid = document.getElementById('availableShelvesGrid');
+const operationHistory = document.getElementById('operationHistory');
+
+// Sayfa yüklendiğinde
+document.addEventListener('DOMContentLoaded', async () => {
+  barcodeInput.focus();
+  loadOperationHistory();
+  await loadAllShelves();
+  
+  // Mobile nav
+  const toggle = document.getElementById('mobileNavToggle');
+  const menu = document.getElementById('mobileNavMenu');
+  toggle?.addEventListener('click', () => {
+    menu.classList.toggle('active');
+  });
+  
+  // Event listeners
+  setupEventListeners();
+});
+
+// Event Listeners Kurulumu
+function setupEventListeners() {
+  // Ana ürün barkodu input
+  barcodeInput.addEventListener('input', async (e) => {
+    const barcode = e.target.value.trim();
+    if (barcode && workflowStep === 1) {
+      // Paket barkodunu kontrol et
+      try {
+        const response = await fetch(`/api/packages/barcode/${encodeURIComponent(barcode)}`);
+        if (response.ok) {
+          await processProductBarcode(barcode);
+          e.target.value = '';
+        }
+      } catch (error) {
+        // Eşleşme yoksa devam et
+      }
+    }
+  });
+  
+  // Raf barkodu input
+  shelfBarcodeInput.addEventListener('input', async (e) => {
+    const barcode = e.target.value.trim();
+    if (barcode && workflowStep === 2 && targetShelf && barcode === targetShelf.shelf_code) {
+      await processShelfConfirmation(barcode);
+      e.target.value = '';
+    }
+  });
+  
+  // Raf dolu butonu
+  shelfFullBtn.addEventListener('click', () => {
+    handleShelfFull();
+  });
+  
+}
+
+// Tüm rafları yükle (atama bilgileri ile birlikte)
+async function loadAllShelves() {
+  try {
+    const [shelvesResponse, assignmentsResponse] = await Promise.all([
+      fetch('/api/shelves'),
+      fetch('/api/shelf-assignments')
+    ]);
+    
+    const shelvesData = await shelvesResponse.json();
+    const assignmentsData = await assignmentsResponse.json();
+    
+    allShelves = shelvesData.shelves || [];
+    const assignments = assignmentsData.assignments || [];
+    
+    // Rafları atama bilgileriyle zenginleştir
+    enrichShelvesWithAssignments(assignments);
+    
+  } catch (error) {
+    console.error('Raflar yüklenemedi:', error);
+  }
+}
+
+// Rafları atama bilgileriyle zenginleştir
+function enrichShelvesWithAssignments(assignments) {
+  const shelfAssignments = {};
+  
+  assignments.forEach(assignment => {
+    if (!shelfAssignments[assignment.shelf_id]) {
+      shelfAssignments[assignment.shelf_id] = {
+        totalQuantity: 0,
+        productIds: new Set()
+      };
+    }
+    
+    shelfAssignments[assignment.shelf_id].totalQuantity += assignment.quantity || 0;
+    shelfAssignments[assignment.shelf_id].productIds.add(assignment.product_id);
+  });
+  
+  // Rafları güncelle
+  allShelves.forEach(shelf => {
+    const assignment = shelfAssignments[shelf.id];
+    shelf.totalQuantity = assignment ? assignment.totalQuantity : 0;
+    shelf.productIds = assignment ? Array.from(assignment.productIds) : [];
+  });
+}
+
+// ============ YENİ İŞ AKIŞI FONKSİYONLARI ============
+
+// Adım 1: Ürün barkodu işleme
+async function processProductBarcode(barcode) {
+  try {
+    scannerStatus.textContent = 'Ürün aranıyor...';
+    scannerStatus.className = 'scanner-status processing';
+    
+    // Ürün bilgisini al
+    const response = await fetch(`/api/packages/barcode/${encodeURIComponent(barcode)}`);
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Ürün bulunamadı');
+    }
+    
+    currentProduct = data.package;
+    
+    // Ürün bilgisini göster
+    showProductInfo(currentProduct);
+    
+    // Bu ürün için önerilen rafı bul
+    await findSuggestedShelf(currentProduct);
+    
+    // Progress bar güncelle
+    updateProgress(33);
+    
+  } catch (error) {
+    showError(`Ürün bulunamadı: ${error.message}`);
+  }
+}
+
+// Ürün bilgisini göster
+function showProductInfo(product) {
+  productDetails.innerHTML = `
+    <div class="info-item">
+      <strong>Ürün:</strong> ${product.product_name}
+    </div>
+    <div class="info-item">
+      <strong>SKU:</strong> ${product.sku}
+    </div>
+    <div class="info-item">
+      <strong>Paket:</strong> ${product.package_name}
+    </div>
+    <div class="info-item">
+      <strong>Barkod:</strong> ${product.barcode}
+    </div>
+  `;
+  productInfo.style.display = 'block';
+}
+
+// Bu ürün için önerilen rafı bul
+async function findSuggestedShelf(product) {
+  try {
+    // Bu ürünün daha önce hangi raflarda saklandığına bak
+    const usedShelves = allShelves.filter(shelf => 
+      shelf.productIds.includes(product.product_id) && hasCapacity(shelf) && !shelf.shelf_code.startsWith('SSH-')
+    );
+    
+    if (usedShelves.length > 0) {
+      // En az dolu olan rafı seç
+      suggestedShelf = usedShelves.sort((a, b) => 
+        (a.totalQuantity || 0) - (b.totalQuantity || 0)
+      )[0];
+      
+      showSuggestedShelf(suggestedShelf, 'Bu raf önerilir çünkü aynı ürün daha önce bu rafta saklandı.');
+      proceedToShelfConfirmation();
+      return;
+    }
+    
+    // Daha önce kullanılmış raf yoksa, boş raf öner (SSH hariç)
+    const emptyShelves = allShelves.filter(shelf => 
+      (!shelf.totalQuantity || shelf.totalQuantity === 0) && !shelf.shelf_code.startsWith('SSH-')
+    );
+    
+    if (emptyShelves.length > 0) {
+      // En yakın boş rafı seç (zone/aisle/level sırası ile)
+      suggestedShelf = emptyShelves.sort((a, b) => {
+        if (a.zone !== b.zone) return a.zone.localeCompare(b.zone);
+        if (a.aisle !== b.aisle) return a.aisle - b.aisle;
+        return a.level - b.level;
+      })[0];
+      
+      showSuggestedShelf(suggestedShelf, 'Bu raf önerilir çünkü boş ve erişilebilir konumda.');
+      proceedToShelfConfirmation();
+      return;
+    }
+    
+    // Hiç boş raf yoksa manuel seçime geç
+    showManualShelfSelection();
+    
+  } catch (error) {
+    console.error('Raf önerisi hatası:', error);
+    showManualShelfSelection();
+  }
+}
+
+// Önerilen rafı göster
+function showSuggestedShelf(shelf, message) {
+  shelfSuggestion.innerHTML = `
+    <div class="shelf-card">
+      <div class="shelf-card-icon">📍</div>
+      <div class="shelf-card-info">
+        <h4>${shelf.shelf_code} - ${shelf.shelf_name}</h4>
+        <div class="shelf-card-details">
+          ${shelf.zone} Bölgesi • Koridor ${shelf.aisle} • Seviye ${shelf.level}<br>
+          Kapasite: ${shelf.totalQuantity || 0}/${shelf.capacity}
+        </div>
+      </div>
+    </div>
+  `;
+  
+  suggestionMessage.textContent = message;
+  suggestedShelfSection.style.display = 'block';
+}
+
+// Raf onayına geç
+function proceedToShelfConfirmation() {
+  workflowStep = 2;
+  targetShelf = suggestedShelf;
+  
+  // UI güncelle
+  statusIndicator.querySelector('.status-icon').textContent = '📍';
+  statusIndicator.querySelector('.status-text').innerHTML = '<strong>Adım 2:</strong> Raf barkodunu okutarak onaylayın';
+  
+  targetShelfCode.textContent = targetShelf.shelf_code;
+  shelfConfirmation.style.display = 'block';
+  
+  // Ana input'u gizle, raf input'unu göster
+  barcodeInput.style.display = 'none';
+  shelfBarcodeInput.style.display = 'block';
+  shelfFullBtn.style.display = 'inline-block';
+  
+  shelfBarcodeInput.focus();
+  scannerStatus.textContent = `${targetShelf.shelf_code} rafına gidin ve raf barkodunu okutun...`;
+  
+  updateProgress(66);
+}
+
+// Adım 2: Raf onayı işleme
+async function processShelfConfirmation(barcode) {
+  try {
+    scannerStatus.textContent = 'Raf onaylanıyor...';
+    
+    // Taranmış raf kodu hedef raf ile eşleşiyor mu?
+    if (barcode === targetShelf.shelf_code) {
+      // Raf onaylandı, ürünü yerleştir
+      await assignProductToShelf(targetShelf);
+    } else {
+      // Yanlış raf tarandı
+      showError(`Yanlış raf! ${targetShelf.shelf_code} rafını tarayın.`);
+    }
+    
+  } catch (error) {
+    showError(`Raf onayı hatası: ${error.message}`);
+  }
+}
+
+// Ürünü rafa ata
+async function assignProductToShelf(shelf) {
+  try {
+    const response = await fetch('/api/shelves/assign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        shelf_code: shelf.shelf_code,
+        package_barcode: currentProduct.barcode,
+        quantity: 1, // Varsayılan 1 paket
+        assigned_by: 'Raf Tarayıcı'
+      })
+    });
+    
+    const data = await response.json();
+    
+    if (!response.ok) {
+      throw new Error(data.error || 'Atama başarısız');
+    }
+    
+    // Başarı!
+    scannerStatus.textContent = 'Ürün başarıyla rafa yerleştirildi!';
+    scannerStatus.className = 'scanner-status success';
+    
+    // İşlem geçmişine ekle
+    addToHistory({
+      type: 'assign',
+      shelf: shelf.shelf_name,
+      product: currentProduct.product_name,
+      package: currentProduct.package_name,
+      quantity: 1,
+      timestamp: new Date().toLocaleString('tr-TR')
+    });
+    
+    updateProgress(100);
+    
+    // 3 saniye sonra sıfırla
+    setTimeout(() => {
+      resetWorkflow();
+    }, 3000);
+    
+  } catch (error) {
+    showError(`Atama hatası: ${error.message}`);
+  }
+}
+
+// Raf dolu durumu
+function handleShelfFull() {
+  scannerStatus.textContent = 'Raf dolu olarak işaretlendi. Manuel raf seçimine geçiliyor...';
+  
+  // Direkt manuel seçime geç
+  showManualShelfSelection();
+}
+
+// En yakın boş rafı bul
+function findNearestEmptyShelf(currentShelf) {
+  const emptyShelves = allShelves.filter(shelf => 
+    shelf.id !== currentShelf.id && hasCapacity(shelf) && !shelf.shelf_code.startsWith('SSH-')
+  );
+  
+  if (emptyShelves.length === 0) return null;
+  
+  // Aynı bölge/koridor önceliği ile sırala
+  return emptyShelves.sort((a, b) => {
+    // Aynı bölge önce
+    if (a.zone === currentShelf.zone && b.zone !== currentShelf.zone) return -1;
+    if (a.zone !== currentShelf.zone && b.zone === currentShelf.zone) return 1;
+    
+    // Aynı koridor önce
+    if (a.aisle === currentShelf.aisle && b.aisle !== currentShelf.aisle) return -1;
+    if (a.aisle !== currentShelf.aisle && b.aisle === currentShelf.aisle) return 1;
+    
+    // Seviye farkı en az olan
+    return Math.abs(a.level - currentShelf.level) - Math.abs(b.level - currentShelf.level);
+  })[0];
+}
+
+// Manuel raf seçimini göster
+function showManualShelfSelection() {
+  workflowStep = 3;
+  
+  // UI güncelle
+  statusIndicator.querySelector('.status-icon').textContent = '🎛️';
+  statusIndicator.querySelector('.status-text').innerHTML = '<strong>Adım 3:</strong> Manuel raf seçimi';
+  
+  manualShelfSelection.style.display = 'block';
+  renderAvailableShelves();
+  
+  scannerStatus.textContent = 'Boş raf bulunamadı. Lütfen manuel olarak raf seçin.';
+  updateProgress(80);
+}
+
+// Mevcut rafları listele
+function renderAvailableShelves() {
+  const availableShelves = allShelves.filter(shelf => 
+    hasCapacity(shelf) && !shelf.shelf_code.startsWith('SSH-')
+  );
+  
+  availableShelvesGrid.innerHTML = availableShelves.map(shelf => `
+    <div class="shelf-option" onclick="selectManualShelf(${shelf.id})">
+      <h5>${shelf.shelf_code}</h5>
+      <div class="shelf-meta">
+        ${shelf.shelf_name}<br>
+        ${shelf.zone}-${shelf.aisle}-${shelf.level}<br>
+        ${shelf.totalQuantity || 0}/${shelf.capacity}
+      </div>
+    </div>
+  `).join('') || '<p>Hiç uygun raf bulunamadı.</p>';
+}
+
+// Manuel raf seçimi
+async function selectManualShelf(shelfId) {
+  if (isProcessing) return; // Çift tıklama önleme
+  
+  const shelf = allShelves.find(s => s.id === shelfId);
+  if (!shelf) return;
+  
+  isProcessing = true;
+  
+  // Seçimi vurgula
+  document.querySelectorAll('.shelf-option').forEach(opt => opt.classList.remove('selected'));
+  event.target.closest('.shelf-option').classList.add('selected');
+  
+  // Ürünü seçilen rafa ata
+  await assignProductToShelf(shelf);
+}
+
+// Rafın kapasitesi var mı?
+function hasCapacity(shelf) {
+  const currentQuantity = shelf.totalQuantity || 0;
+  const capacity = shelf.capacity || 100;
+  return currentQuantity < capacity;
+}
+
+// Progress bar güncelle
+function updateProgress(percentage) {
+  progressBar.style.width = percentage + '%';
+}
+
+// İş akışını sıfırla
+function resetWorkflow() {
+  // Değişkenleri sıfırla
+  currentProduct = null;
+  suggestedShelf = null;
+  targetShelf = null;
+  workflowStep = 1;
+  isProcessing = false; // İşlem durumunu sıfırla
+  
+  // UI'yı sıfırla
+  statusIndicator.querySelector('.status-icon').textContent = '📦';
+  statusIndicator.querySelector('.status-text').innerHTML = '<strong>Adım 1:</strong> Ürün barkodunu okutun';
+  
+  productInfo.style.display = 'none';
+  suggestedShelfSection.style.display = 'none';
+  shelfConfirmation.style.display = 'none';
+  manualShelfSelection.style.display = 'none';
+  
+  // Input'ları sıfırla
+  barcodeInput.style.display = 'block';
+  shelfBarcodeInput.style.display = 'none';
+  shelfFullBtn.style.display = 'none';
+  
+  barcodeInput.focus();
+  scannerStatus.textContent = 'Ürün barkodu bekleniyor...';
+  scannerStatus.className = 'scanner-status';
+  
+  updateProgress(0);
+}
+
+
+// Global olarak erişilebilir manuel raf seçimi fonksiyonu
+window.selectManualShelf = selectManualShelf;
+
+// İşlem geçmişi
+function addToHistory(operation) {
+  let history = JSON.parse(localStorage.getItem('shelfOperationHistory') || '[]');
+  history.unshift(operation); // En yeniler en üstte
+  history = history.slice(0, 20); // Son 20 işlem
+  localStorage.setItem('shelfOperationHistory', JSON.stringify(history));
+  displayHistory(history);
+}
+
+function loadOperationHistory() {
+  const history = JSON.parse(localStorage.getItem('shelfOperationHistory') || '[]');
+  displayHistory(history);
+}
+
+function displayHistory(history) {
+  if (history.length === 0) {
+    operationHistory.innerHTML = '<div class="history-item"><em>Henüz işlem yapılmadı...</em></div>';
+    return;
+  }
+  
+  operationHistory.innerHTML = history.map(op => `
+    <div class="history-item ${op.type}">
+      <div class="history-icon">${op.type === 'assign' ? '✅' : '➖'}</div>
+      <div class="history-details">
+        <strong>${op.product}</strong> (${op.package})<br>
+        <small>${op.shelf} • ${op.quantity} adet • ${op.timestamp}</small>
+      </div>
+    </div>
+  `).join('');
+}
+
+// Yardımcı fonksiyonlar
+function showError(message) {
+  scannerStatus.textContent = message;
+  scannerStatus.className = 'scanner-status error';
+  setTimeout(() => {
+    if (workflowStep === 1) {
+      scannerStatus.textContent = 'Ürün barkodu bekleniyor...';
+    } else if (workflowStep === 2) {
+      scannerStatus.textContent = `${targetShelf.shelf_code} rafına gidin ve raf barkodunu okutun...`;
+    }
+    scannerStatus.className = 'scanner-status';
+  }, 3000);
+}
+
+function showSuccess(message) {
+  scannerStatus.textContent = message;
+  scannerStatus.className = 'scanner-status success';
+}
+
+// Focus yönetimi
+document.addEventListener('click', (e) => {
+  // Eğer tıklanan element input veya button değilse ve açık input varsa onu focus et
+  if (!e.target.matches('input, button, .shelf-option')) {
+    if (workflowStep === 1 && barcodeInput.style.display !== 'none') {
+      barcodeInput.focus();
+    } else if (workflowStep === 2 && shelfBarcodeInput.style.display !== 'none') {
+      shelfBarcodeInput.focus();
+    }
+  }
+});
+
+</script>
+
+<style>
+.status-indicator {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  padding: 20px;
+  border-radius: 12px;
+  font-size: 16px;
+  background: var(--card);
+  border: 2px solid var(--accent);
+  color: var(--fg);
+}
+
+.status-indicator.step-1 {
+  background: var(--card);
+  border-color: var(--warning);
+  color: var(--fg);
+}
+
+.status-indicator.step-2 {
+  background: var(--card);
+  border-color: var(--success);
+  color: var(--fg);
+}
+
+.status-icon {
+  font-size: 32px;
+  flex-shrink: 0;
+}
+
+.scanner-container {
+  text-align: center;
+}
+
+.barcode-input {
+  width: 100%;
+  padding: 15px;
+  font-size: 18px;
+  border: 3px solid #ddd;
+  border-radius: 8px;
+  text-align: center;
+  font-family: 'Courier New', monospace;
+  margin-bottom: 10px;
+}
+
+.barcode-input:focus {
+  border-color: #4caf50;
+  outline: none;
+  box-shadow: 0 0 10px rgba(76, 175, 80, 0.3);
+}
+
+.scanner-status {
+  padding: 10px;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.scanner-status.processing {
+  background-color: rgba(251,191,36,0.2);
+  color: var(--warning);
+}
+
+.scanner-status.success {
+  background-color: rgba(34,197,94,0.2);
+  color: var(--success);
+}
+
+.scanner-status.error {
+  background-color: rgba(239,68,68,0.2);
+  color: var(--danger);
+}
+
+.info-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.info-item {
+  padding: 8px;
+  background: rgba(31,42,68,0.2);
+  border-radius: 4px;
+  color: var(--fg);
+}
+
+.info-item strong {
+  color: var(--accent);
+}
+
+.quantity-section {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid var(--border);
+  color: var(--fg);
+}
+
+.quantity-section input {
+  width: 80px;
+  padding: 8px;
+  text-align: center;
+}
+
+.quick-actions {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.history-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.history-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  background: rgba(31,42,68,0.1);
+  margin-bottom: 4px;
+  border-radius: 6px;
+  color: var(--fg);
+}
+
+.history-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.history-item.assign .history-icon {
+  color: var(--success);
+}
+
+.history-item.remove .history-icon {
+  color: var(--danger);
+}
+
+.history-icon {
+  font-size: 20px;
+  flex-shrink: 0;
+}
+
+.history-details {
+  flex: 1;
+  font-size: 14px;
+  color: var(--fg);
+}
+
+.history-details strong {
+  color: var(--accent);
+}
+
+.history-details small {
+  color: var(--muted);
+}
+
+@media (max-width: 600px) {
+  .info-grid {
+    gap: 8px;
+  }
+  
+  .quantity-section {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .quick-actions {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
+
+</body>
+</html>

@@ -1,0 +1,1361 @@
+
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Toplama</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <style>
+    /* Mobile optimizations for pick page */
+    @media (max-width: 768px) {
+      .desktop-only {
+        display: none !important;
+      }
+      
+      .mobile-only {
+        display: block !important;
+      }
+      
+      .mobile-item-card {
+        background: rgba(31,42,68,0.3);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      
+      .mobile-item-card:hover {
+        background: rgba(31,42,68,0.5);
+        border-color: var(--accent);
+      }
+      
+      .mobile-item-card.completed {
+        border-color: var(--success);
+        background: rgba(34, 197, 94, 0.1);
+      }
+      
+      .mobile-item-card.partial {
+        border-color: var(--warning);
+        background: rgba(251, 191, 36, 0.1);
+      }
+      
+      .mobile-item-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 8px;
+      }
+      
+      .mobile-item-sku {
+        font-weight: bold;
+        color: var(--accent);
+      }
+      
+      .mobile-item-status {
+        font-size: 18px;
+      }
+      
+      .mobile-item-name {
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+      
+      .mobile-item-details {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr 1fr;
+        gap: 8px;
+        font-size: 12px;
+      }
+      
+      .mobile-item-detail {
+        text-align: center;
+        padding: 4px;
+        background: rgba(0,0,0,0.2);
+        border-radius: 4px;
+      }
+      
+      .mobile-item-detail-label {
+        color: var(--muted);
+        display: block;
+        margin-bottom: 2px;
+      }
+      
+      .mobile-item-detail-value {
+        font-weight: bold;
+        color: var(--fg);
+      }
+      
+    }
+    
+    @media (min-width: 769px) {
+      .mobile-only {
+        display: none !important;
+      }
+      
+      .desktop-only {
+        display: table !important;
+      }
+    }
+    
+    /* Package Location Styles */
+    .package-locations {
+      margin: 12px 0;
+      background: rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      padding: 10px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    
+    .locations-header {
+      font-size: 12px;
+      font-weight: bold;
+      color: #4da3ff;
+      margin-bottom: 8px;
+      text-align: center;
+    }
+    
+    .location-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 6px 8px;
+      margin: 4px 0;
+      background: rgba(0, 0, 0, 0.2);
+      border-radius: 4px;
+      font-size: 12px;
+      position: relative;
+    }
+    
+    .location-item.first-fifo {
+      background: rgba(34, 197, 94, 0.2);
+      border: 1px solid #22c55e;
+      animation: pulse 2s infinite;
+    }
+    
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+      70% { box-shadow: 0 0 0 5px rgba(34, 197, 94, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+    }
+    
+    .shelf-code {
+      font-weight: bold;
+      color: #4da3ff;
+    }
+    
+    .shelf-info {
+      color: #93a4bd;
+      font-size: 11px;
+    }
+    
+    .shelf-qty {
+      background: #f59e0b;
+      color: white;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 10px;
+      font-weight: bold;
+    }
+    
+    .fifo-badge {
+      position: absolute;
+      top: -5px;
+      right: -5px;
+      background: #22c55e;
+      color: white;
+      font-size: 8px;
+      padding: 2px 4px;
+      border-radius: 8px;
+      font-weight: bold;
+    }
+    
+    .no-locations {
+      text-align: center;
+      color: #ef4444;
+      font-size: 12px;
+      padding: 8px;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      border-radius: 4px;
+      margin: 8px 0;
+    }
+    
+    /* Product color badge styles */
+    .color-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+      color: white;
+      text-shadow: 0 1px 1px rgba(0,0,0,0.3);
+      margin: 2px;
+      min-width: 45px;
+      text-align: center;
+    }
+    
+    .color-badge.beyaz { background: linear-gradient(135deg, #f8f9fa, #e9ecef); color: #333; }
+    .color-badge.siyah { background: linear-gradient(135deg, #343a40, #212529); }
+    .color-badge.kahve { background: linear-gradient(135deg, #8b4513, #a0522d); }
+    .color-badge.gri { background: linear-gradient(135deg, #6c757d, #495057); }
+    .color-badge.antrasit { background: linear-gradient(135deg, #36454f, #2f3640); }
+    .color-badge.mavi { background: linear-gradient(135deg, #007bff, #0056b3); }
+    .color-badge.kirmizi { background: linear-gradient(135deg, #dc3545, #c82333); }
+    .color-badge.yesil { background: linear-gradient(135deg, #28a745, #1e7e34); }
+    .color-badge.sari { background: linear-gradient(135deg, #ffc107, #e0a800); color: #333; }
+    .color-badge.pembe { background: linear-gradient(135deg, #e83e8c, #d91a72); }
+    .color-badge.mor { background: linear-gradient(135deg, #6f42c1, #59359a); }
+    .color-badge.turuncu { background: linear-gradient(135deg, #fd7e14, #e8590c); }
+    .color-badge.default { background: linear-gradient(135deg, #6c757d, #5a6268); }
+    
+    /* Package content styling */
+    .package-content {
+      margin: 8px 0;
+      padding: 6px 8px;
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+      border-left: 3px solid rgba(255, 255, 255, 0.2);
+    }
+    
+    .package-content small {
+      color: #93a4bd;
+      font-size: 11px;
+      line-height: 1.3;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div style="display:flex;justify-content:space-between;align-items:center;padding:16px;position:relative;">
+    <h1>Toplama</h1>
+    <button id="exitPick" class="exit-btn" title="Çıkış yapmak için mouse ile 2 kez üzerine gelin" style="background:#dc3545;color:white;padding:12px 24px;border:none;border-radius:6px;font-weight:bold;cursor:pointer;position:fixed;top:20px;right:20px;z-index:99999;box-shadow:0 4px 8px rgba(0,0,0,0.3);">Çıkış (2x hover)</button>
+  </div>
+</header>
+
+<main style="max-width:1100px;margin:auto;padding:16px" class="grid">
+  <section class="card">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+      <h2>Tarayıcı</h2>
+      <div style="display:flex;gap:8px;">
+        <button id="debugBtn" style="background:#6f42c1;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">Debug</button>
+        <div id="locationVerifyStatus" style="background:#6c757d;color:white;padding:8px 16px;border-radius:6px;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:bold;">
+          <span id="locationVerifyIcon">🔓</span>
+          <span id="locationVerifyText">Lokasyon Teyit: OPSİYONEL</span>
+        </div>
+      </div>
+    </div>
+    <div class="flex" style="margin-top:16px;gap:12px;">
+      <input id="manual" placeholder="Ürün Barkodunu Okutun" class="scanner-input" style="flex:1;font-size:20px;padding:16px;text-align:center;" />
+      <button id="enter" class="btn-large" style="background:#22c55e;color:white;min-width:120px;">Ekle</button>
+    </div>
+    <div class="grid" style="grid-template-columns: 1fr 1fr;">
+      <div><strong>Son Okunan:</strong> <span id="last"></span></div>
+      <div style="text-align:right"><a id="pdfLink" target="_blank">İrsaliye PDF</a></div>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Sipariş Durumu</h2>
+    <div id="orderInfo"></div>
+    <div id="itemsContainer">
+      <div id="mobileItems" class="mobile-only"></div>
+      <table id="items" class="desktop-only"><thead><tr><th>SKU</th><th>Ürün</th><th>Renk</th><th>Paketler</th><th>Toplanan</th><th>Adet</th></tr></thead><tbody></tbody></table>
+      <div id="packageDetails" class="package-details"></div>
+    </div>
+  </section>
+</main>
+
+<audio id="beepOk"><source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYBYWFhYWFhAAAA" type="audio/wav"></audio>
+<audio id="beepErr"><source src="data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAESsAACJWAAACABYBYWFhYWFhAAAA" type="audio/wav"></audio>
+
+<script type="module">
+const $ = (s)=>document.querySelector(s);
+const url = new URL(location.href);
+const pickId = url.searchParams.get('pick');
+
+let pickData=null;
+let currentlyViewedItemId = null; // Hangi item'ın package details'i açık
+
+// Lokasyon teyit sistemi - Opsiyonel
+let locationVerificationEnabled = false; // Varsayılan olarak kapalı
+let pendingPackageBarcode = null;
+let isWaitingForLocationScan = false;
+
+// Color badge creation function
+function createColorBadge(color) {
+  if (!color) return '<span class="color-badge default">-</span>';
+  
+  const colorClass = color.toLowerCase()
+    .replace('ı', 'i')
+    .replace('ü', 'u')
+    .replace('ğ', 'g')
+    .replace('ş', 's')
+    .replace('ç', 'c')
+    .replace(/\s+/g, '');
+  
+  return `<span class="color-badge ${colorClass}">${color}</span>`;
+}
+
+async function loadPick(){
+  console.log('Loading pick with ID:', pickId);
+  if(!pickId){
+    alert('Pick ID bulunamadı! URL\'de ?pick=X parametresi eksik.');
+    return;
+  }
+  
+  try {
+    const r = await fetch('/api/picks/'+pickId);
+    if(!r.ok) {
+      throw new Error(`HTTP ${r.status}: ${r.statusText}`);
+    }
+    pickData = await r.json();
+    console.log('Pick data loaded:', pickData);
+    
+    // Debug: Paket lokasyonlarını kontrol et
+    if (pickData.items) {
+      pickData.items.forEach((item, itemIndex) => {
+        console.log(`🔍 Item ${itemIndex}: ${item.sku} - ${item.product_name}`);
+        if (item.packages) {
+          item.packages.forEach((pkg, pkgIndex) => {
+            console.log(`  📦 Package ${pkgIndex}: ${pkg.package_name} (${pkg.barcode})`);
+            if (pkg.locations && pkg.locations.length > 0) {
+              console.log(`    📍 Locations:`, pkg.locations);
+            } else {
+              console.log(`    ❌ No locations found for this package`);
+            }
+          });
+        } else {
+          console.log(`  ❌ No packages found for this item`);
+        }
+      });
+    }
+    
+    if(!pickData.order) {
+      throw new Error('Sipariş bilgisi bulunamadı');
+    }
+    
+    $('#orderInfo').innerHTML = `
+      <div><strong>Sipariş:</strong> ${pickData.order.order_number}</div>
+      <div><strong>Müşteri:</strong> ${pickData.order.customer_name||'-'}</div>
+      <div><strong>Durum:</strong> ${pickData.order.status}</div>
+      <div><strong>Pick ID:</strong> ${pickData.pick.id}</div>
+    `;
+    
+    const tb = $('#items tbody');
+    console.log('📦 Items data:', pickData.items);
+    console.log('📦 Items length:', pickData.items ? pickData.items.length : 'undefined');
+    
+    if(!pickData.items || pickData.items.length === 0) {
+      console.warn('⚠️ No items found in pick data!');
+      tb.innerHTML = '<tr><td colspan="5">Bu siparişte hiç kalem yok</td></tr>';
+    } else {
+      // Desktop table
+      tb.innerHTML = pickData.items.map(it=>{
+        const cls = (it.picked_qty>=it.quantity) ? 'completed' : (it.picked_qty > 0 ? 'partial' : '');
+        const statusIcon = (it.picked_qty>=it.quantity) ? '✅' : (it.picked_qty > 0 ? '🔄' : '⏳');
+        
+        // Bu item için toplanan paket sayısını hesapla
+        const scannedPackagesForItem = pickData.scans
+          .filter(scan => scan.order_item_id === it.id)
+          .length;
+        
+        // Bu item için toplam gerekli paket sayısını hesapla
+        const totalRequiredPackages = it.packages 
+          ? it.packages.reduce((sum, pkg) => sum + (pkg.quantity * it.quantity), 0)
+          : 0;
+        
+        return `<tr class="${cls}" onclick="showPackageDetails(${it.id})" style="cursor: pointer;">
+          <td>${statusIcon} ${it.sku}</td>
+          <td>${it.product_name}</td>
+          <td>${createColorBadge(it.product_color)}</td>
+          <td><span class="package-count">${it.packages ? it.packages.length : 0} paket</span></td>
+          <td class="picked-cell">
+            ${totalRequiredPackages > 0 
+              ? `<strong>${scannedPackagesForItem}/${totalRequiredPackages}</strong> paket`
+              : `<strong>${it.picked_qty}</strong> set`
+            }
+          </td>
+          <td class="quantity-cell">${it.quantity}</td>
+        </tr>`
+      }).join('');
+      
+      // Mobile cards
+      const mobileContainer = $('#mobileItems');
+      mobileContainer.innerHTML = pickData.items.map(it=>{
+        const cls = (it.picked_qty>=it.quantity) ? 'completed' : (it.picked_qty > 0 ? 'partial' : '');
+        const statusIcon = (it.picked_qty>=it.quantity) ? '✅' : (it.picked_qty > 0 ? '🔄' : '⏳');
+        
+        const scannedPackagesForItem = pickData.scans
+          .filter(scan => scan.order_item_id === it.id)
+          .length;
+        
+        const totalRequiredPackages = it.packages 
+          ? it.packages.reduce((sum, pkg) => sum + (pkg.quantity * it.quantity), 0)
+          : 0;
+        
+        return `<div class="mobile-item-card ${cls}" onclick="showPackageDetails(${it.id})">
+          <div class="mobile-item-header">
+            <div class="mobile-item-sku">${it.sku}</div>
+            <div class="mobile-item-status">${statusIcon}</div>
+          </div>
+          <div class="mobile-item-name">${it.product_name}</div>
+          <div class="mobile-item-details">
+            <div class="mobile-item-detail">
+              <span class="mobile-item-detail-label">Renk</span>
+              <span class="mobile-item-detail-value">${createColorBadge(it.product_color)}</span>
+            </div>
+            <div class="mobile-item-detail">
+              <span class="mobile-item-detail-label">Paketler</span>
+              <span class="mobile-item-detail-value">${it.packages ? it.packages.length : 0}</span>
+            </div>
+            <div class="mobile-item-detail">
+              <span class="mobile-item-detail-label">Toplanan</span>
+              <span class="mobile-item-detail-value">
+                ${totalRequiredPackages > 0 
+                  ? `${scannedPackagesForItem}/${totalRequiredPackages}`
+                  : it.picked_qty
+                }
+              </span>
+            </div>
+            <div class="mobile-item-detail">
+              <span class="mobile-item-detail-label">Adet</span>
+              <span class="mobile-item-detail-value">${it.quantity}</span>
+            </div>
+          </div>
+        </div>`
+      }).join('');
+    }
+    $('#pdfLink').href = '/api/picks/'+pickId+'/delivery-note.pdf';
+  } catch(error) {
+    console.error('Pick yükleme hatası:', error);
+    alert('Pick yüklenemedi: ' + error.message);
+    $('#orderInfo').innerHTML = '<div style="color:red">Hata: Pick yüklenemedi</div>';
+  }
+}
+
+async function submitBarcode(code){
+  console.log('🔍 Submitting barcode:', code);
+  
+  // Lokasyon teyit modunda lokasyon taraması bekleniyor
+  if (isWaitingForLocationScan) {
+    await handleLocationScan(code);
+    return;
+  }
+  
+  // Lokasyon teyit modu açıksa ve bu bir ürün barkodu
+  if (locationVerificationEnabled) {
+    pendingPackageBarcode = code;
+    isWaitingForLocationScan = true;
+    
+    // Input placeholder'ını değiştir ve görsel feedback ver
+    $('#manual').placeholder = 'Şimdi raf barkodunu okutun (lokasyon teyit)';
+    $('#manual').style.background = '#fff3cd';
+    $('#manual').style.border = '2px solid #f0ad4e';
+    
+    // Kullanıcıya bilgi ver
+    $('#last').textContent = `📦 Paket: ${code} → 📍 Raf barkodunu okutun`;
+    $('#last').style.color = 'orange';
+    $('#last').style.fontWeight = 'bold';
+    
+    return;
+  }
+  
+  // Normal tarama modu
+  const r = await fetch('/api/picks/'+pickId+'/scan', {
+    method: 'POST',
+    headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ barcode: code })
+  });
+  const res = await r.json();
+  
+  console.log('📡 Barcode scan response:', res);
+  
+  if(res.success){
+    $('#last').textContent = code;
+    document.getElementById('beepOk').play().catch(()=>{});
+    
+    // Hemen görsel feedback göster
+    $('#last').style.color = 'var(--success)';
+    $('#last').style.fontWeight = 'bold';
+    setTimeout(() => {
+      $('#last').style.color = '';
+      $('#last').style.fontWeight = '';
+    }, 2000);
+    
+    console.log('🔄 Reloading pick data after successful scan...');
+    await loadPick();
+    
+    console.log('📊 Updated pickData after scan:', pickData);
+    
+    // Eğer package details açıksa otomatik yenile
+    if(currentlyViewedItemId) {
+      showPackageDetails(currentlyViewedItemId);
+    }
+    
+    if(res.order_completed){
+      showOrderCompletedModal();
+    }
+  } else {
+    document.getElementById('beepErr').play().catch(()=>{});
+    alert(res.error || 'Hata');
+  }
+}
+
+// Lokasyon teyit fonksiyonu
+async function handleLocationScan(shelfCode) {
+  console.log('📍 Location scan:', shelfCode, 'for package:', pendingPackageBarcode);
+  
+  try {
+    // Lokasyon teyit API'sini çağır
+    const response = await fetch(`/api/picks/${pickId}/verify-location`, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ 
+        packageBarcode: pendingPackageBarcode,
+        shelfCode: shelfCode
+      })
+    });
+    
+    const result = await response.json();
+    console.log('📍 Location verification result:', result);
+    
+    if (response.ok && result.success) {
+      // Teyit sonucunu göster
+      if (result.isCorrectLocation) {
+        // Doğru lokasyon
+        $('#last').textContent = `✅ ${result.message}`;
+        $('#last').style.color = '#22c55e';
+        
+        // Başarılı teyit sonrası normal taramaya geç
+        await processVerifiedScan(pendingPackageBarcode, shelfCode);
+      } else {
+        // Yanlış lokasyon
+        $('#last').textContent = `⚠️ ${result.message}`;
+        $('#last').style.color = '#f59e0b';
+        
+        // Alternatif seçenekler sun
+        if (confirm(`Yanlış lokasyon!\n\nBeklenen: ${result.expectedLocation.shelf_code}\nTaranan: ${shelfCode}\n\nYine de devam etmek istiyor musunuz?`)) {
+          await processVerifiedScan(pendingPackageBarcode, shelfCode, false);
+        } else {
+          resetLocationVerification();
+          return;
+        }
+      }
+    } else {
+      throw new Error(result.error || 'Lokasyon teyit hatası');
+    }
+    
+  } catch (error) {
+    console.error('Location verification error:', error);
+    alert('Lokasyon teyidi başarısız: ' + error.message);
+    resetLocationVerification();
+  }
+}
+
+// Teyit edilmiş taramayı işle
+async function processVerifiedScan(packageBarcode, shelfCode, isCorrectLocation = true) {
+  try {
+    const r = await fetch('/api/picks/'+pickId+'/scan', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ 
+        barcode: packageBarcode,
+        verifiedLocation: {
+          shelfCode: shelfCode,
+          isCorrectLocation: isCorrectLocation
+        }
+      })
+    });
+    const res = await r.json();
+    
+    console.log('📡 Verified scan response:', res);
+    
+    if(res.success){
+      document.getElementById('beepOk').play().catch(()=>{});
+      
+      console.log('🔄 Reloading pick data after successful verified scan...');
+      await loadPick();
+      
+      // Eğer package details açıksa otomatik yenile
+      if(currentlyViewedItemId) {
+        showPackageDetails(currentlyViewedItemId);
+      }
+      
+      if(res.order_completed){
+        showOrderCompletedModal();
+      }
+    } else {
+      document.getElementById('beepErr').play().catch(()=>{});
+      alert(res.error || 'Hata');
+    }
+    
+  } catch (error) {
+    console.error('Verified scan error:', error);
+    alert('Tarama hatası: ' + error.message);
+  } finally {
+    resetLocationVerification();
+  }
+}
+
+// Lokasyon teyit durumunu sıfırla
+function resetLocationVerification() {
+  isWaitingForLocationScan = false;
+  pendingPackageBarcode = null;
+  
+  // Input'u eski haline getir
+  $('#manual').placeholder = 'Ürün Barkodunu Okutun';
+  $('#manual').style.background = '';
+  $('#manual').style.border = '';
+  $('#last').style.color = '';
+  $('#last').style.fontWeight = '';
+}
+
+$('#enter').addEventListener('click', ()=>{
+  const v = $('#manual').value.trim();
+  if(v) {
+    submitBarcode(v);
+    $('#manual').value='';
+  }
+});
+
+// Enter tuşu ile de tarama yapabilme
+$('#manual').addEventListener('keypress', (e)=>{
+  if(e.key === 'Enter') {
+    const v = $('#manual').value.trim();
+    if(v) {
+      submitBarcode(v);
+      $('#manual').value='';
+    }
+  }
+});
+
+
+
+// Auto-submit for barcode scanners (Zebra terminals)
+let autoSubmitTimer = null;
+$('#manual').addEventListener('input', (e) => {
+  const value = e.target.value.trim();
+  
+  // Clear existing timer
+  if (autoSubmitTimer) {
+    clearTimeout(autoSubmitTimer);
+  }
+  
+  // If value is long enough to be a barcode (usually 6+ chars), auto-submit after delay
+  if (value.length >= 6) {
+    autoSubmitTimer = setTimeout(() => {
+      console.log('🤖 Auto-submitting barcode:', value);
+      if ($('#manual').value.trim() === value) { // Make sure it hasn't changed
+        submitBarcode(value);
+        $('#manual').value = '';
+      }
+    }, 300); // 300ms delay for barcode scanners
+  }
+});
+
+
+// Paket detaylarını göster
+function showPackageDetails(itemId) {
+  currentlyViewedItemId = itemId; // Hangi item'ın detayları gösterildiğini kaydet
+  
+  const item = pickData.items.find(it => it.id === itemId);
+  if (!item || !item.packages || item.packages.length === 0) {
+    $('#packageDetails').innerHTML = '<div class="no-packages">Bu ürün için paket tanımlı değil</div>';
+    return;
+  }
+
+  // Taranan paketleri bul
+  const scannedPackages = pickData.scans
+    .filter(scan => scan.order_item_id === itemId)
+    .reduce((acc, scan) => {
+      acc[scan.package_id] = (acc[scan.package_id] || 0) + 1;
+      return acc;
+    }, {});
+
+  const packageHtml = `
+    <div class="package-section">
+      <h3>📦 ${item.product_name} Paketleri</h3>
+      <div class="package-grid">
+        ${item.packages.map(pkg => {
+          const scannedCount = scannedPackages[pkg.id] || 0;
+          const requiredCount = pkg.quantity * item.quantity;
+          const isComplete = scannedCount >= requiredCount;
+          const progress = requiredCount > 0 ? Math.round((scannedCount / requiredCount) * 100) : 0;
+          
+          // Paket lokasyonlarını FIFO sırasıyla göster
+          const locationsHtml = pkg.locations && pkg.locations.length > 0 
+            ? `<div class="package-locations">
+                 <div class="locations-header">📍 Lokasyonlar (FIFO Sırası):</div>
+                 ${pkg.locations.map((loc, index) => `
+                   <div class="location-item ${index === 0 ? 'first-fifo' : ''}">
+                     <span class="shelf-code">${loc.shelf_code}</span>
+                     <span class="shelf-info">${loc.zone}-${loc.aisle}-${loc.level}</span>
+                     <span class="shelf-qty">${loc.quantity} adet</span>
+                     ${index === 0 ? '<span class="fifo-badge">İlk Çıkar</span>' : ''}
+                   </div>
+                 `).join('')}
+               </div>`
+            : `<div class="no-locations">❌ Rafta stok yok</div>`;
+
+          return `
+            <div class="package-card ${isComplete ? 'completed' : (scannedCount > 0 ? 'partial' : 'pending')}">
+              <div class="package-header">
+                <div class="package-name">${pkg.package_number ? `Paket No: ${pkg.package_number}` : pkg.package_name}</div>
+                <div class="package-status">${isComplete ? '✅' : (scannedCount > 0 ? '🔄' : '⏳')}</div>
+              </div>
+              <div class="package-barcode">
+                <code>${pkg.barcode}</code>
+              </div>
+              ${pkg.package_content ? `<div class="package-content"><small>İçerik: ${pkg.package_content}</small></div>` : ''}
+              ${locationsHtml}
+              <div class="package-count-info">
+                <div class="count-display">
+                  <span class="scanned-count">${scannedCount}</span> 
+                  <span class="separator">/</span> 
+                  <span class="total-count">${requiredCount}</span>
+                  <span class="count-label">paket</span>
+                </div>
+                <div class="count-status ${isComplete ? 'completed' : (scannedCount > 0 ? 'partial' : 'pending')}">
+                  ${isComplete ? 'Tamamlandı' : (scannedCount > 0 ? 'Devam ediyor' : 'Bekleniyor')}
+                </div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+  
+  $('#packageDetails').innerHTML = packageHtml;
+}
+
+// Manuel tarama fonksiyonu - artık kullanılmıyor, sadece uyumluluk için bırakıldı
+function manualScan(barcode) {
+  $('#manual').value = barcode;
+  submitBarcode(barcode);
+  
+  // Input alanını temizle
+  setTimeout(() => {
+    $('#manual').value = '';
+  }, 1000);
+}
+
+// Global fonksiyon olarak tanımla
+window.showPackageDetails = showPackageDetails;
+window.manualScan = manualScan;
+
+// Yeni çıkış mantığı - 3 senaryo
+function checkForScannedItems() {
+  console.log('🔍 Checking for scanned items...');
+  console.log('🔍 pickData exists:', !!pickData);
+  
+  if (!pickData) {
+    console.log('❌ No pickData');
+    return false;
+  }
+  
+  // En önce scans kontrolü yap - bu en güvenilir yöntem
+  if (pickData.scans && pickData.scans.length > 0) {
+    console.log('✅ Found scans data:', pickData.scans.length, 'scans');
+    return true;
+  }
+  
+  // pickData.items kontrolü
+  if (pickData.items && pickData.items.length > 0) {
+    console.log('✅ Found pickData.items');
+    
+    const scannedItems = pickData.items.filter(item => item.picked_qty > 0);
+    console.log('📋 Items with picked_qty > 0:', scannedItems.length);
+    
+    if (scannedItems.length > 0) {
+      return true;
+    }
+  }
+  
+  // pickData.order.items kontrolü (fallback)
+  if (pickData.order && pickData.order.items) {
+    const scannedItems = pickData.order.items.filter(item => item.picked_qty > 0);
+    console.log('📋 Order items with picked_qty > 0:', scannedItems.length);
+    return scannedItems.length > 0;
+  }
+  
+  console.log('❌ No scanned items detected');
+  return false;
+}
+
+function showExitModal() {
+  console.log('🚀 Creating exit modal...');
+  
+  // Eğer zaten modal varsa kaldır
+  const existingModal = document.getElementById('exitModal');
+  if (existingModal) {
+    console.log('🗑️ Removing existing modal');
+    existingModal.remove();
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'exitModal';
+  
+  console.log('📝 Setting modal styles...');
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.9);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 99999;
+    font-family: inherit;
+  `;
+  
+  const modalContent = document.createElement('div');
+  modalContent.style.cssText = `
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 95%;
+    max-height: 90vh;
+    overflow-y: auto;
+    text-align: center;
+    color: black;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+    border: 2px solid #dc3545;
+  `;
+  
+  modalContent.innerHTML = `
+    <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+    <h2 style="margin: 0 0 15px 0; color: #dc3545;">Sipariş Toplama Yarım Kaldı</h2>
+    <p style="margin: 0 0 25px 0; color: #666; line-height: 1.5;">
+      Bazı ürünler taratıldı ancak sipariş henüz tamamlanmadı.<br>
+      Ne yapmak istiyorsunuz?
+    </p>
+    
+    <div style="display: flex; flex-direction: column; gap: 15px;">
+      <button id="cancelOrder" style="
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        transition: all 0.2s;
+        min-height: 60px;
+        touch-action: manipulation;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      ">
+        🗑️ Sipariş Toplamayı İptal Et ve Kapat<br><small style="font-size: 12px; opacity: 0.8;">Tüm taramalar silinir ve rafa geri konur</small>
+      </button>
+      
+      <button id="savePartial" style="
+        background: #ffc107;
+        color: #000;
+        border: none;
+        padding: 15px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        transition: all 0.2s;
+        min-height: 60px;
+        touch-action: manipulation;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      ">
+        💾 Sonra Devam Et (Kısmi Toplama Kaydet)<br><small style="font-size: 12px; opacity: 0.8;">Kaldığınız yerden devam edebilirsiniz</small>
+      </button>
+      
+      <button id="continuePicking" style="
+        background: #22c55e;
+        color: white;
+        border: none;
+        padding: 15px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: bold;
+        transition: all 0.2s;
+        min-height: 60px;
+        touch-action: manipulation;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      ">
+        ▶️ Toplamaya Devam Et<br><small style="font-size: 12px; opacity: 0.8;">Bu sayfada kalmaya devam edin</small>
+      </button>
+    </div>
+  `;
+  
+  console.log('📦 Adding modal to DOM...');
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+  
+  console.log('✅ Modal added to DOM, should be visible');
+  
+  // Modal'a tıklama önle
+  modal.addEventListener('click', (e) => {
+    if (e.target === modal) {
+      // Modal dışına tıklandığında kapatma
+      closeExitModal();
+    }
+  });
+  
+  // Button hover effects ve click handlers
+  const cancelBtn = modal.querySelector('#cancelOrder');
+  const saveBtn = modal.querySelector('#savePartial');
+  const continueBtn = modal.querySelector('#continuePicking');
+  
+  // Hover effects
+  [cancelBtn, saveBtn, continueBtn].forEach(btn => {
+    if (!btn) return;
+    
+    btn.addEventListener('mouseenter', () => {
+      btn.style.transform = 'scale(1.05)';
+      if (btn.id === 'cancelOrder') btn.style.background = '#c82333';
+      else if (btn.id === 'savePartial') btn.style.background = '#e0a800';
+      else if (btn.id === 'continuePicking') btn.style.background = '#16a34a';
+    });
+    
+    btn.addEventListener('mouseleave', () => {
+      btn.style.transform = 'scale(1)';
+      if (btn.id === 'cancelOrder') btn.style.background = '#dc3545';
+      else if (btn.id === 'savePartial') btn.style.background = '#ffc107';
+      else if (btn.id === 'continuePicking') btn.style.background = '#22c55e';
+    });
+  });
+  
+  // Event listeners
+  if (cancelBtn) cancelBtn.addEventListener('click', handleCancelOrder);
+  if (saveBtn) saveBtn.addEventListener('click', handleSavePartial);
+  if (continueBtn) continueBtn.addEventListener('click', handleContinuePicking);
+  
+  return modal;
+}
+
+function closeExitModal() {
+  const modal = document.getElementById('exitModal');
+  if (modal) {
+    modal.remove();
+  }
+}
+
+function showOrderCompletedModal() {
+  console.log('🎉 Creating order completed modal...');
+  
+  // Eğer zaten modal varsa kaldır
+  const existingModal = document.getElementById('completedModal');
+  if (existingModal) {
+    existingModal.remove();
+  }
+  
+  const modal = document.createElement('div');
+  modal.id = 'completedModal';
+  
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.8);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+    font-family: inherit;
+  `;
+  
+  const modalContent = document.createElement('div');
+  modalContent.style.cssText = `
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    text-align: center;
+    max-width: 400px;
+    width: 90%;
+    margin: 20px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    animation: modalSlideIn 0.3s ease;
+  `;
+  
+  modalContent.innerHTML = `
+    <div style="font-size: 64px; margin-bottom: 20px;">🎉</div>
+    <h2 style="margin: 0 0 15px 0; color: #22c55e; font-size: 24px;">Sipariş Tamamlandı!</h2>
+    <p style="margin: 0 0 25px 0; color: #666; line-height: 1.5; font-size: 16px;">
+      Sipariş başarıyla tamamlandı ve durumu güncellendi.
+    </p>
+    <div style="display: flex; gap: 15px; justify-content: center;">
+      <button id="goToOrders" style="
+        background: #22c55e;
+        color: white;
+        border: none;
+        padding: 12px 24px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-size: 16px;
+        font-weight: 500;
+        transition: all 0.2s ease;
+      ">Siparişler Sayfasına Git</button>
+    </div>
+  `;
+  
+  modal.appendChild(modalContent);
+  document.body.appendChild(modal);
+  
+  // Button hover effect
+  const button = modalContent.querySelector('#goToOrders');
+  button.addEventListener('mouseenter', () => {
+    button.style.background = '#16a34a';
+  });
+  button.addEventListener('mouseleave', () => {
+    button.style.background = '#22c55e';
+  });
+  
+  // Event listeners
+  document.getElementById('goToOrders').addEventListener('click', () => {
+    console.log('🔄 Redirecting to orders page...');
+    window.location.href = '/orders.html';
+  });
+  
+  return modal;
+}
+
+async function handleCancelOrder() {
+  console.log('🗑️ Canceling order and resetting...');
+  
+  try {
+    // Sipariş toplamayı sıfırla
+    const response = await fetch(`/api/picks/${pickId}/reset`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      console.log('✅ Order picking reset successfully');
+      closeExitModal();
+      window.location.href = '/orders.html';
+    } else {
+      console.error('❌ Failed to reset order picking');
+      alert('Sipariş iptal edilirken hata oluştu. Lütfen tekrar deneyin.');
+    }
+  } catch (error) {
+    console.error('❌ Error resetting order:', error);
+    alert('Sipariş iptal edilirken hata oluştu: ' + error.message);
+  }
+}
+
+async function handleSavePartial() {
+  console.log('💾 Saving partial pick...');
+  
+  try {
+    // Kısmi toplama olarak kaydet
+    const response = await fetch(`/api/picks/${pickId}/partial`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    if (response.ok) {
+      console.log('✅ Partial pick saved successfully');
+      closeExitModal();
+      
+      // Başarı mesajı göster
+      const successDiv = document.createElement('div');
+      successDiv.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #22c55e;
+        color: white;
+        padding: 20px;
+        border-radius: 8px;
+        z-index: 10001;
+        text-align: center;
+        font-weight: bold;
+      `;
+      successDiv.innerHTML = `
+        ✅ Kısmi toplama kaydedildi!<br>
+        <small>Siparişler sayfasına yönlendiriliyorsunuz...</small>
+      `;
+      document.body.appendChild(successDiv);
+      
+      setTimeout(() => {
+        window.location.href = '/orders.html';
+      }, 2000);
+      
+    } else {
+      console.error('❌ Failed to save partial pick');
+      alert('Kısmi toplama kaydedilirken hata oluştu. Lütfen tekrar deneyin.');
+    }
+  } catch (error) {
+    console.error('❌ Error saving partial pick:', error);
+    alert('Kısmi toplama kaydedilirken hata oluştu: ' + error.message);
+  }
+}
+
+function handleContinuePicking() {
+  console.log('▶️ Continuing picking...');
+  closeExitModal();
+  
+  // Focus'u manuel input'a ver
+  setTimeout(() => $('#manual').focus(), 100);
+}
+
+async function handleExit() {
+  console.log('🚪 Exit button clicked!');
+  console.log('🔍 Current pickData state:', pickData);
+  
+  const hasScannedItems = checkForScannedItems();
+  console.log('📦 Has scanned items result:', hasScannedItems);
+  
+  if (!hasScannedItems) {
+    // Senaryo 1: Hiç tarama yapılmamış - direkt çık
+    console.log('✅ No scanned items detected, proceeding with direct exit');
+    console.log('🔄 Redirecting to orders page...');
+    window.location.href = '/orders.html';
+  } else {
+    // Senaryo 2: Bazı ürünler taratılmış - modal göster
+    console.log('⚠️ Scanned items detected! Showing exit modal...');
+    
+    // Try-catch ile modal gösterme
+    try {
+      const modal = showExitModal();
+      console.log('✅ Exit modal created and should be visible now');
+      
+      // Modal'ın DOM'da olduğunu kontrol et
+      const modalInDom = document.getElementById('exitModal');
+      if (modalInDom) {
+        console.log('✅ Modal confirmed in DOM');
+      } else {
+        console.error('❌ Modal not found in DOM after creation');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error showing exit modal:', error);
+      // Fallback: Simple confirm dialog
+      const confirmExit = confirm('Sipariş toplama yarım kaldı. Ne yapmak istiyorsunuz?\n\n✅ Tamam = Çıkış yap\n❌ İptal = Devam et');
+      if (confirmExit) {
+        // Eğer kullanıcı çıkış seçerse reset API'sini çağır
+        try {
+          const response = await fetch(`/api/picks/${pickId}/reset`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+          });
+          
+          if (response.ok) {
+            console.log('✅ Order picking reset successfully');
+            window.location.href = '/orders.html';
+          } else {
+            console.error('❌ Failed to reset order picking');
+            alert('Sipariş iptal edilirken hata oluştu. Yine de çıkış yapılacak.');
+            window.location.href = '/orders.html';
+          }
+        } catch (resetError) {
+          console.error('❌ Error resetting order:', resetError);
+          window.location.href = '/orders.html';
+        }
+      }
+    }
+  }
+}
+
+// Sayfa kapatılırken kontrol
+window.addEventListener('beforeunload', (e) => {
+  if (checkForScannedItems() && !document.hidden) {
+    e.preventDefault();
+    e.returnValue = 'Sipariş henüz tamamlanmadı. Çıkmak istediğinizden emin misiniz?';
+  }
+});
+
+
+// Location verification toggle functionality
+function toggleLocationVerification() {
+  const statusDiv = $('#locationVerifyStatus');
+  const icon = $('#locationVerifyIcon');
+  const text = $('#locationVerifyText');
+  
+  locationVerificationEnabled = !locationVerificationEnabled;
+  
+  if (locationVerificationEnabled) {
+    // Zorunlu mod
+    statusDiv.style.background = '#dc3545';
+    icon.textContent = '🔒';
+    text.textContent = 'Lokasyon Teyit: ZORUNLU';
+  } else {
+    // Opsiyonel mod
+    statusDiv.style.background = '#6c757d';
+    icon.textContent = '🔓';
+    text.textContent = 'Lokasyon Teyit: OPSİYONEL';
+  }
+  
+  // Input placeholder'ını da güncelle
+  if (!isWaitingForLocationScan) {
+    $('#manual').placeholder = locationVerificationEnabled 
+      ? '1. Ürün Barkodunu Okutun (Lokasyon Teyit Zorunlu)'
+      : 'Ürün Barkodunu Okutun';
+  }
+  
+  console.log('🔄 Location verification toggled:', locationVerificationEnabled ? 'MANDATORY' : 'OPTIONAL');
+}
+
+// Location verification toggle button event listener
+$('#locationVerifyStatus').addEventListener('click', toggleLocationVerification);
+
+// Debug button event listener
+$('#debugBtn').addEventListener('click', () => {
+  console.log('🐛 DEBUG INFORMATION:');
+  console.log('📊 pickData:', pickData);
+  console.log('🔍 checkForScannedItems result:', checkForScannedItems());
+  
+  // Test modal'ı göster
+  console.log('🧪 Testing exit modal...');
+  showExitModal();
+});
+
+await loadPick();
+
+// Manuel input modu
+$('#manual').focus();
+console.log('📱 Started in manual input mode.');
+
+// Zebra Terminal Optimizasyonları - Sayfa yüklenince çalıştır
+setTimeout(() => {
+  const manualInput = $('#manual');
+  
+  console.log('🔧 Setting up barcode auto-focus...');
+  
+  if (manualInput) {
+    // İlk focus
+    manualInput.focus();
+    manualInput.click(); // iOS için gerekli
+    
+    console.log('✅ Initial focus set');
+    
+    // Focus kaybını sürekli kontrol et
+    setInterval(() => {
+      if (document.activeElement !== manualInput) {
+        manualInput.focus();
+      }
+    }, 500);
+    
+    // Her tıklamada focus
+    document.addEventListener('click', (e) => {
+      if (e.target !== manualInput) {
+        setTimeout(() => manualInput.focus(), 50);
+      }
+    });
+    
+    // Sayfa görünür olduğunda focus
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) {
+        setTimeout(() => manualInput.focus(), 100);
+      }
+    });
+    
+    console.log('✅ Auto-focus system activated');
+  }
+}, 1000);
+
+// Visual feedback for successful scan (outside setTimeout)
+function showScanFeedback(success) {
+  const manualInput = $('#manual');
+  if (manualInput) {
+    manualInput.style.background = success ? '#22c55e' : '#ef4444';
+    manualInput.style.color = 'white';
+    setTimeout(() => {
+      manualInput.style.background = '#000';
+      manualInput.style.color = '#00ff00';
+    }, 300);
+  }
+}
+
+// Zebra device detection and optimizations
+const isZebraDevice = /Android/.test(navigator.userAgent) && 
+                     (screen.width <= 900 || screen.height <= 900);
+
+if (isZebraDevice) {
+  document.body.classList.add('zebra-optimized');
+  console.log('🦓 Zebra device detected - enabling optimizations');
+  
+  // Prevent screen dim during operation
+  if ('wakeLock' in navigator) {
+    navigator.wakeLock.request('screen').catch(e => 
+      console.log('Wake lock not supported:', e)
+    );
+  }
+}
+
+// Çıkış butonu event listener - load sonrası ekle
+console.log('🔧 Adding exit button event listener...');
+const exitBtn = document.getElementById('exitPick');
+console.log('🔧 Exit button found:', exitBtn);
+
+if (exitBtn) {
+  // Multiple ways to add event listener for debugging
+  
+  // Multiple event types to catch any click
+  ['mousedown', 'touchstart', 'click', 'pointerdown'].forEach(eventType => {
+    exitBtn.addEventListener(eventType, function(e) {
+      console.log(`🔥 EXIT BUTTON CLICKED (${eventType})!`);
+      e.preventDefault();
+      e.stopPropagation();
+      
+      // Yeni exit logic'i kullan
+      handleExit();
+    });
+  });
+  
+  // Method 3: Direct style test
+  exitBtn.style.pointerEvents = 'all';
+  exitBtn.style.zIndex = '9999';
+  
+  console.log('✅ Exit button listener added with multiple methods');
+  
+  // Since click doesn't work, use double hover as trigger
+  let hoverCount = 0;
+  let hoverTimeout = null;
+  
+  exitBtn.addEventListener('mouseenter', () => {
+    hoverCount++;
+    console.log(`🖱️ Mouse entered exit button! (${hoverCount})`);
+    exitBtn.style.backgroundColor = '#b02a37'; // Darker red on hover
+    
+    // Reset counter after 1 second
+    if (hoverTimeout) clearTimeout(hoverTimeout);
+    hoverTimeout = setTimeout(() => {
+      hoverCount = 0;
+    }, 1000);
+    
+    // Trigger exit on double hover
+    if (hoverCount >= 2) {
+      console.log('🔥 DOUBLE HOVER DETECTED - TRIGGERING EXIT!');
+      hoverCount = 0;
+      
+      // Yeni exit logic'i kullan
+      handleExit();
+    }
+  });
+  
+  exitBtn.addEventListener('mouseleave', () => {
+    exitBtn.style.backgroundColor = '#dc3545'; // Original red
+  });
+  
+  // Test click with setTimeout
+  setTimeout(() => {
+    console.log('🧪 Testing button click programmatically...');
+    // Don't actually click, just test if button exists
+    console.log('🧪 Button still exists after 2 seconds:', !!document.getElementById('exitPick'));
+  }, 2000);
+  
+} else {
+  console.error('❌ Exit button not found!');
+}
+</script>
+</body>
+</html>

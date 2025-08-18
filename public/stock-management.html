@@ -1,0 +1,2534 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Stok Yönetimi</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">Stok Yönetimi</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="stock-management">
+  <!-- Stok Özeti -->
+  <section class="card stock-summary">
+    <h2>📊 Stok Özeti</h2>
+    <div class="summary-stats">
+      <div class="summary-item">
+        <span class="summary-icon">📦</span>
+        <div class="summary-content">
+          <span class="summary-value" id="totalProducts">0</span>
+          <span class="summary-label">Toplam Ürün</span>
+        </div>
+      </div>
+      <div class="summary-item warning">
+        <span class="summary-icon">⚠️</span>
+        <div class="summary-content">
+          <span class="summary-value" id="lowStockItems">0</span>
+          <span class="summary-label">Düşük Stok</span>
+        </div>
+      </div>
+      <div class="summary-item danger">
+        <span class="summary-icon">🚨</span>
+        <div class="summary-content">
+          <span class="summary-value" id="outOfStockItems">0</span>
+          <span class="summary-label">Stokta Yok</span>
+        </div>
+      </div>
+      <div class="summary-item">
+        <span class="summary-icon">📈</span>
+        <div class="summary-content">
+          <span class="summary-value" id="totalMovements">0</span>
+          <span class="summary-label">Bugünkü Hareket</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Hızlı İşlemler -->
+  <section class="card quick-actions">
+    <h2>⚡ Hızlı İşlemler</h2>
+    <div class="action-buttons">
+      <button class="action-btn" id="stockAdjustmentBtn">
+        <span class="btn-icon">🔧</span>
+        <span class="btn-text">Stok Ayarlama</span>
+      </button>
+      <button class="action-btn" id="stockMovementBtn">
+        <span class="btn-icon">📝</span>
+        <span class="btn-text">Stok Hareketi</span>
+      </button>
+      <button class="action-btn" id="lowStockReportBtn">
+        <span class="btn-icon">⚠️</span>
+        <span class="btn-text">Düşük Stok Raporu</span>
+      </button>
+      <button class="action-btn" id="stockReportBtn">
+        <span class="btn-icon">📄</span>
+        <span class="btn-text">Stok Raporu</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Fark Düzeltme Bildirimi -->
+  <section class="card variance-notification" id="varianceNotification" style="display: none;">
+    <div class="variance-header">
+      <h2>🔧 Sayım Farkları Düzeltme Modu</h2>
+      <button class="btn-close-variance" id="closeVarianceMode">✕</button>
+    </div>
+    <div class="variance-info">
+      <p>Sayım sonucunda <strong id="varianceCount">0</strong> üründe fark tespit edildi. Farkları düzeltmek için barkod okutun.</p>
+      <div class="variance-controls">
+        <button class="action-btn" id="quickFixBtn">
+          <span class="btn-icon">⚡</span>
+          <span class="btn-text">Hızlı Düzeltme</span>
+        </button>
+        <button class="action-btn secondary" id="viewVarianceListBtn">
+          <span class="btn-icon">📋</span>
+          <span class="btn-text">Fark Listesi</span>
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stok Arama ve Filtreleme -->
+  <section class="card stock-filters">
+    <h2>🔍 Stok Arama</h2>
+    <div class="filter-controls">
+      <div class="search-input">
+        <input type="text" id="stockSearch" placeholder="SKU, ürün adı veya paket no ile ara..." />
+        <button class="search-btn" id="searchBtn">🔍</button>
+      </div>
+      <div class="filter-options">
+        <select id="stockFilter">
+          <option value="all">Tümü</option>
+          <option value="in_stock">Stokta Var</option>
+          <option value="low_stock">Düşük Stok</option>
+          <option value="out_of_stock">Stokta Yok</option>
+          <option value="variance" id="varianceFilterOption" style="display: none;">Fark Olan Ürünler</option>
+        </select>
+        <select id="locationFilter">
+          <option value="all">Tüm Lokasyonlar</option>
+        </select>
+        <select id="sortBy">
+          <option value="sku">SKU'ya Göre</option>
+          <option value="name">Ürün Adına Göre</option>
+          <option value="stock_desc">Stok (Yüksek-Düşük)</option>
+          <option value="stock_asc">Stok (Düşük-Yüksek)</option>
+          <option value="location">Lokasyona Göre</option>
+          <option value="variance" id="varianceSortOption" style="display: none;">Farka Göre</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <!-- Stok Listesi -->
+  <section class="card stock-list">
+    <h2>📋 Stok Durumu</h2>
+    <div class="stock-table-container">
+      <table class="stock-table" id="stockTable">
+        <thead>
+          <tr>
+            <th>SKU</th>
+            <th>Ürün Adı</th>
+            <th>Paketler</th>
+            <th>Lokasyonlar</th>
+            <th>Toplam Stok</th>
+            <th>Durum</th>
+            <th>İşlemler</th>
+          </tr>
+        </thead>
+        <tbody id="stockTableBody">
+          <tr class="empty-state">
+            <td colspan="7">
+              <div class="empty-content">
+                <span class="empty-icon">📦</span>
+                <p>Stok verileri yükleniyor...</p>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- Son Stok Hareketleri -->
+  <section class="card recent-movements">
+    <h2>📈 Son Stok Hareketleri</h2>
+    <div class="movements-list" id="movementsList">
+      <div class="empty-state">
+        <span class="empty-icon">📈</span>
+        <p>Son stok hareketleri yükleniyor...</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Stok Ayarlama Modalı -->
+<div class="modal" id="stockAdjustmentModal" style="display: none;">
+  <div class="modal-content stock-adjustment-modal">
+    <div class="modal-header">
+      <h3 id="adjustmentModalTitle">🔧 Stok Ayarlama</h3>
+      <button class="btn-close" id="closeStockModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Scanner section - sadece normal modda göster -->
+      <div class="adjustment-scanner" id="adjustmentScannerSection">
+        <label>Ürün Barkodu:</label>
+        <input type="text" id="adjustmentScanner" placeholder="Ürün veya paket barkodunu okutun..." autocomplete="off" />
+        <div class="scanner-help">
+          <small>📱 Barkod okutun veya manuel girin</small>
+        </div>
+      </div>
+      
+      <!-- Variance mode info -->
+      <div class="variance-adjustment-info" id="varianceAdjustmentInfo" style="display: none;">
+        <div class="variance-alert">
+          <div class="variance-header">
+            <span class="variance-icon">🔧</span>
+            <div class="variance-title">
+              <strong>Sayım Farkı Düzeltmesi</strong>
+              <span id="varianceProgress" class="variance-progress">1 / 1</span>
+            </div>
+          </div>
+          <div class="variance-details">
+            <div class="variance-row">
+              <span class="variance-label">Beklenen:</span>
+              <span id="varianceExpected" class="variance-value">-</span>
+            </div>
+            <div class="variance-row">
+              <span class="variance-label">Sayılan:</span>
+              <span id="varianceCounted" class="variance-value">-</span>
+            </div>
+            <div class="variance-row">
+              <span class="variance-label">Fark:</span>
+              <span id="varianceAmount" class="variance-value variance-diff">-</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="adjustment-details" id="adjustmentDetails" style="display: none;">
+        <div class="product-info">
+          <h4 id="adjustmentProduct">Ürün</h4>
+          <p id="adjustmentLocation">Lokasyon</p>
+          <p id="adjustmentPackage">Paket No</p>
+          <div class="current-stock">
+            <span>Mevcut Stok: <strong id="currentStock">0</strong></span>
+          </div>
+        </div>
+        
+        <div class="adjustment-form">
+          <div class="adjustment-type">
+            <label>İşlem Türü:</label>
+            <select id="adjustmentType">
+              <option value="IN">Stok Girişi (+)</option>
+              <option value="OUT">Stok Çıkışı (-)</option>
+              <option value="ADJUST">Stok Düzeltme (=)</option>
+            </select>
+          </div>
+          
+          <div class="quantity-input">
+            <label id="quantityLabel">Miktar:</label>
+            <div class="qty-controls">
+              <button class="qty-btn" data-action="minus" data-target="adjustmentQty">-</button>
+              <input type="number" id="adjustmentQty" value="1" min="0" />
+              <button class="qty-btn" data-action="plus" data-target="adjustmentQty">+</button>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Açıklama:</label>
+            <textarea id="adjustmentNote" placeholder="Stok değişikliği nedeni..." rows="3"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="action-btn confirm-adjustment" id="confirmAdjustment" style="display: none;">
+        <span class="btn-icon">✅</span>
+        <span class="btn-text">Onayla</span>
+      </button>
+      <button class="action-btn secondary" id="cancelAdjustment">
+        <span class="btn-icon">✕</span>
+        <span class="btn-text">İptal</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Stok Hareketi Modalı -->
+<div class="modal" id="stockMovementModal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>📝 Stok Hareketi Ekle</h3>
+      <button class="btn-close" id="closeMovementModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label>İşlem Türü:</label>
+        <select id="movementType">
+          <option value="IN">Stok Girişi</option>
+          <option value="OUT">Stok Çıkışı</option>
+          <option value="ADJUST">Stok Düzeltme</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>Ürün/Paket Barkodu:</label>
+        <input type="text" id="movementScanner" placeholder="Barkod okutun..." autocomplete="off" />
+      </div>
+      
+      <div class="movement-product" id="movementProduct" style="display: none;">
+        <h4 id="movementProductName">Ürün</h4>
+        <p id="movementProductLocation">Lokasyon</p>
+        <p id="movementProductStock">Mevcut Stok</p>
+      </div>
+      
+      <div class="form-group">
+        <label>Miktar:</label>
+        <input type="number" id="movementQty" value="1" min="1" />
+      </div>
+      
+      <div class="form-group">
+        <label>Açıklama:</label>
+        <textarea id="movementNote" placeholder="Hareket açıklaması..." rows="3"></textarea>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="action-btn" id="confirmMovement">
+        <span class="btn-icon">✅</span>
+        <span class="btn-text">Kaydet</span>
+      </button>
+      <button class="action-btn secondary" id="cancelMovement">
+        <span class="btn-icon">✕</span>
+        <span class="btn-text">İptal</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Paket Lokasyonları Modalı -->
+<div class="modal" id="packageLocationModal" style="display: none;">
+  <div class="modal-content large-modal">
+    <div class="modal-header">
+      <h3 id="locationModalTitle">📦 Paket Lokasyonları</h3>
+      <button class="btn-close" id="closeLocationModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="locations-container" id="locationsContainer">
+        <div class="loading-locations">📍 Lokasyon detayları yükleniyor...</div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="action-btn secondary" id="closeLocationModalBtn">
+        <span class="btn-icon">✕</span>
+        <span class="btn-text">Kapat</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Raf Düzenleme Modalı -->
+<div class="modal" id="shelfAdjustmentModal" style="display: none;">
+  <div class="modal-content large-modal">
+    <div class="modal-header">
+      <h3 id="shelfAdjustmentTitle">🔧 Raf Stok Düzenleme</h3>
+      <button class="btn-close" id="closeShelfAdjustmentModal">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Ürün ve Lokasyon Bilgisi -->
+      <div class="adjustment-info">
+        <div class="product-summary">
+          <h4 id="adjustmentProductInfo">📦 Ürün Bilgisi</h4>
+          <div class="info-row">
+            <span class="info-label">📍 Lokasyon:</span>
+            <span id="adjustmentShelfInfo">-</span>
+          </div>
+          <div class="info-row">
+            <span class="info-label">📦 Mevcut Stok:</span>
+            <span id="adjustmentCurrentStock">0 adet</span>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Son Hareketler -->
+      <div class="recent-movements-section">
+        <h4>📈 Son Hareketler</h4>
+        <div class="movements-history" id="shelfMovementsHistory">
+          <div class="loading-movements">📊 Hareket geçmişi yükleniyor...</div>
+        </div>
+      </div>
+      
+      <!-- Stok Ayarlama Formu -->
+      <div class="shelf-adjustment-form">
+        <h4>🔧 Stok Ayarlama</h4>
+        <div class="adjustment-controls">
+          <div class="adjustment-type">
+            <label>İşlem Türü:</label>
+            <select id="shelfAdjustmentType">
+              <option value="IN">Stok Girişi (+)</option>
+              <option value="OUT">Stok Çıkışı (-)</option>
+              <option value="ADJUST">Stok Düzeltme (=)</option>
+            </select>
+          </div>
+          
+          <div class="quantity-input">
+            <label id="shelfQuantityLabel">Miktar:</label>
+            <div class="qty-controls">
+              <button class="qty-btn" data-target="shelfAdjustmentQty" data-action="minus">-</button>
+              <input type="number" id="shelfAdjustmentQty" value="1" min="0" />
+              <button class="qty-btn" data-target="shelfAdjustmentQty" data-action="plus">+</button>
+            </div>
+          </div>
+          
+          <div class="form-group">
+            <label>Açıklama:</label>
+            <textarea id="shelfAdjustmentNote" placeholder="Stok değişikliği nedeni..." rows="2"></textarea>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="action-btn" id="confirmShelfAdjustment">
+        <span class="btn-icon">✅</span>
+        <span class="btn-text">Stok Güncelle</span>
+      </button>
+      <button class="action-btn secondary" id="cancelShelfAdjustment">
+        <span class="btn-icon">✕</span>
+        <span class="btn-text">İptal</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const API = {
+  stock: {
+    list: (filters = {}) => {
+      const params = new URLSearchParams(filters);
+      return fetch(`/api/stock?${params}`).then(r => r.json());
+    },
+    adjust: (data) => fetch('/api/stock/adjust', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)}).then(r => r.json()),
+    movements: (limit = 50) => fetch(`/api/stock/movements?limit=${limit}`).then(r => r.json()),
+    summary: () => fetch('/api/stock/summary').then(r => r.json())
+  },
+  products: () => fetch('/api/products').then(r => r.json()),
+  locations: () => fetch('/api/shelves').then(r => r.json()),
+  packages: (sku) => fetch(`/api/stock/${sku}/packages`).then(r => r.json()),
+  packageLocations: (barcode) => fetch(`/api/stock/package/${barcode}/locations`).then(r => r.json()),
+  shelfMovements: (barcode, shelfCode) => fetch(`/api/stock/package/${barcode}/shelf/${shelfCode}/movements`).then(r => r.json())
+};
+
+let currentAdjustmentItem = null;
+let currentMovementItem = null;
+let currentShelfAdjustment = null;
+let varianceData = null;
+let varianceMode = false;
+let currentVarianceIndex = 0;
+
+// Sayfa yüklendiğinde
+document.addEventListener('DOMContentLoaded', () => {
+  // URL parametrelerini kontrol et (variance mode)
+  checkVarianceMode();
+  
+  loadStockSummary();
+  loadStockList();
+  loadRecentMovements();
+  loadLocationFilter();
+});
+
+// Variance mode kontrolü
+function checkVarianceMode() {
+  // Önce localStorage'dan kontrol et
+  const savedVarianceData = localStorage.getItem('varianceData');
+  const savedVarianceMode = localStorage.getItem('varianceMode');
+  
+  if (savedVarianceData && savedVarianceMode === 'true') {
+    try {
+      varianceData = JSON.parse(savedVarianceData);
+      varianceMode = true;
+      setupVarianceMode();
+      return;
+    } catch (error) {
+      console.error('Saved variance data parse error:', error);
+    }
+  }
+  
+  // URL parametrelerini kontrol et
+  const urlParams = new URLSearchParams(window.location.search);
+  const mode = urlParams.get('mode');
+  const data = urlParams.get('data');
+  
+  if (mode === 'variance' && data) {
+    try {
+      varianceData = JSON.parse(decodeURIComponent(data));
+      varianceMode = true;
+      
+      // localStorage'a kaydet
+      localStorage.setItem('varianceData', JSON.stringify(varianceData));
+      localStorage.setItem('varianceMode', 'true');
+      
+      setupVarianceMode();
+    } catch (error) {
+      console.error('Variance data parse error:', error);
+    }
+  }
+}
+
+// Variance mode setup
+function setupVarianceMode() {
+  if (!varianceData || varianceData.length === 0) return;
+  
+  // Variance notification'ı göster
+  document.getElementById('varianceNotification').style.display = 'block';
+  document.getElementById('varianceCount').textContent = varianceData.length;
+  
+  // Filter seçeneklerini göster
+  document.getElementById('varianceFilterOption').style.display = 'block';
+  document.getElementById('varianceSortOption').style.display = 'block';
+  
+  // Variance filter'ı aktif et
+  document.getElementById('stockFilter').value = 'variance';
+  
+  // Header'ı güncelle
+  document.querySelector('.header-subtitle').textContent = 'Stok Yönetimi - Fark Düzeltme Modu';
+  document.querySelector('.header-subtitle').style.color = '#ff6b35';
+  
+  // Variance listesini otomatik yükle
+  setTimeout(() => {
+    showVarianceList();
+  }, 500);
+}
+
+// Stok özetini yükle
+async function loadStockSummary() {
+  try {
+    const summary = await API.stock.summary();
+    
+    document.getElementById('totalProducts').textContent = summary.total_products || 0;
+    document.getElementById('lowStockItems').textContent = summary.low_stock_items || 0;
+    document.getElementById('outOfStockItems').textContent = summary.out_of_stock_items || 0;
+    document.getElementById('totalMovements').textContent = summary.todays_movements || 0;
+    
+  } catch (error) {
+    console.error('Stok özeti yüklenemedi:', error);
+  }
+}
+
+// Stok listesini yükle
+async function loadStockList(filters = {}) {
+  try {
+    // Variance mode'da ise variance ürünlerini filtrele
+    if (varianceMode && filters.filter === 'variance') {
+      const varianceStockData = await getVarianceStockData();
+      renderStockTable(varianceStockData);
+      return;
+    }
+    
+    const stockData = await API.stock.list(filters);
+    renderStockTable(stockData);
+    
+  } catch (error) {
+    console.error('Stok listesi yüklenemedi:', error);
+    document.getElementById('stockTableBody').innerHTML = `
+      <tr class="error-state">
+        <td colspan="7">
+          <div class="error-content">
+            <span class="error-icon">❌</span>
+            <p>Stok verileri yüklenemedi</p>
+          </div>
+        </td>
+      </tr>`;
+  }
+}
+
+// Stok tablosunu render et
+function renderStockTable(stockData) {
+  const tbody = document.getElementById('stockTableBody');
+  
+  if (!stockData || stockData.length === 0) {
+    tbody.innerHTML = `
+      <tr class="empty-state">
+        <td colspan="7">
+          <div class="empty-content">
+            <span class="empty-icon">📦</span>
+            <p>Stok verisi bulunamadı</p>
+          </div>
+        </td>
+      </tr>`;
+    return;
+  }
+  
+  const rowsHtml = stockData.map(item => {
+    const stockStatus = getStockStatus(item.main_product_quantity);
+    const statusClass = stockStatus.class;
+    const statusText = stockStatus.text;
+    
+    // Variance item için özel styling
+    const varianceClass = item.is_variance_item ? 'variance-item' : '';
+    const varianceIcon = item.is_variance_item ? ' 🔧' : '';
+    
+    return `
+      <tr class="${statusClass} ${varianceClass}" data-sku="${item.sku}">
+        <td>
+          <button class="sku-expand-btn" onclick="togglePackageDetails('${item.sku}')">
+            <span class="expand-icon">▶</span>
+            <strong>${item.sku}${varianceIcon}</strong>
+          </button>
+        </td>
+        <td>${item.product_name}${item.is_variance_item ? ' <span class="variance-badge">FARK</span>' : ''}</td>
+        <td><span class="package-summary">${item.package_count || 0} paket</span></td>
+        <td><span class="location-summary">${item.location_count || 0} lokasyon</span></td>
+        <td><span class="stock-quantity">${item.main_product_quantity || 0}</span></td>
+        <td><span class="stock-status ${statusClass}">${statusText}</span></td>
+        <td>
+          <div class="table-actions">
+            ${item.is_variance_item ? `
+              <button class="action-btn small variance-fix-btn" onclick="fixVarianceItem('${item.sku}')">
+                <span class="btn-icon">🔧</span>
+              </button>
+            ` : ''}
+            <button class="action-btn small" onclick="viewMovements('${item.sku}')">
+              <span class="btn-icon">📈</span>
+            </button>
+          </div>
+        </td>
+      </tr>
+      <tr class="package-details-row" id="packages-${item.sku}" style="display: none;">
+        <td colspan="7">
+          <div class="package-details-container">
+            <div class="loading-packages">📦 Paket detayları yükleniyor...</div>
+          </div>
+        </td>
+      </tr>`;
+  }).join('');
+  
+  tbody.innerHTML = rowsHtml;
+}
+
+// Stok durumu belirle
+function getStockStatus(quantity) {
+  const qty = Number(quantity) || 0; // Handle null/undefined/string values
+  
+  if (qty === 0) {
+    return { class: 'out-of-stock', text: 'Stokta Yok' };
+  } else if (qty <= 5) {
+    return { class: 'low-stock', text: 'Düşük Stok' };
+  } else if (qty <= 10) {
+    return { class: 'medium-stock', text: 'Orta Stok' };
+  } else {
+    return { class: 'high-stock', text: 'Yeterli Stok' };
+  }
+}
+
+// Son hareketleri yükle
+async function loadRecentMovements() {
+  try {
+    const movements = await API.stock.movements(20);
+    renderMovementsList(movements);
+    
+  } catch (error) {
+    console.error('Stok hareketleri yüklenemedi:', error);
+  }
+}
+
+// Hareketler listesini render et
+function renderMovementsList(movements) {
+  const container = document.getElementById('movementsList');
+  
+  if (!movements || movements.length === 0) {
+    container.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">📈</span>
+        <p>Henüz stok hareketi bulunmuyor</p>
+      </div>`;
+    return;
+  }
+  
+  const movementsHtml = movements.map(movement => {
+    const typeIcon = movement.type === 'IN' ? '📥' : movement.type === 'OUT' ? '📤' : '🔧';
+    const typeClass = movement.type === 'IN' ? 'in' : movement.type === 'OUT' ? 'out' : 'adjust';
+    const qtyDisplay = movement.type === 'OUT' ? `-${movement.qty}` : 
+                      movement.type === 'IN' ? `+${movement.qty}` : `=${movement.qty}`;
+    
+    // Use enhanced display info
+    const displaySku = movement.sku || 'SKU-N/A';
+    const displayName = movement.product_name || 'Ürün Adı Yok';
+    const packageInfo = movement.package_number ? `Paket ${movement.package_number}` : '';
+    const shelfInfo = movement.shelf_code ? `Raf: ${movement.shelf_code}` : '';
+    
+    return `
+      <div class="movement-item">
+        <div class="movement-info">
+          <span class="movement-icon">${typeIcon}</span>
+          <div class="movement-details">
+            <strong>${displaySku}</strong>
+            <span class="movement-product">${displayName}</span>
+            <span class="movement-note">${packageInfo} ${shelfInfo}</span>
+          </div>
+        </div>
+        <div class="movement-meta">
+          <span class="movement-qty ${typeClass}">${qtyDisplay}</span>
+          <span class="movement-date">${formatDate(movement.created_at)}</span>
+        </div>
+      </div>`;
+  }).join('');
+  
+  container.innerHTML = movementsHtml;
+}
+
+// Lokasyon filtresini yükle
+async function loadLocationFilter() {
+  try {
+    const response = await API.locations();
+    const locations = response.shelves || response; // Handle both formats
+    const select = document.getElementById('locationFilter');
+    
+    if (!Array.isArray(locations)) {
+      console.error('Locations data is not an array:', locations);
+      return;
+    }
+    
+    const optionsHtml = locations.map(loc => 
+      `<option value="${loc.shelf_code}">${loc.shelf_code} - ${loc.shelf_name || ''}</option>`
+    ).join('');
+    
+    select.innerHTML = '<option value="all">Tüm Lokasyonlar</option>' + optionsHtml;
+    
+  } catch (error) {
+    console.error('Lokasyonlar yüklenemedi:', error);
+  }
+}
+
+// Tarih formatlama
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now - date;
+  const diffMins = Math.floor(diffMs / (1000 * 60));
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  
+  if (diffMins < 1) return 'Az önce';
+  if (diffMins < 60) return `${diffMins} dk önce`;
+  if (diffHours < 24) return `${diffHours} saat önce`;
+  if (diffDays < 7) return `${diffDays} gün önce`;
+  
+  return date.toLocaleDateString('tr-TR');
+}
+
+// Filtreleme ve arama
+document.getElementById('stockSearch').addEventListener('input', debounce(applyFilters, 300));
+document.getElementById('stockFilter').addEventListener('change', applyFilters);
+document.getElementById('locationFilter').addEventListener('change', applyFilters);
+document.getElementById('sortBy').addEventListener('change', applyFilters);
+
+function applyFilters() {
+  const search = document.getElementById('stockSearch').value.trim();
+  const filter = document.getElementById('stockFilter').value;
+  const location = document.getElementById('locationFilter').value;
+  const sort = document.getElementById('sortBy').value;
+  
+  const filters = {
+    search,
+    filter,
+    location: location === 'all' ? '' : location,
+    sort
+  };
+  
+  loadStockList(filters);
+}
+
+// Debounce fonksiyonu
+function debounce(func, wait) {
+  let timeout;
+  return function executedFunction(...args) {
+    const later = () => {
+      clearTimeout(timeout);
+      func(...args);
+    };
+    clearTimeout(timeout);
+    timeout = setTimeout(later, wait);
+  };
+}
+
+// Hızlı işlem butonları
+document.getElementById('stockAdjustmentBtn').addEventListener('click', () => {
+  document.getElementById('stockAdjustmentModal').style.display = 'flex';
+  document.getElementById('adjustmentScanner').focus();
+});
+
+document.getElementById('stockMovementBtn').addEventListener('click', () => {
+  document.getElementById('stockMovementModal').style.display = 'flex';
+  document.getElementById('movementScanner').focus();
+});
+
+document.getElementById('lowStockReportBtn').addEventListener('click', () => {
+  window.open('/api/stock/report?type=low_stock', '_blank');
+});
+
+document.getElementById('stockReportBtn').addEventListener('click', () => {
+  window.open('/api/stock/report?type=full', '_blank');
+});
+
+// Stok ayarlama modalı
+document.getElementById('adjustmentScanner').addEventListener('input', async (e) => {
+  const barcode = e.target.value.trim();
+  
+  if (barcode.length >= 6) {
+    try {
+      const response = await fetch(`/api/stock/search?barcode=${barcode}`);
+      const result = await response.json();
+      
+      if (result.success && result.item) {
+        currentAdjustmentItem = result.item;
+        showAdjustmentDetails(result.item);
+        e.target.value = '';
+      } else {
+        showError('Ürün bulunamadı!');
+      }
+    } catch (error) {
+      showError('Ürün arama hatası!');
+    }
+  }
+});
+
+function showAdjustmentDetails(item) {
+  document.getElementById('adjustmentProduct').textContent = `${item.product_name} (${item.sku})`;
+  document.getElementById('adjustmentLocation').textContent = `Lokasyon: ${item.location_code}`;
+  document.getElementById('adjustmentPackage').textContent = item.package_number ? `Paket No: ${item.package_number}` : '';
+  document.getElementById('currentStock').textContent = item.current_stock || 0;
+  
+  document.getElementById('adjustmentDetails').style.display = 'block';
+  document.getElementById('confirmAdjustment').style.display = 'block';
+  
+  updateQuantityLabel();
+}
+
+// Ayarlama türü değiştiğinde label'ı güncelle
+document.getElementById('adjustmentType').addEventListener('change', updateQuantityLabel);
+
+function updateQuantityLabel() {
+  const type = document.getElementById('adjustmentType').value;
+  const label = document.getElementById('quantityLabel');
+  
+  switch(type) {
+    case 'IN':
+      label.textContent = 'Eklenecek Miktar:';
+      break;
+    case 'OUT':
+      label.textContent = 'Çıkarılacak Miktar:';
+      break;
+    case 'ADJUST':
+      label.textContent = 'Yeni Stok Miktarı:';
+      break;
+  }
+}
+
+// Miktar kontrolleri
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('qty-btn')) {
+    const targetId = e.target.dataset.target || 'adjustmentQty'; // default fallback
+    const input = document.getElementById(targetId);
+    if (!input) return;
+    
+    const current = parseInt(input.value) || 0;
+    const action = e.target.dataset.action;
+    
+    if (action === 'plus') {
+      input.value = current + 1;
+    } else if (action === 'minus' && current > 0) {
+      input.value = current - 1;
+    }
+    
+    // Update label if shelf adjustment
+    if (targetId === 'shelfAdjustmentQty') {
+      updateShelfQuantityLabel();
+    }
+  }
+});
+
+// Update shelf quantity label
+function updateShelfQuantityLabel() {
+  const type = document.getElementById('shelfAdjustmentType').value;
+  const label = document.getElementById('shelfQuantityLabel');
+  
+  switch(type) {
+    case 'IN':
+      label.textContent = 'Eklenecek Miktar:';
+      break;
+    case 'OUT':
+      label.textContent = 'Çıkarılacak Miktar:';
+      break;
+    case 'ADJUST':
+      label.textContent = 'Yeni Stok Miktarı:';
+      break;
+  }
+}
+
+// Shelf adjustment type change
+document.getElementById('shelfAdjustmentType').addEventListener('change', updateShelfQuantityLabel);
+
+// Shelf adjustment confirm
+document.getElementById('confirmShelfAdjustment').addEventListener('click', async () => {
+  if (!currentShelfAdjustment) return;
+  
+  const type = document.getElementById('shelfAdjustmentType').value;
+  const qty = parseInt(document.getElementById('shelfAdjustmentQty').value) || 0;
+  const note = document.getElementById('shelfAdjustmentNote').value.trim();
+  
+  if (qty <= 0 && type !== 'ADJUST') {
+    alert('Geçerli bir miktar girin!');
+    return;
+  }
+  
+  try {
+    const data = {
+      barcode: currentShelfAdjustment.barcode,
+      shelf_code: currentShelfAdjustment.shelfCode,
+      type: type,
+      quantity: qty,
+      note: note || `${type} işlemi - ${currentShelfAdjustment.packageNumber}`
+    };
+    
+    const result = await fetch('/api/stock/shelf/adjust', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(data)
+    }).then(r => r.json());
+    
+    if (result.success) {
+      closeShelfAdjustmentModal();
+      loadStockSummary();
+      loadStockList();
+      loadRecentMovements();
+      showSuccess('Raf stok ayarlama başarılı!');
+      
+      // Variance modunda ise bu item'ı listeden kaldır
+      if (varianceMode && currentShelfAdjustment) {
+        removeVarianceItemFromList(currentShelfAdjustment.barcode, currentShelfAdjustment.shelfCode);
+      }
+    } else {
+      alert('Stok ayarlama başarısız: ' + result.error);
+    }
+  } catch (error) {
+    alert('Stok ayarlama hatası: ' + error.message);
+  }
+});
+
+// Stok ayarlama onaylama
+document.getElementById('confirmAdjustment').addEventListener('click', async () => {
+  console.log('🔧 Confirm adjustment clicked!');
+  
+  if (!currentAdjustmentItem) {
+    console.log('❌ No current adjustment item');
+    return;
+  }
+  
+  const type = document.getElementById('adjustmentType').value;
+  const qty = parseInt(document.getElementById('adjustmentQty').value) || 0;
+  const note = document.getElementById('adjustmentNote').value.trim();
+  
+  console.log('📋 Adjustment data:', { type, qty, note, currentAdjustmentItem });
+  
+  if (qty <= 0 && type !== 'ADJUST') {
+    alert('Geçerli bir miktar girin!');
+    return;
+  }
+  
+  try {
+    let result;
+    console.log('🚀 Starting adjustment...', { varianceMode, currentAdjustmentItem });
+    
+    // Variance mode'da ise shelf adjustment kullan
+    if (varianceMode && currentAdjustmentItem.package_barcode) {
+      const data = {
+        barcode: currentAdjustmentItem.package_barcode,
+        shelf_code: currentAdjustmentItem.location_code,
+        type: type,
+        quantity: qty,
+        note: note || `Sayım düzeltmesi - ${type} işlemi`
+      };
+      
+      console.log('📦 Using shelf adjustment API:', data);
+      
+      result = await fetch('/api/stock/shelf/adjust', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+      }).then(r => r.json());
+    } else {
+      // Normal stock adjustment
+      const data = {
+        sku: currentAdjustmentItem.sku,
+        location_code: currentAdjustmentItem.location_code,
+        type: type,
+        quantity: qty,
+        note: note || `${type} işlemi`
+      };
+      
+      console.log('📋 Using stock adjustment API:', data);
+      
+      result = await API.stock.adjust(data);
+    }
+    
+    console.log('✅ Adjustment result:', result);
+    
+    if (result.success) {
+      loadStockSummary();
+      loadRecentMovements();
+      showSuccess('Stok ayarlama başarılı!');
+      
+      // Variance mode'da ise düzeltilen item'ı kaldır ve sonraki variance'ı aç
+      if (varianceMode && currentAdjustmentItem) {
+        removeVarianceItemFromList(
+          currentAdjustmentItem.package_barcode || currentAdjustmentItem.sku, 
+          currentAdjustmentItem.location_code
+        );
+        // Modal kapatma işlemini removeVarianceItemFromList fonksiyonu halledecek
+      } else {
+        closeStockModal();
+        loadStockList();
+      }
+    } else {
+      alert('Stok ayarlama başarısız: ' + result.error);
+    }
+  } catch (error) {
+    alert('Stok ayarlama hatası: ' + error.message);
+  }
+});
+
+// Modal kapatma
+function closeStockModal() {
+  document.getElementById('stockAdjustmentModal').style.display = 'none';
+  resetAdjustmentModal();
+  currentAdjustmentItem = null;
+}
+
+function closeMovementModal() {
+  document.getElementById('stockMovementModal').style.display = 'none';
+  document.getElementById('movementProduct').style.display = 'none';
+  document.getElementById('movementScanner').value = '';
+  document.getElementById('movementQty').value = '1';
+  document.getElementById('movementNote').value = '';
+  currentMovementItem = null;
+}
+
+// Event listeners
+document.getElementById('closeStockModal').addEventListener('click', closeStockModal);
+document.getElementById('cancelAdjustment').addEventListener('click', closeStockModal);
+document.getElementById('closeMovementModal').addEventListener('click', closeMovementModal);
+document.getElementById('cancelMovement').addEventListener('click', closeMovementModal);
+document.getElementById('closeLocationModal').addEventListener('click', closeLocationModal);
+document.getElementById('closeLocationModalBtn').addEventListener('click', closeLocationModal);
+document.getElementById('closeShelfAdjustmentModal').addEventListener('click', closeShelfAdjustmentModal);
+document.getElementById('cancelShelfAdjustment').addEventListener('click', closeShelfAdjustmentModal);
+
+function closeLocationModal() {
+  document.getElementById('packageLocationModal').style.display = 'none';
+}
+
+function closeShelfAdjustmentModal() {
+  document.getElementById('shelfAdjustmentModal').style.display = 'none';
+  currentShelfAdjustment = null;
+}
+
+// Package details toggle
+window.togglePackageDetails = async (sku) => {
+  const detailsRow = document.getElementById(`packages-${sku}`);
+  const expandIcon = document.querySelector(`[data-sku="${sku}"] .expand-icon`);
+  
+  if (detailsRow.style.display === 'none') {
+    // Expand
+    expandIcon.textContent = '▼';
+    detailsRow.style.display = 'table-row';
+    
+    // Load package details
+    try {
+      const response = await API.packages(sku);
+      if (response.success) {
+        renderPackageDetails(sku, response.packages);
+      }
+    } catch (error) {
+      console.error('Paket detayları yüklenemedi:', error);
+    }
+  } else {
+    // Collapse
+    expandIcon.textContent = '▶';
+    detailsRow.style.display = 'none';
+  }
+};
+
+// Render package details
+function renderPackageDetails(sku, packages) {
+  const container = document.querySelector(`#packages-${sku} .package-details-container`);
+  
+  if (!packages || packages.length === 0) {
+    container.innerHTML = '<div class="no-packages">❌ Bu ürüne ait paket bulunamadı</div>';
+    return;
+  }
+  
+  const packagesHtml = packages.map(pkg => `
+    <div class="package-detail-item clickable-package" onclick="showPackageLocations('${pkg.package_barcode}', '${pkg.package_number}')">
+      <div class="package-info">
+        <div class="package-header">
+          <strong>📦 ${pkg.package_number}</strong>
+          <span class="package-barcode">${pkg.package_barcode}</span>
+        </div>
+        <div class="package-summary-info">
+          <span class="total-stock-info">💼 Toplam Stok: ${pkg.total_package_quantity || 0} adet</span>
+          <span class="click-hint">👆 Raf detayları için tıklayın</span>
+        </div>
+      </div>
+      <div class="package-stock">
+        <span class="package-quantity">${pkg.total_package_quantity || 0} adet</span>
+        <div class="package-info-icon">
+          <span class="detail-icon">👁️</span>
+        </div>
+      </div>
+    </div>
+  `).join('');
+  
+  container.innerHTML = `
+    <div class="packages-header">
+      <h4>📦 ${sku} - Paket Detayları</h4>
+    </div>
+    <div class="packages-list">
+      ${packagesHtml}
+    </div>
+  `;
+}
+
+// Show package locations
+window.showPackageLocations = async (barcode, packageNumber) => {
+  try {
+    const response = await API.packageLocations(barcode);
+    if (response.success) {
+      showLocationModal(packageNumber, barcode, response.locations);
+    }
+  } catch (error) {
+    console.error('Lokasyon detayları yüklenemedi:', error);
+    alert('Lokasyon detayları yüklenemedi!');
+  }
+};
+
+// Show location modal
+function showLocationModal(packageNumber, barcode, locations) {
+  const modal = document.getElementById('packageLocationModal');
+  const title = document.getElementById('locationModalTitle');
+  const container = document.getElementById('locationsContainer');
+  
+  title.textContent = `📦 ${packageNumber} (${barcode}) - Raf Lokasyonları`;
+  
+  if (!locations || locations.length === 0) {
+    container.innerHTML = '<div class="no-locations">❌ Bu paket için aktif lokasyon bulunamadı</div>';
+  } else {
+    const locationsHtml = locations.map(loc => `
+      <div class="location-item">
+        <div class="location-info">
+          <div class="location-header">
+            <strong>📍 ${loc.shelf_code}</strong>
+            ${loc.shelf_name ? `<span class="shelf-name">${loc.shelf_name}</span>` : ''}
+          </div>
+          <div class="location-details">
+            <span class="zone-info">🏢 ${loc.zone || 'Zone N/A'} - ${loc.aisle || 'Aisle N/A'} - ${loc.level || 'Level N/A'}</span>
+            <span class="assigned-date">📅 ${formatDate(loc.assigned_date)}</span>
+          </div>
+        </div>
+        <div class="location-stock">
+          <span class="location-quantity">${loc.quantity} adet</span>
+          <button class="action-btn small" onclick="openShelfAdjustment('${barcode}', '${loc.shelf_code}', '${packageNumber}', ${loc.quantity})">
+            <span class="btn-icon">🔧</span>
+            <span class="btn-text">Düzenle</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+    
+    container.innerHTML = locationsHtml;
+  }
+  
+  modal.style.display = 'flex';
+}
+
+// Open shelf adjustment modal
+window.openShelfAdjustment = async (barcode, shelfCode, packageNumber, currentStock) => {
+  // Close location modal
+  document.getElementById('packageLocationModal').style.display = 'none';
+  
+  // Set current adjustment data
+  currentShelfAdjustment = { barcode, shelfCode, packageNumber, currentStock };
+  
+  // Update modal info
+  document.getElementById('adjustmentProductInfo').textContent = `📦 ${packageNumber} (${barcode})`;
+  document.getElementById('adjustmentShelfInfo').textContent = `${shelfCode}`;
+  document.getElementById('adjustmentCurrentStock').textContent = `${currentStock} adet`;
+  
+  // Load movements history
+  loadShelfMovements(barcode, shelfCode);
+  
+  // Show modal
+  document.getElementById('shelfAdjustmentModal').style.display = 'flex';
+};
+
+// Load shelf movements
+async function loadShelfMovements(barcode, shelfCode) {
+  try {
+    const response = await API.shelfMovements(barcode, shelfCode);
+    if (response.success) {
+      renderShelfMovements(response.movements);
+    }
+  } catch (error) {
+    console.error('Hareket geçmişi yüklenemedi:', error);
+    document.getElementById('shelfMovementsHistory').innerHTML = 
+      '<div class="error-movements">❌ Hareket geçmişi yüklenemedi</div>';
+  }
+}
+
+// Render shelf movements
+function renderShelfMovements(movements) {
+  const container = document.getElementById('shelfMovementsHistory');
+  
+  if (!movements || movements.length === 0) {
+    container.innerHTML = '<div class="no-movements">📊 Bu raf için hareket kaydı bulunamadı</div>';
+    return;
+  }
+  
+  const movementsHtml = movements.map(movement => {
+    const typeIcon = movement.type === 'IN' ? '📥' : movement.type === 'OUT' ? '📤' : '🔧';
+    const typeClass = movement.type === 'IN' ? 'in' : movement.type === 'OUT' ? 'out' : 'adjust';
+    const qtyDisplay = movement.type === 'OUT' ? `-${movement.qty}` : 
+                      movement.type === 'IN' ? `+${movement.qty}` : `=${movement.qty}`;
+    
+    return `
+      <div class="shelf-movement-item">
+        <div class="movement-icon">${typeIcon}</div>
+        <div class="movement-info">
+          <div class="movement-qty ${typeClass}">${qtyDisplay}</div>
+          <div class="movement-note">${movement.note || 'Açıklama yok'}</div>
+          <div class="movement-date">${formatDate(movement.created_at)}</div>
+        </div>
+      </div>
+    `;
+  }).join('');
+  
+  container.innerHTML = movementsHtml;
+}
+
+// Package stock adjustment
+window.adjustPackageStock = (barcode) => {
+  document.getElementById('stockAdjustmentModal').style.display = 'flex';
+  document.getElementById('adjustmentScanner').value = barcode;
+  document.getElementById('adjustmentScanner').dispatchEvent(new Event('input'));
+};
+
+// Global fonksiyonlar
+window.adjustStock = (sku, locationCode) => {
+  document.getElementById('stockAdjustmentModal').style.display = 'flex';
+  document.getElementById('adjustmentScanner').value = sku;
+  document.getElementById('adjustmentScanner').dispatchEvent(new Event('input'));
+};
+
+window.viewMovements = (sku) => {
+  // TODO: Ürün bazlı hareket geçmişi modalı
+  alert(`${sku} için hareket geçmişi (yakında)`);
+};
+
+// Variance item düzeltme
+window.fixVarianceItem = (sku) => {
+  if (!varianceData) return;
+  
+  // Bu SKU için variance bilgisini bul
+  const variance = varianceData.find(v => v.sku === sku);
+  if (variance) {
+    openVarianceAdjustment(variance);
+  }
+};
+
+// Yardımcı fonksiyonlar
+function showSuccess(message) {
+  // TODO: Toast notification
+  console.log('SUCCESS:', message);
+}
+
+function showError(message) {
+  // TODO: Toast notification
+  console.log('ERROR:', message);
+}
+
+// Mobile navigation toggle
+document.getElementById('mobileNavToggle').addEventListener('click', () => {
+  const menu = document.getElementById('mobileNavMenu');
+  menu.classList.toggle('show');
+});
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('mobileNav');
+  const menu = document.getElementById('mobileNavMenu');
+  if (!nav.contains(e.target)) {
+    menu.classList.remove('show');
+  }
+});
+
+// Variance mode fonksiyonları
+async function getVarianceStockData() {
+  if (!varianceData) return [];
+  
+  // Variance verilerini stock data formatına çevir
+  const varianceStockData = [];
+  const processedSkus = new Set();
+  
+  for (const variance of varianceData) {
+    if (!processedSkus.has(variance.sku)) {
+      processedSkus.add(variance.sku);
+      
+      // Ürün bilgilerini al
+      try {
+        const response = await fetch(`/api/stock/search?sku=${variance.sku}`);
+        const result = await response.json();
+        
+        if (result.success && result.item) {
+          const stockItem = {
+            sku: variance.sku,
+            product_name: variance.product_name,
+            main_product_quantity: variance.expected_quantity,
+            package_count: 1,
+            location_count: 1,
+            variance_info: varianceData.filter(v => v.sku === variance.sku),
+            is_variance_item: true
+          };
+          varianceStockData.push(stockItem);
+        } else {
+          // API'den bulamazsa variance verilerinden oluştur
+          const stockItem = {
+            sku: variance.sku,
+            product_name: variance.product_name,
+            main_product_quantity: variance.expected_quantity,
+            package_count: 1,
+            location_count: 1,
+            variance_info: [variance],
+            is_variance_item: true
+          };
+          varianceStockData.push(stockItem);
+        }
+      } catch (error) {
+        console.error('Variance stock data fetch error:', error);
+      }
+    }
+  }
+  
+  return varianceStockData;
+}
+
+// Variance item'ı listeden kaldır
+function removeVarianceItemFromList(barcode, shelfCode) {
+  if (!varianceData) return;
+  
+  console.log('🗑️ Removing variance item:', barcode, shelfCode);
+  
+  // Item'ı variance data'dan kaldır
+  varianceData = varianceData.filter(item => 
+    !(item.package_barcode === barcode && item.location_code === shelfCode)
+  );
+  
+  // localStorage'ı güncelle
+  localStorage.setItem('varianceData', JSON.stringify(varianceData));
+  
+  // Variance count'u güncelle
+  document.getElementById('varianceCount').textContent = varianceData.length;
+  
+  console.log('📊 Remaining variances:', varianceData.length);
+  
+  // Eğer tüm variance'lar tamamlandıysa mode'u kapat
+  if (varianceData.length === 0) {
+    closeStockModal(); // Modal'ı kapat
+    closeVarianceMode();
+    showSuccess('🎉 Tüm sayım farkları düzeltildi!');
+    return;
+  }
+  
+  // Listeyi yenile
+  loadStockList();
+  
+  // Sonraki variance'ı otomatik aç (modal açık kalacak)
+  setTimeout(() => {
+    if (varianceData.length > 0) {
+      console.log('🔄 Opening next variance:', varianceData[0]);
+      currentVarianceIndex = 0;
+      openVarianceAdjustment(varianceData[0]);
+      // Modal zaten açık, sadece içeriği güncelleniyor
+    }
+  }, 800);
+}
+
+// Variance mode kapatma
+function closeVarianceMode() {
+  varianceMode = false;
+  varianceData = null;
+  
+  // localStorage'dan temizle
+  localStorage.removeItem('varianceData');
+  localStorage.removeItem('varianceMode');
+  
+  document.getElementById('varianceNotification').style.display = 'none';
+  document.getElementById('varianceFilterOption').style.display = 'none';
+  document.getElementById('varianceSortOption').style.display = 'none';
+  document.querySelector('.header-subtitle').textContent = 'Stok Yönetimi';
+  document.querySelector('.header-subtitle').style.color = '';
+  
+  // URL'i temizle
+  const url = new URL(window.location);
+  url.searchParams.delete('mode');
+  url.searchParams.delete('data');
+  window.history.replaceState({}, '', url);
+  
+  // Normal listeyi yükle
+  document.getElementById('stockFilter').value = 'all';
+  loadStockList();
+}
+
+// Hızlı düzeltme fonksiyonu
+function quickFixVariance() {
+  if (!varianceData || varianceData.length === 0) return;
+  
+  // İlk fark olan ürünü aç
+  currentVarianceIndex = 0;
+  openVarianceAdjustment(varianceData[currentVarianceIndex]);
+}
+
+// Variance adjustment açma
+function openVarianceAdjustment(variance) {
+  console.log('🔧 Opening variance adjustment for:', variance);
+  
+  // Modal'ı temizle ve hazırla
+  resetAdjustmentModal();
+  
+  // Variance mode düzenlemesi
+  document.getElementById('adjustmentModalTitle').textContent = '🔧 Sayım Farkı Düzeltme';
+  document.getElementById('adjustmentScannerSection').style.display = 'none';
+  document.getElementById('varianceAdjustmentInfo').style.display = 'block';
+  
+  // Progress göster
+  const progress = `${currentVarianceIndex + 1} / ${varianceData.length}`;
+  document.getElementById('varianceProgress').textContent = progress;
+  
+  // Variance bilgilerini doldur
+  document.getElementById('varianceExpected').textContent = `${variance.expected_quantity} adet`;
+  document.getElementById('varianceCounted').textContent = `${variance.counted_quantity} adet`;
+  
+  const varianceAmount = variance.variance;
+  const varianceSpan = document.getElementById('varianceAmount');
+  varianceSpan.textContent = `${varianceAmount > 0 ? '+' : ''}${varianceAmount} adet`;
+  varianceSpan.className = 'variance-value variance-diff';
+  if (varianceAmount > 0) {
+    varianceSpan.classList.add('positive');
+  } else if (varianceAmount < 0) {
+    varianceSpan.classList.add('negative');
+  }
+  
+  // Ürün bilgilerini manuel doldur (variance'tan geldiği için)
+  currentAdjustmentItem = {
+    sku: variance.sku,
+    product_name: variance.product_name,
+    location_code: variance.location_code,
+    package_number: variance.package_number,
+    package_barcode: variance.package_barcode || variance.barcode,
+    current_stock: variance.expected_quantity // Sayımdan önceki stock
+  };
+  
+  // Details'i göster
+  document.getElementById('adjustmentProduct').textContent = `${variance.product_name} (${variance.sku})`;
+  document.getElementById('adjustmentLocation').textContent = `Lokasyon: ${variance.location_code}`;
+  document.getElementById('adjustmentPackage').textContent = variance.package_number ? `Paket No: ${variance.package_number}` : '';
+  document.getElementById('currentStock').textContent = variance.expected_quantity || 0;
+  
+  document.getElementById('adjustmentDetails').style.display = 'block';
+  document.getElementById('confirmAdjustment').style.display = 'block';
+  
+  // Miktar ayarlama - sayılan miktarı varsayılan olarak koy
+  document.getElementById('adjustmentType').value = 'ADJUST';
+  document.getElementById('adjustmentQty').value = variance.counted_quantity || variance.expected_quantity;
+  document.getElementById('adjustmentNote').value = `Sayım düzeltmesi - Beklenen: ${variance.expected_quantity}, Sayılan: ${variance.counted_quantity}, Fark: ${variance.variance}`;
+  
+  updateQuantityLabel();
+  
+  // Modal'ı göster
+  document.getElementById('stockAdjustmentModal').style.display = 'flex';
+  
+  // Focus to quantity input
+  setTimeout(() => {
+    document.getElementById('adjustmentQty').focus();
+    document.getElementById('adjustmentQty').select();
+  }, 200);
+}
+
+// Modal reset fonksiyonu
+function resetAdjustmentModal() {
+  document.getElementById('adjustmentModalTitle').textContent = '🔧 Stok Ayarlama';
+  document.getElementById('adjustmentScannerSection').style.display = 'block';
+  document.getElementById('varianceAdjustmentInfo').style.display = 'none';
+  document.getElementById('adjustmentDetails').style.display = 'none';
+  document.getElementById('confirmAdjustment').style.display = 'none';
+  document.getElementById('adjustmentScanner').value = '';
+  document.getElementById('adjustmentQty').value = '1';
+  document.getElementById('adjustmentNote').value = '';
+  document.getElementById('adjustmentType').value = 'IN';
+}
+
+// Variance list gösterimi
+function showVarianceList() {
+  if (!varianceData) return;
+  
+  // Stock filter'ı variance'a çevir ve listele
+  document.getElementById('stockFilter').value = 'variance';
+  
+  // Variance filtresini manuel çağır
+  const filters = {
+    search: document.getElementById('stockSearch').value.trim(),
+    filter: 'variance',
+    location: document.getElementById('locationFilter').value === 'all' ? '' : document.getElementById('locationFilter').value,
+    sort: document.getElementById('sortBy').value
+  };
+  
+  loadStockList(filters);
+}
+
+// Event listeners - variance controls
+document.getElementById('closeVarianceMode').addEventListener('click', closeVarianceMode);
+document.getElementById('quickFixBtn').addEventListener('click', quickFixVariance);
+document.getElementById('viewVarianceListBtn').addEventListener('click', showVarianceList);
+
+// Debug: Event listener'ların doğru atanıp atanmadığını kontrol et
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('🔧 Checking adjustment modal elements:');
+  console.log('- confirmAdjustment button:', document.getElementById('confirmAdjustment'));
+  console.log('- stockAdjustmentModal:', document.getElementById('stockAdjustmentModal'));
+  console.log('- adjustmentDetails:', document.getElementById('adjustmentDetails'));
+});
+</script>
+
+<style>
+.stock-management {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  gap: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.stock-summary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+}
+
+.stock-summary h2 {
+  color: white !important;
+  margin-bottom: 20px;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 20px;
+}
+
+.summary-item {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 20px;
+  border-radius: 12px;
+  backdrop-filter: blur(10px);
+}
+
+.summary-item.warning {
+  background: rgba(255, 193, 7, 0.2);
+}
+
+.summary-item.danger {
+  background: rgba(220, 53, 69, 0.2);
+}
+
+.summary-icon {
+  font-size: 2.5rem;
+}
+
+.summary-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-value {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 5px;
+}
+
+.summary-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.quick-actions h2 {
+  color: var(--fg) !important;
+  margin-bottom: 20px;
+}
+
+.action-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 15px;
+}
+
+.stock-filters h2 {
+  color: var(--fg) !important;
+  margin-bottom: 20px;
+}
+
+.filter-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.search-input {
+  display: flex;
+  gap: 10px;
+}
+
+.search-input input {
+  flex: 1;
+  padding: 12px 15px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.search-btn {
+  padding: 12px 20px;
+  background: var(--accent);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 1rem;
+}
+
+.filter-options {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.filter-options select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  flex: 1;
+  min-width: 150px;
+}
+
+.stock-list h2 {
+  color: var(--fg) !important;
+  margin-bottom: 20px;
+}
+
+.stock-table-container {
+  overflow-x: auto;
+}
+
+.stock-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--card);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.stock-table th {
+  background: var(--accent);
+  color: white;
+  padding: 15px 12px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.stock-table td {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stock-table tr:hover {
+  background: rgba(0, 123, 255, 0.05);
+}
+
+.stock-table tr.low-stock {
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.stock-table tr.out-of-stock {
+  background: rgba(220, 53, 69, 0.1);
+}
+
+.stock-quantity {
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.stock-status {
+  padding: 4px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.stock-status.high-stock {
+  background: rgba(40, 167, 69, 0.2);
+  color: #28a745;
+}
+
+.stock-status.medium-stock {
+  background: rgba(0, 123, 255, 0.2);
+  color: #007bff;
+}
+
+.stock-status.low-stock {
+  background: rgba(255, 193, 7, 0.2);
+  color: #ffc107;
+}
+
+.stock-status.out-of-stock {
+  background: rgba(220, 53, 69, 0.2);
+  color: #dc3545;
+}
+
+.table-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.table-actions .action-btn.small {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+}
+
+.recent-movements h2 {
+  color: var(--fg) !important;
+  margin-bottom: 20px;
+}
+
+.movements-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.movement-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.movement-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.movement-icon {
+  font-size: 1.5rem;
+}
+
+.movement-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.movement-details strong {
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.movement-product {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.movement-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+.movement-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  text-align: right;
+}
+
+.movement-qty {
+  font-weight: bold;
+  font-size: 1.1rem;
+}
+
+.movement-qty.in {
+  color: var(--success);
+}
+
+.movement-qty.out {
+  color: var(--danger);
+}
+
+.movement-qty.adjust {
+  color: var(--warning);
+}
+
+.movement-date {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.adjustment-scanner, .movement-scanner {
+  margin-bottom: 20px;
+}
+
+.adjustment-scanner input, .movement-scanner input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.scanner-help {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.product-info {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.product-info h4 {
+  color: var(--fg) !important;
+  margin-bottom: 5px;
+}
+
+.product-info p {
+  color: var(--muted) !important;
+  margin: 5px 0;
+}
+
+.current-stock {
+  background: var(--accent);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 6px;
+  margin-top: 10px;
+  display: inline-block;
+}
+
+.adjustment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.adjustment-type select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.quantity-input label {
+  color: var(--fg) !important;
+  font-weight: 600;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 30px;
+}
+
+.error-content, .empty-content {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+}
+
+.error-icon, .empty-icon {
+  font-size: 3rem;
+  display: block;
+  margin-bottom: 15px;
+}
+
+/* Expandable rows */
+.sku-expand-btn {
+  background: none;
+  border: none;
+  color: var(--accent);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  padding: 0;
+}
+
+.sku-expand-btn:hover {
+  opacity: 0.8;
+}
+
+.expand-icon {
+  font-size: 0.8rem;
+  transition: transform 0.2s ease;
+}
+
+.package-details-row {
+  background: var(--card) !important;
+}
+
+.package-details-container {
+  padding: 20px;
+  border-top: 2px solid var(--border);
+  background: rgba(0, 123, 255, 0.05);
+}
+
+.packages-header {
+  margin-bottom: 15px;
+}
+
+.packages-header h4 {
+  color: var(--fg) !important;
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.packages-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.package-detail-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.package-info {
+  flex: 1;
+}
+
+.package-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.package-header strong {
+  color: var(--fg);
+}
+
+.package-barcode {
+  background: var(--accent);
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+  font-family: monospace;
+}
+
+.package-location {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.package-stock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.package-quantity {
+  font-weight: bold;
+  font-size: 1.1rem;
+  color: var(--fg);
+}
+
+.package-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.loading-packages, .no-packages {
+  text-align: center;
+  padding: 20px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Clickable packages */
+.clickable-package {
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.clickable-package:hover {
+  background: rgba(0, 123, 255, 0.1) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+}
+
+.package-summary-info {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  margin-top: 5px;
+}
+
+.total-stock-info {
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.click-hint {
+  color: var(--muted);
+  font-size: 0.8rem;
+  font-style: italic;
+}
+
+/* Package locations modal */
+.large-modal {
+  max-width: 800px;
+  width: 90%;
+}
+
+.locations-container {
+  max-height: 500px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.location-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  transition: all 0.2s ease;
+}
+
+.location-item:hover {
+  background: rgba(0, 123, 255, 0.05);
+  border-color: var(--accent);
+}
+
+.location-info {
+  flex: 1;
+}
+
+.location-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.location-header strong {
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.shelf-name {
+  background: var(--muted);
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.location-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.zone-info, .assigned-date {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.location-stock {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.location-quantity {
+  font-weight: bold;
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+
+.loading-locations, .no-locations {
+  text-align: center;
+  padding: 40px 20px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Shelf adjustment modal */
+.adjustment-info {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.product-summary h4 {
+  color: var(--fg) !important;
+  margin-bottom: 10px;
+}
+
+.info-row {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 5px;
+}
+
+.info-label {
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 90px;
+}
+
+.recent-movements-section {
+  margin-bottom: 20px;
+}
+
+.recent-movements-section h4 {
+  color: var(--fg) !important;
+  margin-bottom: 10px;
+}
+
+.movements-history {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+  background: var(--card);
+}
+
+.shelf-movement-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 5px;
+}
+
+.shelf-movement-item:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+.shelf-movement-item .movement-icon {
+  font-size: 1.2rem;
+}
+
+.shelf-movement-item .movement-info {
+  flex: 1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.shelf-movement-item .movement-qty {
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+.shelf-movement-item .movement-note {
+  color: var(--muted);
+  font-size: 0.8rem;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shelf-movement-item .movement-date {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.shelf-adjustment-form {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px;
+}
+
+.shelf-adjustment-form h4 {
+  color: var(--fg) !important;
+  margin-bottom: 15px;
+}
+
+.adjustment-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.package-info-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.detail-icon {
+  font-size: 1.2rem;
+  color: var(--accent);
+}
+
+.loading-movements, .no-movements, .error-movements {
+  text-align: center;
+  padding: 20px;
+  color: var(--muted);
+  font-style: italic;
+}
+
+@media (max-width: 768px) {
+  .summary-stats {
+    grid-template-columns: 1fr;
+  }
+  
+  .action-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .filter-options {
+    flex-direction: column;
+  }
+  
+  .stock-table {
+    font-size: 0.9rem;
+  }
+  
+  .stock-table th,
+  .stock-table td {
+    padding: 8px 6px;
+  }
+  
+  .movement-item {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+  
+  .package-detail-item {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .package-stock {
+    align-items: center;
+  }
+  
+  .location-item {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .location-stock {
+    align-items: center;
+  }
+  
+  .large-modal {
+    width: 95%;
+    max-width: none;
+  }
+}
+
+/* Variance Mode Styles */
+.variance-notification {
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: white;
+  border: none;
+  position: relative;
+}
+
+.variance-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.variance-header h2 {
+  color: white !important;
+  margin: 0;
+}
+
+.btn-close-variance {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: white;
+  font-size: 1.5rem;
+  cursor: pointer;
+  padding: 8px 12px;
+  border-radius: 6px;
+  transition: background 0.3s ease;
+}
+
+.btn-close-variance:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.variance-info p {
+  color: white !important;
+  margin-bottom: 15px;
+  font-size: 1.1rem;
+}
+
+.variance-controls {
+  display: flex;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.variance-controls .action-btn {
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(10px);
+}
+
+.variance-controls .action-btn:hover {
+  background: rgba(255, 255, 255, 0.25);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.variance-item {
+  background: rgba(255, 107, 53, 0.1) !important;
+  border-left: 4px solid #ff6b35 !important;
+}
+
+.variance-badge {
+  background: #ff6b35;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  font-weight: bold;
+  margin-left: 8px;
+}
+
+.variance-fix-btn {
+  background: #ff6b35 !important;
+  color: white !important;
+}
+
+.variance-fix-btn:hover {
+  background: #e55722 !important;
+}
+
+/* Variance Adjustment Modal Styles */
+.stock-adjustment-modal {
+  max-width: 600px;
+}
+
+.variance-adjustment-info {
+  background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%);
+  color: white;
+  border-radius: 8px;
+  padding: 15px;
+  margin-bottom: 20px;
+}
+
+.variance-alert {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.variance-icon {
+  font-size: 1.5rem;
+}
+
+.variance-text {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.variance-text strong {
+  font-size: 1.1rem;
+  margin-bottom: 5px;
+}
+
+.variance-text span {
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.confirm-adjustment {
+  background: #28a745 !important;
+  color: white !important;
+  font-size: 1.1rem;
+  padding: 12px 24px;
+}
+
+.confirm-adjustment:hover {
+  background: #218838 !important;
+}
+
+.adjustment-scanner {
+  margin-bottom: 20px;
+}
+
+.adjustment-scanner label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--fg);
+}
+
+.adjustment-scanner input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  text-align: center;
+  font-size: 1.1rem;
+}
+
+.adjustment-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.adjustment-type label,
+.quantity-input label,
+.form-group label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--fg);
+}
+
+.adjustment-type select {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.form-group textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: inherit;
+  resize: vertical;
+}
+
+@media (max-width: 768px) {
+  .variance-controls {
+    flex-direction: column;
+  }
+  
+  .variance-header {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .stock-adjustment-modal {
+    width: 95%;
+    max-width: none;
+  }
+}
+</style>
+</body>
+</html>

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>Raf Yönetimi - Debug</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    .debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    .error { background: #ffebee; color: #c62828; padding: 10px; margin: 10px 0; border-radius: 5px; }
+    .success { background: #e8f5e8; color: #2e7d32; padding: 10px; margin: 10px 0; border-radius: 5px; }
+  </style>
+</head>
+<body>
+
+<h1>🔧 Raf Yönetimi - Debug Modu</h1>
+
+<div class="debug">
+  <strong>Debug Log:</strong>
+  <div id="debugLog"></div>
+</div>
+
+<div>
+  <h2>Test Butonları:</h2>
+  <button onclick="testBasicJS()">Temel JS Test</button>
+  <button onclick="testAPICall()">API Test</button>
+  <button onclick="testPrintFunction()">Print Fonksiyon Test</button>
+</div>
+
+<div id="results"></div>
+
+<script>
+function log(message) {
+  const debugLog = document.getElementById('debugLog');
+  debugLog.innerHTML += '<br>' + new Date().toLocaleTimeString() + ': ' + message;
+  console.log(message);
+}
+
+function testBasicJS() {
+  try {
+    log('✅ Temel JavaScript çalışıyor');
+    document.getElementById('results').innerHTML = '<div class="success">JavaScript çalışıyor!</div>';
+  } catch (error) {
+    log('❌ JavaScript hatası: ' + error.message);
+    document.getElementById('results').innerHTML = '<div class="error">JavaScript hatası: ' + error.message + '</div>';
+  }
+}
+
+async function testAPICall() {
+  try {
+    log('🔄 API testi başlıyor...');
+    const response = await fetch('/api/shelves');
+    const data = await response.json();
+    log('✅ API çalışıyor, ' + (data.shelves ? data.shelves.length : 0) + ' raf var');
+    document.getElementById('results').innerHTML = '<div class="success">API çalışıyor! Raf sayısı: ' + (data.shelves ? data.shelves.length : 0) + '</div>';
+  } catch (error) {
+    log('❌ API hatası: ' + error.message);
+    document.getElementById('results').innerHTML = '<div class="error">API hatası: ' + error.message + '</div>';
+  }
+}
+
+function testPrintFunction() {
+  try {
+    log('🔄 Print fonksiyon testi...');
+    
+    // Basit print testi - template literal kullanmadan
+    const testWindow = window.open('', '_blank');
+    const html = '<html><head><title>Test</title></head><body><h1>Print Test</h1><script>setTimeout(function(){window.close();}, 2000);</script></body></html>';
+    testWindow.document.write(html);
+    testWindow.document.close();
+    
+    log('✅ Print fonksiyonu çalışıyor');
+    document.getElementById('results').innerHTML = '<div class="success">Print fonksiyonu çalıştı (2 saniye sonra kapanacak)</div>';
+  } catch (error) {
+    log('❌ Print hatası: ' + error.message);
+    document.getElementById('results').innerHTML = '<div class="error">Print hatası: ' + error.message + '</div>';
+  }
+}
+
+// Sayfa yüklendiğinde
+document.addEventListener('DOMContentLoaded', function() {
+  log('📄 Sayfa yüklendi');
+  
+  // Varsa hataları yakala
+  window.addEventListener('error', function(e) {
+    log('🚨 Global hata: ' + e.message + ' (Satır: ' + e.lineno + ')');
+  });
+  
+  // Unhandled promise rejection
+  window.addEventListener('unhandledrejection', function(e) {
+    log('🚨 Promise hatası: ' + e.reason);
+  });
+});
+</script>
+
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="utf-8">
+    <title>Raf Yönetimi Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .card { border: 1px solid #ddd; padding: 20px; margin: 10px 0; }
+    </style>
+</head>
+<body>
+    <h1>🏗️ Raf Yönetimi Test Sayfası</h1>
+    
+    <div class="card">
+        <h2>Bu sayfa çalışıyor mu?</h2>
+        <p>Eğer bu metni görebiliyorsanız, HTML dosyası doğru yükleniyor.</p>
+        <button onclick="testJS()">JavaScript Testi</button>
+        <div id="jsResult"></div>
+    </div>
+    
+    <div class="card">
+        <h2>API Testleri</h2>
+        <button onclick="testAPI()">Rafları Getir</button>
+        <div id="apiResult"></div>
+    </div>
+
+    <script>
+        function testJS() {
+            document.getElementById('jsResult').innerHTML = '✅ JavaScript çalışıyor!';
+        }
+        
+        async function testAPI() {
+            const resultDiv = document.getElementById('apiResult');
+            try {
+                resultDiv.innerHTML = 'API test ediliyor...';
+                const response = await fetch('/api/shelves');
+                const data = await response.json();
+                resultDiv.innerHTML = `✅ API çalışıyor! ${data.shelves?.length || 0} raf bulundu.`;
+            } catch (error) {
+                resultDiv.innerHTML = `❌ API hatası: ${error.message}`;
+            }
+        }
+        
+        console.log('✅ Sayfa yüklendi, JavaScript çalışıyor');
+    </script>
+</body>
+</html>

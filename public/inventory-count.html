@@ -1,0 +1,2284 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Depo Sayım</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">Depo Sayım</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="inventory-count">
+  <!-- Sayım Türü Seçimi -->
+  <section class="card count-type-selection">
+    <h2>📊 Depo Sayım</h2>
+    <div class="count-type-buttons">
+      <button class="count-type-btn" data-type="full">
+        <span class="btn-icon">📋</span>
+        <span class="btn-text">Tam Sayım</span>
+        <small>Tüm depoyu say</small>
+      </button>
+      <button class="count-type-btn" data-type="spot">
+        <span class="btn-icon">🎯</span>
+        <span class="btn-text">Nokta Sayım</span>
+        <small>Belirli ürünleri say</small>
+      </button>
+      <button class="count-type-btn" data-type="shelf">
+        <span class="btn-icon">🏗️</span>
+        <span class="btn-text">Raf Sayım</span>
+        <small>Belirli rafları say</small>
+      </button>
+      <button class="count-type-btn" data-type="manual">
+        <span class="btn-icon">📱</span>
+        <span class="btn-text">Manuel Sayım</span>
+        <small>Tek tek barkod okut</small>
+      </button>
+    </div>
+  </section>
+
+  <!-- Sayım Formu -->
+  <section class="card count-form" id="countForm" style="display: none;">
+    <div class="form-header">
+      <h3 id="countTitle">Sayım Başlat</h3>
+      <button class="btn-close" id="closeCountForm">✕</button>
+    </div>
+    
+    <div id="fullCountSetup" class="count-setup" style="display: none;">
+      <h4>Tam Sayım Ayarları</h4>
+      <div class="form-group">
+        <label>Sayım Adı:</label>
+        <input type="text" id="fullCountName" placeholder="Örn: Yıllık Sayım 2024" />
+      </div>
+      <div class="form-group">
+        <label>Açıklama:</label>
+        <textarea id="fullCountDescription" placeholder="Sayım açıklaması..." rows="3"></textarea>
+      </div>
+      <button class="action-btn" id="startFullCount">
+        <span class="btn-icon">🚀</span>
+        <span class="btn-text">Tam Sayım Başlat</span>
+      </button>
+    </div>
+
+    <div id="spotCountSetup" class="count-setup" style="display: none;">
+      <h4>Nokta Sayım Ayarları</h4>
+      <div class="form-group">
+        <label>Ürün/SKU Seç:</label>
+        <input type="text" id="spotCountProduct" placeholder="SKU veya ürün adı girin..." />
+        <div id="productSuggestions" class="suggestions"></div>
+      </div>
+      <button class="action-btn" id="startSpotCount">
+        <span class="btn-icon">🎯</span>
+        <span class="btn-text">Nokta Sayım Başlat</span>
+      </button>
+    </div>
+
+    <div id="shelfCountSetup" class="count-setup" style="display: none;">
+      <h4>Raf Sayım Ayarları</h4>
+      <div class="form-group">
+        <label>Raf Kodu:</label>
+        <input type="text" id="shelfCountLocation" placeholder="Raf kodunu girin..." />
+      </div>
+      <button class="action-btn" id="startShelfCount">
+        <span class="btn-icon">🏗️</span>
+        <span class="btn-text">Raf Sayım Başlat</span>
+      </button>
+    </div>
+
+    <div id="manualCountSetup" class="count-setup" style="display: none;">
+      <h4>Manuel Sayım Ayarları</h4>
+      <div class="form-group">
+        <label>Sayım Adı:</label>
+        <input type="text" id="manualCountName" placeholder="Örn: Serbest Sayım" />
+      </div>
+      <div class="form-group">
+        <label>Açıklama:</label>
+        <textarea id="manualCountDescription" placeholder="Bu sayımda hangi ürünleri sayacaksınız?" rows="2"></textarea>
+      </div>
+      <div class="manual-count-info">
+        <p><strong>📱 Manuel Sayım:</strong></p>
+        <ul>
+          <li>Boş sayım oluşturulur</li>
+          <li>Barkod okutarak ürünleri tek tek eklersiniz</li>
+          <li>Sadece okutulan ürünler sayıma dahil olur</li>
+        </ul>
+      </div>
+      <button class="action-btn" id="startManualCount">
+        <span class="btn-icon">📱</span>
+        <span class="btn-text">Manuel Sayım Başlat</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Aktif Sayımlar -->
+  <section class="card active-counts">
+    <h2>Aktif Sayımlar</h2>
+    <div id="activeCountsList" class="counts-list">
+      <div class="empty-state">
+        <span class="empty-icon">📊</span>
+        <p>Henüz aktif sayım bulunmuyor.</p>
+        <small>Yukarıdan yeni sayım başlatabilirsiniz.</small>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sayım İşlemi -->
+  <section class="card count-process" id="countProcess" style="display: none;">
+    <div class="process-header">
+      <h3 id="processTitle">Sayım İşlemi</h3>
+      <div class="process-info">
+        <span id="processProgress">0/0</span>
+        <span id="processType" class="process-badge"></span>
+      </div>
+    </div>
+
+    <div class="scanner-section">
+      <div class="scanner-input">
+        <label>Barkod Tarayıcı:</label>
+        <input type="text" id="countScanner" placeholder="Barkod okutun..." autocomplete="off" />
+        <div class="scanner-help">
+          <small>📱 Barkod okutun veya manuel girin</small>
+        </div>
+      </div>
+
+      <div class="current-scan" id="currentScan" style="display: none;">
+        <div class="scan-info">
+          <h4 id="scanProduct">Ürün</h4>
+          <p id="scanLocation">Lokasyon</p>
+          <p id="scanPackage" style="display: none;">Paket No</p>
+          <div class="scan-expected">
+            <span>Beklenen: <strong id="expectedQty">0</strong></span>
+          </div>
+        </div>
+        <div class="location-verification" id="locationVerification" style="display: none;">
+          <label>Raf Lokasyonu Kontrol:</label>
+          <input type="text" id="locationScanner" placeholder="Raf barkodunu okutun veya manuel girin..." autocomplete="off" />
+          <div class="location-status" id="locationStatus"></div>
+        </div>
+        <div class="quantity-input">
+          <label>Sayılan Miktar - Giriş Yöntemi Seçin:</label>
+          
+          <!-- Giriş modu seçimi -->
+          <div class="input-mode-selection">
+            <button class="mode-btn active" id="numberModeBtn" data-mode="number">
+              <span class="mode-icon">🔢</span>
+              <span class="mode-text">Sayı Gir</span>
+            </button>
+            <button class="mode-btn" id="scanModeBtn" data-mode="scan">
+              <span class="mode-icon">📱</span>
+              <span class="mode-text">Tek Tek Okut</span>
+            </button>
+          </div>
+          
+          <!-- Sayı girme modu -->
+          <div class="qty-input-section" id="numberInputSection">
+            <div class="qty-controls">
+              <button class="qty-btn" data-action="minus">-</button>
+              <input type="number" id="countedQty" value="0" min="0" />
+              <button class="qty-btn" data-action="plus">+</button>
+            </div>
+          </div>
+          
+          <!-- Tek tek okutma modu -->
+          <div class="scan-input-section" id="scanInputSection" style="display: none;">
+            <div class="scan-counter">
+              <div class="scan-display">
+                <span class="scan-count" id="scanCount">0</span>
+                <span class="scan-label">Adet Okutuldu</span>
+              </div>
+              <input type="text" id="itemScanner" placeholder="Ürün barkodunu okutun..." autocomplete="off" />
+              <div class="scan-help">
+                <small>📱 Her ürünü ayrı ayrı okutun</small>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="scan-actions">
+          <button class="action-btn confirm-btn" id="confirmCount">
+            <span class="btn-icon">✅</span>
+            <span class="btn-text">Onayla</span>
+          </button>
+          <button class="action-btn skip-btn" id="skipCount">
+            <span class="btn-icon">⏭️</span>
+            <span class="btn-text">Atla</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="count-summary">
+      <div class="summary-stats">
+        <div class="summary-item">
+          <span class="summary-label">Sayılan:</span>
+          <span class="summary-value" id="countedItems">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Fark:</span>
+          <span class="summary-value" id="varianceItems">0</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Kalan:</span>
+          <span class="summary-value" id="remainingItems">0</span>
+        </div>
+      </div>
+      
+      <!-- Sayım Önizleme -->
+      <div class="count-preview">
+        <div class="preview-header">
+          <h4>📋 Yapılan Sayımlar</h4>
+          <button class="preview-toggle" id="previewToggle">
+            <span class="toggle-icon">👁️</span>
+            <span class="toggle-text">Önizleme</span>
+          </button>
+        </div>
+        <div class="preview-content" id="previewContent" style="display: none;">
+          <div class="preview-controls">
+            <div class="preview-search">
+              <input type="text" id="previewSearch" placeholder="🔍 SKU, ürün adı veya paket no ile ara..." />
+            </div>
+            <div class="preview-filters">
+              <select id="previewFilter">
+                <option value="all">Tümü</option>
+                <option value="counted">Sayılanlar</option>
+                <option value="variance">Fark Olanlar</option>
+                <option value="pending">Bekleyenler</option>
+                <option value="skipped">Atlananlar</option>
+              </select>
+              <select id="previewSort">
+                <option value="sku">SKU'ya Göre</option>
+                <option value="location">Lokasyona Göre</option>
+                <option value="status">Duruma Göre</option>
+                <option value="variance">Farka Göre</option>
+                <option value="product">Ürün Adına Göre</option>
+              </select>
+            </div>
+          </div>
+          <div class="preview-list" id="previewList">
+            <div class="empty-state">
+              <span class="empty-icon">📊</span>
+              <p>Henüz sayım yapılmadı.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <button class="action-btn complete-btn" id="completeCount" style="display: none;">
+        <span class="btn-icon">🏁</span>
+        <span class="btn-text">Sayımı Tamamla</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Sayım Geçmişi -->
+  <section class="card count-history">
+    <h2>Sayım Geçmişi</h2>
+    <div class="history-filters">
+      <select id="historyFilter">
+        <option value="all">Tümü</option>
+        <option value="full">Tam Sayım</option>
+        <option value="spot">Nokta Sayım</option>
+        <option value="shelf">Raf Sayım</option>
+      </select>
+      <input type="date" id="historyDate" />
+    </div>
+    <div id="countHistoryList" class="history-list">
+      <div class="empty-state">
+        <span class="empty-icon">📋</span>
+        <p>Henüz sayım geçmişi bulunmuyor.</p>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- Sayım Tamamlama Modalı -->
+<div class="modal" id="completeModal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Sayım Tamamlandı</h3>
+    </div>
+    <div class="modal-body">
+      <div class="completion-summary">
+        <div class="summary-row">
+          <span>Toplam Sayılan Kalem:</span>
+          <strong id="finalCountedItems">0</strong>
+        </div>
+        <div class="summary-row">
+          <span>Sayılmayan Kalem:</span>
+          <strong id="finalUncountedItems">0</strong>
+        </div>
+        <div class="summary-row">
+          <span>Fark Bulunan Kalem:</span>
+          <strong id="finalVarianceItems">0</strong>
+        </div>
+        <div class="summary-row">
+          <span>Toplam Fark Miktarı:</span>
+          <strong id="finalVarianceQty">0</strong>
+        </div>
+      </div>
+      <div class="variance-details" id="varianceDetails" style="display: none;">
+        <h4>Fark Detayları:</h4>
+        <div id="varianceList" class="variance-list"></div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="action-btn" id="generateReport">
+        <span class="btn-icon">📄</span>
+        <span class="btn-text">Rapor Oluştur</span>
+      </button>
+      <button class="action-btn warning" id="fixVariances" style="display: none;">
+        <span class="btn-icon">🔧</span>
+        <span class="btn-text">Farkları Düzelt</span>
+      </button>
+      <button class="action-btn secondary" id="closeCompleteModal">
+        <span class="btn-icon">✅</span>
+        <span class="btn-text">Tamam</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Lokasyon Seçim Modalı -->
+<div class="modal" id="locationModal" style="display: none;">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h3>Raf Seçimi</h3>
+    </div>
+    <div class="modal-body">
+      <p id="locationModalText">Bu ürün birden fazla rafta bulunmakta. Hangi rafı saydığınızın raf kodunu girin:</p>
+      <div class="location-selector">
+        <div id="locationOptions" class="location-options"></div>
+        <div class="location-scanner-input">
+          <label>Raf Barkodu Okutun:</label>
+          <input type="text" id="locationModalScanner" placeholder="Raf barkodunu okutun..." autocomplete="off" />
+          <div class="location-scanner-status" id="locationScannerStatus"></div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-actions">
+      <button class="action-btn secondary" id="cancelLocationModal">
+        <span class="btn-icon">✕</span>
+        <span class="btn-text">İptal</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const API = {
+  counts: {
+    create: (data) => fetch('/api/inventory-counts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)}).then(r => r.json()),
+    list: () => fetch('/api/inventory-counts').then(r => r.json()),
+    get: (id) => fetch(`/api/inventory-counts/${id}`).then(r => r.json()),
+    complete: (id) => fetch(`/api/inventory-counts/${id}/complete`, {method: 'POST'}).then(r => r.json()),
+    items: (countId) => fetch(`/api/inventory-counts/${countId}/items`).then(r => r.json()),
+    addItem: (countId, data) => fetch(`/api/inventory-counts/${countId}/items`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)}).then(r => r.json()),
+    updateItem: (countId, itemId, data) => fetch(`/api/inventory-counts/${countId}/items/${itemId}`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)}).then(r => r.json()),
+    scan: (countId, barcode) => fetch(`/api/inventory-counts/${countId}/scan`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({barcode})}).then(r => r.json())
+  },
+  products: () => fetch('/api/products').then(r => r.json()),
+  shelves: () => fetch('/api/shelves').then(r => r.json())
+};
+
+let currentCount = null;
+let currentCountItems = [];
+let currentScanIndex = 0;
+let pendingLocationItems = [];
+let currentBarcode = null;
+
+// Sayım türü seçimi
+document.querySelectorAll('.count-type-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const type = btn.dataset.type;
+    showCountForm(type);
+  });
+});
+
+function showCountForm(type) {
+  document.getElementById('countForm').style.display = 'block';
+  document.querySelectorAll('.count-setup').forEach(setup => setup.style.display = 'none');
+  
+  switch(type) {
+    case 'full':
+      document.getElementById('countTitle').textContent = 'Tam Sayım';
+      document.getElementById('fullCountSetup').style.display = 'block';
+      break;
+    case 'spot':
+      document.getElementById('countTitle').textContent = 'Nokta Sayım';
+      document.getElementById('spotCountSetup').style.display = 'block';
+      break;
+    case 'shelf':
+      document.getElementById('countTitle').textContent = 'Raf Sayım';
+      document.getElementById('shelfCountSetup').style.display = 'block';
+      break;
+    case 'manual':
+      document.getElementById('countTitle').textContent = 'Manuel Sayım';
+      document.getElementById('manualCountSetup').style.display = 'block';
+      break;
+  }
+}
+
+// Form kapatma
+document.getElementById('closeCountForm').addEventListener('click', () => {
+  document.getElementById('countForm').style.display = 'none';
+});
+
+// Tam sayım başlatma
+document.getElementById('startFullCount').addEventListener('click', async () => {
+  const name = document.getElementById('fullCountName').value.trim();
+  const description = document.getElementById('fullCountDescription').value.trim();
+  
+  if (!name) {
+    alert('Sayım adı gerekli!');
+    return;
+  }
+
+  try {
+    const result = await API.counts.create({
+      type: 'full',
+      name: name,
+      description: description
+    });
+    
+    startCountProcess(result.count);
+  } catch (error) {
+    alert('Sayım başlatılamadı: ' + error.message);
+  }
+});
+
+// Nokta sayım başlatma
+document.getElementById('startSpotCount').addEventListener('click', async () => {
+  const productSearch = document.getElementById('spotCountProduct').value.trim();
+  
+  if (!productSearch) {
+    alert('Ürün seçimi gerekli!');
+    return;
+  }
+
+  try {
+    const result = await API.counts.create({
+      type: 'spot',
+      name: `Nokta Sayım - ${productSearch}`,
+      product_filter: productSearch
+    });
+    
+    startCountProcess(result.count);
+  } catch (error) {
+    alert('Sayım başlatılamadı: ' + error.message);
+  }
+});
+
+// Raf sayım başlatma
+document.getElementById('startShelfCount').addEventListener('click', async () => {
+  const shelfCode = document.getElementById('shelfCountLocation').value.trim();
+  
+  if (!shelfCode) {
+    alert('Raf kodu gerekli!');
+    return;
+  }
+
+  try {
+    const result = await API.counts.create({
+      type: 'shelf',
+      name: `Raf Sayım - ${shelfCode}`,
+      shelf_filter: shelfCode
+    });
+    
+    startCountProcess(result.count);
+  } catch (error) {
+    alert('Sayım başlatılamadı: ' + error.message);
+  }
+});
+
+// Manuel sayım başlatma
+document.getElementById('startManualCount').addEventListener('click', async () => {
+  const name = document.getElementById('manualCountName').value.trim();
+  const description = document.getElementById('manualCountDescription').value.trim();
+  
+  if (!name) {
+    alert('Sayım adı gerekli!');
+    return;
+  }
+
+  try {
+    const result = await API.counts.create({
+      type: 'manual',
+      name: name,
+      description: description
+    });
+    
+    startCountProcess(result.count);
+  } catch (error) {
+    alert('Sayım başlatılamadı: ' + error.message);
+  }
+});
+
+// Sayım işlemini başlat
+async function startCountProcess(count) {
+  currentCount = count;
+  currentScanIndex = 0;
+  
+  // Sayım kalemlerini yükle
+  currentCountItems = await API.counts.items(count.id);
+  
+  // UI'ı sayım moduna geç
+  document.getElementById('countForm').style.display = 'none';
+  document.getElementById('countProcess').style.display = 'block';
+  document.getElementById('processTitle').textContent = count.name;
+  document.getElementById('processType').textContent = count.type.toUpperCase();
+  
+  updateProgress();
+  
+  // Scanner'ı aktif et
+  document.getElementById('countScanner').focus();
+}
+
+// İlerleme güncelleme
+function updateProgress() {
+  const counted = currentCountItems.filter(item => item.status === 'counted').length;
+  const total = currentCountItems.length;
+  const variance = currentCountItems.filter(item => item.variance !== 0).length;
+  
+  document.getElementById('processProgress').textContent = `${counted}/${total}`;
+  document.getElementById('countedItems').textContent = counted;
+  document.getElementById('varianceItems').textContent = variance;
+  document.getElementById('remainingItems').textContent = total - counted;
+  
+  // Önizleme listesini güncelle
+  updatePreviewList();
+  
+  // Sayım tamamlandıysa veya en az 1 ürün sayıldıysa tamamlama butonunu göster
+  if ((counted === total && total > 0) || counted > 0) {
+    document.getElementById('completeCount').style.display = 'block';
+    
+    // Kısmi tamamlama için buton metnini güncelle
+    const completeBtn = document.getElementById('completeCount');
+    if (counted === total) {
+      completeBtn.innerHTML = '<span class="btn-icon">🏁</span><span class="btn-text">Sayımı Tamamla</span>';
+    } else {
+      completeBtn.innerHTML = '<span class="btn-icon">⚠️</span><span class="btn-text">Kısmi Tamamla (' + counted + '/' + total + ')</span>';
+    }
+  }
+}
+
+// Önizleme listesini güncelle
+function updatePreviewList() {
+  const filter = document.getElementById('previewFilter')?.value || 'all';
+  const sortBy = document.getElementById('previewSort')?.value || 'sku';
+  const searchQuery = document.getElementById('previewSearch')?.value.toLowerCase().trim() || '';
+  
+  let filteredItems = [...currentCountItems];
+  
+  // Filtre uygula
+  switch(filter) {
+    case 'counted':
+      filteredItems = filteredItems.filter(item => item.status === 'counted');
+      break;
+    case 'variance':
+      filteredItems = filteredItems.filter(item => item.variance !== 0);
+      break;
+    case 'pending':
+      filteredItems = filteredItems.filter(item => item.status === 'pending');
+      break;
+    case 'skipped':
+      filteredItems = filteredItems.filter(item => item.status === 'skipped');
+      break;
+  }
+  
+  // Arama uygula
+  if (searchQuery) {
+    filteredItems = filteredItems.filter(item => 
+      item.sku?.toLowerCase().includes(searchQuery) ||
+      item.product_name?.toLowerCase().includes(searchQuery) ||
+      item.package_barcode?.toLowerCase().includes(searchQuery) ||
+      item.package_number?.toLowerCase().includes(searchQuery) ||
+      item.location_code?.toLowerCase().includes(searchQuery)
+    );
+  }
+  
+  // Sıralama uygula
+  filteredItems.sort((a, b) => {
+    switch(sortBy) {
+      case 'sku':
+        return (a.sku || '').localeCompare(b.sku || '');
+      case 'location':
+        return (a.location_code || '').localeCompare(b.location_code || '');
+      case 'status':
+        const statusOrder = { 'counted': 1, 'pending': 2, 'skipped': 3 };
+        return (statusOrder[a.status] || 4) - (statusOrder[b.status] || 4);
+      case 'variance':
+        return Math.abs(b.variance || 0) - Math.abs(a.variance || 0);
+      case 'product':
+        return (a.product_name || '').localeCompare(b.product_name || '');
+      default:
+        return 0;
+    }
+  });
+  
+  const previewList = document.getElementById('previewList');
+  if (!previewList) return;
+  
+  if (filteredItems.length === 0) {
+    previewList.innerHTML = `
+      <div class="empty-state">
+        <span class="empty-icon">📊</span>
+        <p>Bu filtrede öğe bulunmuyor.</p>
+      </div>`;
+    return;
+  }
+  
+  const itemsHtml = filteredItems.map(item => {
+    const statusIcon = item.status === 'counted' ? '✅' : 
+                      item.status === 'skipped' ? '⏭️' : '⏳';
+    const varianceClass = item.variance > 0 ? 'positive' : 
+                         item.variance < 0 ? 'negative' : '';
+    
+    return `
+      <div class="preview-item ${item.status}">
+        <div class="preview-info">
+          <span class="preview-status">${statusIcon}</span>
+          <div class="preview-details">
+            <strong>${item.sku}</strong>
+            <span class="preview-name">${item.product_name}</span>
+            <span class="preview-location">📍 ${item.location_code}</span>
+            ${item.package_number && item.package_number !== 'NO-PKG' ? 
+              `<span class="preview-package">📦 ${item.package_number}</span>` : 
+              ''
+            }
+          </div>
+        </div>
+        <div class="preview-counts">
+          <span class="expected">Beklenen: ${item.expected_quantity}</span>
+          ${item.status === 'counted' ? 
+            `<span class="counted">Sayılan: ${item.counted_quantity}</span>` : 
+            '<span class="pending-text">Bekliyor</span>'
+          }
+          ${item.variance !== 0 ? 
+            `<span class="variance ${varianceClass}">Fark: ${item.variance > 0 ? '+' : ''}${item.variance}</span>` : 
+            ''
+          }
+        </div>
+      </div>`;
+  }).join('');
+  
+  previewList.innerHTML = itemsHtml;
+}
+
+// Önizleme toggle
+document.addEventListener('click', (e) => {
+  if (e.target.closest('#previewToggle')) {
+    const content = document.getElementById('previewContent');
+    const isVisible = content.style.display !== 'none';
+    
+    content.style.display = isVisible ? 'none' : 'block';
+    
+    const toggleIcon = document.querySelector('.toggle-icon');
+    const toggleText = document.querySelector('.toggle-text');
+    
+    if (isVisible) {
+      toggleIcon.textContent = '👁️';
+      toggleText.textContent = 'Önizleme';
+    } else {
+      toggleIcon.textContent = '👁️‍🗨️';
+      toggleText.textContent = 'Gizle';
+      updatePreviewList();
+    }
+  }
+});
+
+// Önizleme filtre ve sıralama
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'previewFilter' || e.target.id === 'previewSort') {
+    updatePreviewList();
+  }
+});
+
+// Önizleme arama
+document.addEventListener('input', (e) => {
+  if (e.target.id === 'previewSearch') {
+    // Debounce için timeout kullan
+    clearTimeout(window.previewSearchTimeout);
+    window.previewSearchTimeout = setTimeout(() => {
+      updatePreviewList();
+    }, 300);
+  }
+});
+
+// Barkod scanner
+document.getElementById('countScanner').addEventListener('input', async (e) => {
+  const barcode = e.target.value.trim();
+  
+  if (barcode.length > 0) {
+    if (currentCount.type === 'manual') {
+      // Manuel sayım - yeni ürün ekleme
+      e.target.value = '';
+      await addManualCountItem(barcode);
+    } else {
+      // Diğer sayım türleri - mevcut listeden eşleşme
+      const matchedItem = currentCountItems.find(item => 
+        item.barcode === barcode || 
+        item.product_barcode === barcode ||
+        item.package_barcode === barcode
+      );
+      
+      if (matchedItem) {
+        e.target.value = '';
+        await processBarcodeScan(barcode);
+      }
+    }
+  }
+});
+
+// Barkod işleme
+async function processBarcodeScan(barcode) {
+  try {
+    // Sayım kalemlerinde barkodu ara - sayılmamış olanları bul
+    const items = currentCountItems.filter(item => 
+      (item.barcode === barcode || 
+       item.product_barcode === barcode ||
+       item.package_barcode === barcode) &&
+      item.status === 'pending'
+    );
+    
+    if (items.length === 0) {
+      // Hiç bulunmadı veya hepsi sayılmış
+      const allMatches = currentCountItems.filter(item => 
+        item.barcode === barcode || 
+        item.product_barcode === barcode ||
+        item.package_barcode === barcode
+      );
+      
+      if (allMatches.length === 0) {
+        alert('Bu barkod sayım listesinde bulunamadı!');
+      } else {
+        // Zaten sayılan paket - ekstra sayım öner
+        const countedItem = allMatches.find(item => item.status === 'counted');
+        if (countedItem) {
+          const extraConfirm = confirm(
+            `⚠️ EKSTRA PAKET BULUNDU!\n\n` +
+            `Bu paket zaten sayıldı:\n` +
+            `📦 ${countedItem.product_name}\n` +
+            `📍 ${countedItem.location_code}\n` +
+            `✅ Sayılan: ${countedItem.counted_quantity}\n\n` +
+            `Bu rafta ekstra paket mi buldunuz?\n` +
+            `Ekstra sayım yapmak istiyorsanız "Tamam"a basın.`
+          );
+          
+          if (extraConfirm) {
+            showCurrentScan(countedItem, true); // Ekstra sayım için tekrar aç
+          }
+        } else {
+          alert('Bu barkodun tüm lokasyonları zaten sayıldı!');
+        }
+      }
+      return;
+    }
+    
+    // Birden fazla lokasyon varsa raf seçim modalı aç
+    if (items.length > 1) {
+      showLocationSelectionModal(items, barcode);
+    } else {
+      // Tek lokasyon
+      showCurrentScan(items[0]);
+    }
+    
+  } catch (error) {
+    console.error('Barkod işleme hatası:', error);
+    alert('Barkod işlenirken hata oluştu');
+  }
+}
+
+// Mevcut tarama gösterimi
+function showCurrentScan(item, skipLocationCheck = false) {
+  document.getElementById('currentScan').style.display = 'block';
+  document.getElementById('scanProduct').textContent = `${item.product_name} (${item.sku})`;
+  document.getElementById('scanLocation').textContent = `Lokasyon: ${item.location_code}`;
+  
+  // Package no bilgisini göster
+  const packageElement = document.getElementById('scanPackage');
+  if (item.package_number && item.package_number !== 'NO-PKG') {
+    packageElement.textContent = `Paket No: ${item.package_number}`;
+    packageElement.style.display = 'block';
+  } else {
+    packageElement.style.display = 'none';
+  }
+  
+  document.getElementById('expectedQty').textContent = item.expected_quantity;
+  document.getElementById('countedQty').value = item.expected_quantity;
+  
+  // Sayaçları sıfırla
+  window.currentScanCount = 0;
+  document.getElementById('scanCount').textContent = '0';
+  
+  // Giriş modunu sayı girme olarak başlat
+  document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('numberModeBtn').classList.add('active');
+  document.getElementById('numberInputSection').style.display = 'block';
+  document.getElementById('scanInputSection').style.display = 'none';
+  
+  // Tam sayım için lokasyon kontrolü göster (modal'dan geldiyse atla)
+  if (currentCount && currentCount.type === 'full' && !skipLocationCheck) {
+    document.getElementById('locationVerification').style.display = 'block';
+    document.getElementById('locationScanner').focus();
+    window.locationVerified = false;
+  } else {
+    document.getElementById('locationVerification').style.display = 'none';
+    document.getElementById('countedQty').focus();
+    document.getElementById('countedQty').select();
+    window.locationVerified = true;
+  }
+  
+  // Mevcut item'ı sakla
+  window.currentScanItem = item;
+}
+
+// Giriş modu değiştirme - delegated event
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.mode-btn')) {
+    const btn = e.target.closest('.mode-btn');
+    
+    // Mode butonlarını güncelle
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    const mode = btn.dataset.mode;
+    if (mode === 'number') {
+      document.getElementById('numberInputSection').style.display = 'block';
+      document.getElementById('scanInputSection').style.display = 'none';
+    } else if (mode === 'scan') {
+      document.getElementById('numberInputSection').style.display = 'none';
+      document.getElementById('scanInputSection').style.display = 'block';
+      document.getElementById('scanCount').textContent = '0';
+      window.currentScanCount = 0;
+      setTimeout(() => {
+        document.getElementById('itemScanner')?.focus();
+      }, 100);
+    }
+  }
+});
+
+// Miktar kontrolleri
+document.querySelectorAll('.qty-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById('countedQty');
+    const current = parseInt(input.value) || 0;
+    const action = btn.dataset.action;
+    
+    if (action === 'plus') {
+      input.value = current + 1;
+    } else if (action === 'minus' && current > 0) {
+      input.value = current - 1;
+    }
+  });
+});
+
+// Global input event listener - tüm input'ları dinle
+document.addEventListener('input', (e) => {
+  console.log('Global input event:', e.target.id, e.target.value); // Debug log
+  
+  // itemScanner için özel işlem
+  if (e.target.id === 'itemScanner') {
+    console.log('itemScanner detected!'); // Debug log
+    const barcode = e.target.value.trim();
+    const currentItem = window.currentScanItem;
+    
+    console.log('Barcode:', barcode, 'Current item:', currentItem); // Debug log
+    
+    if (barcode.length > 0 && currentItem) {
+      console.log('Checking barcode match...'); // Debug log
+      
+      // Ürün barkodu kontrol et - eşleşmede otomatik enter işlemi
+      if (barcode === currentItem.barcode || 
+          barcode === currentItem.product_barcode || 
+          barcode === currentItem.package_barcode) {
+        
+        console.log('✅ Barcode match found!'); // Debug log
+        
+        // Sayacı artır
+        window.currentScanCount = (window.currentScanCount || 0) + 1;
+        document.getElementById('scanCount').textContent = window.currentScanCount;
+        
+        // countedQty'yi güncelle
+        document.getElementById('countedQty').value = window.currentScanCount;
+        
+        // Input'u temizle - otomatik enter işlemi
+        e.target.value = '';
+        
+        // Başarı efekti
+        const scanDisplay = document.querySelector('.scan-display');
+        if (scanDisplay) {
+          scanDisplay.style.background = '#d4edda';
+          setTimeout(() => {
+            scanDisplay.style.background = '';
+          }, 300);
+        }
+      }
+      // Eşleşmezse hiçbir şey yapma - kullanıcı yazmaya devam edebilsin
+    }
+  }
+});
+
+// Giriş modu değiştirme - delegated event
+document.addEventListener('click', (e) => {
+  if (e.target.closest('.mode-btn')) {
+    const btn = e.target.closest('.mode-btn');
+    
+    // Mode butonlarını güncelle
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    
+    const mode = btn.dataset.mode;
+    if (mode === 'number') {
+      document.getElementById('numberInputSection').style.display = 'block';
+      document.getElementById('scanInputSection').style.display = 'none';
+    } else if (mode === 'scan') {
+      document.getElementById('numberInputSection').style.display = 'none';
+      document.getElementById('scanInputSection').style.display = 'block';
+      document.getElementById('scanCount').textContent = '0';
+      window.currentScanCount = 0;
+      setTimeout(() => {
+        document.getElementById('itemScanner')?.focus();
+      }, 100);
+    }
+  }
+});
+
+// Lokasyon scanner - otomatik eşleşme ve manuel giriş desteği
+document.getElementById('locationScanner').addEventListener('input', async (e) => {
+  const locationBarcode = e.target.value.trim();
+  const item = window.currentScanItem;
+  
+  if (locationBarcode.length > 0 && item) {
+    // Lokasyon eşleşmesi kontrol et
+    if (locationBarcode === item.location_code) {
+      // Doğru lokasyon - kalıcı başarı mesajı
+      document.getElementById('locationStatus').innerHTML = '<span style="color: var(--success);">✅ Lokasyon doğru - Miktar girişi yapabilirsiniz</span>';
+      window.locationVerified = true;
+      
+      // Sadece 6+ karakter ise (barkod okuyucu) otomatik temizle
+      if (locationBarcode.length >= 6) {
+        e.target.value = '';
+      }
+      
+      // Miktar girişine geç
+      setTimeout(() => {
+        document.getElementById('countedQty').focus();
+        document.getElementById('countedQty').select();
+      }, 300);
+    } else {
+      // Yanlış lokasyon - hata mesajı göster ama değeri temizleme
+      document.getElementById('locationStatus').innerHTML = '<span style="color: var(--danger);">❌ Yanlış lokasyon! Beklenen: ' + item.location_code + '</span>';
+      window.locationVerified = false;
+    }
+  }
+});
+
+// Lokasyon scanner için Enter tuşu desteği  
+document.getElementById('locationScanner').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const locationBarcode = e.target.value.trim();
+    const item = window.currentScanItem;
+    
+    if (locationBarcode.length > 0 && item && locationBarcode === item.location_code) {
+      // Doğru lokasyon girildiyse otomatik işlem
+      document.getElementById('locationStatus').innerHTML = '<span style="color: var(--success);">✅ Lokasyon doğru - Miktar girişi yapabilirsiniz</span>';
+      window.locationVerified = true;
+      e.target.value = '';
+      
+      setTimeout(() => {
+        document.getElementById('countedQty').focus();
+        document.getElementById('countedQty').select();
+      }, 300);
+    }
+  }
+});
+
+// Sayım onaylama
+document.getElementById('confirmCount').addEventListener('click', async () => {
+  const countedQty = parseInt(document.getElementById('countedQty').value) || 0;
+  const item = window.currentScanItem;
+  
+  if (!item) return;
+  
+  // Tam sayımda lokasyon kontrolü
+  if (currentCount && currentCount.type === 'full' && !window.locationVerified) {
+    alert('Önce raf lokasyonunu doğrulamalısınız!');
+    document.getElementById('locationScanner').focus();
+    return;
+  }
+  
+  try {
+    await API.counts.updateItem(currentCount.id, item.id, {
+      counted_quantity: countedQty,
+      status: 'counted'
+    });
+    
+    // Local item'ı güncelle
+    const itemIndex = currentCountItems.findIndex(i => i.id === item.id);
+    if (itemIndex >= 0) {
+      currentCountItems[itemIndex] = {
+        ...currentCountItems[itemIndex],
+        counted_quantity: countedQty,
+        variance: countedQty - item.expected_quantity,
+        status: 'counted'
+      };
+    }
+    
+    // UI'ı temizle ve güncel­le
+    document.getElementById('currentScan').style.display = 'none';
+    document.getElementById('locationStatus').innerHTML = '';
+    window.locationVerified = false;
+    updateProgress();
+    document.getElementById('countScanner').focus();
+    
+  } catch (error) {
+    alert('Sayım kaydedilemedi: ' + error.message);
+  }
+});
+
+// Sayım atlama
+document.getElementById('skipCount').addEventListener('click', () => {
+  document.getElementById('currentScan').style.display = 'none';
+  document.getElementById('locationStatus').innerHTML = '';
+  window.locationVerified = false;
+  document.getElementById('countScanner').focus();
+});
+
+// Sayım tamamlama
+document.getElementById('completeCount').addEventListener('click', async () => {
+  const counted = currentCountItems.filter(item => item.status === 'counted').length;
+  const total = currentCountItems.length;
+  
+  // Kısmi tamamlama onayı
+  if (counted < total) {
+    const remaining = total - counted;
+    const confirm = window.confirm(
+      `Sayım henüz tamamlanmadı!\n\n` +
+      `Sayılan: ${counted}/${total}\n` +
+      `Kalan: ${remaining} ürün\n\n` +
+      `Kısmi olarak tamamlamak istediğinizden emin misiniz?\n` +
+      `Sayılmayan ürünler raporda "SAYILMADI" olarak görünecek.`
+    );
+    
+    if (!confirm) return;
+  }
+  
+  try {
+    const result = await API.counts.complete(currentCount.id);
+    showCompletionModal(result);
+    
+  } catch (error) {
+    alert('Sayım tamamlanamadı: ' + error.message);
+  }
+});
+
+// Tamamlama modalını göster
+function showCompletionModal(result) {
+  document.getElementById('finalCountedItems').textContent = result.summary.counted_items;
+  document.getElementById('finalUncountedItems').textContent = result.summary.uncounted_items || 0;
+  document.getElementById('finalVarianceItems').textContent = result.summary.variance_items;
+  document.getElementById('finalVarianceQty').textContent = result.summary.total_variance;
+  
+  // Fark detayları ve düzeltme butonu
+  if (result.variances && result.variances.length > 0) {
+    document.getElementById('varianceDetails').style.display = 'block';
+    document.getElementById('fixVariances').style.display = 'block';
+    
+    const varianceHtml = result.variances.map(v => `
+      <div class="variance-item">
+        <span class="variance-product">${v.product_name}</span>
+        <span class="variance-location">${v.location_code}</span>
+        <span class="variance-diff ${v.variance > 0 ? 'positive' : 'negative'}">
+          ${v.variance > 0 ? '+' : ''}${v.variance}
+        </span>
+      </div>
+    `).join('');
+    document.getElementById('varianceList').innerHTML = varianceHtml;
+    
+    // Global değişkende fark verilerini sakla
+    window.currentVariances = result.variances;
+  } else {
+    document.getElementById('fixVariances').style.display = 'none';
+  }
+  
+  document.getElementById('completeModal').style.display = 'flex';
+}
+
+// Modal kapatma
+document.getElementById('closeCompleteModal').addEventListener('click', () => {
+  document.getElementById('completeModal').style.display = 'none';
+  // Sayım işlemini kapat ve ana sayfaya dön
+  document.getElementById('countProcess').style.display = 'none';
+  loadActiveCounts();
+  loadCountHistory();
+});
+
+// Rapor oluşturma
+document.getElementById('generateReport').addEventListener('click', async () => {
+  try {
+    window.open(`/api/inventory-counts/${currentCount.id}/report`, '_blank');
+  } catch (error) {
+    alert('Rapor oluşturulamadı: ' + error.message);
+  }
+});
+
+// Ürün öneriler (nokta sayım için)
+let productSuggestionsTimeout;
+document.getElementById('spotCountProduct').addEventListener('input', (e) => {
+  clearTimeout(productSuggestionsTimeout);
+  const query = e.target.value.trim();
+  
+  if (query.length < 2) {
+    document.getElementById('productSuggestions').innerHTML = '';
+    return;
+  }
+  
+  productSuggestionsTimeout = setTimeout(async () => {
+    try {
+      const products = await API.products();
+      const filtered = products.filter(p => 
+        p.sku.toLowerCase().includes(query.toLowerCase()) ||
+        p.name.toLowerCase().includes(query.toLowerCase())
+      ).slice(0, 5);
+      
+      const suggestionsHtml = filtered.map(p => `
+        <div class="suggestion-item" data-sku="${p.sku}">
+          <strong>${p.sku}</strong> - ${p.name}
+        </div>
+      `).join('');
+      
+      document.getElementById('productSuggestions').innerHTML = suggestionsHtml;
+      
+      // Öneri tıklama
+      document.querySelectorAll('.suggestion-item').forEach(item => {
+        item.addEventListener('click', () => {
+          document.getElementById('spotCountProduct').value = item.dataset.sku;
+          document.getElementById('productSuggestions').innerHTML = '';
+        });
+      });
+    } catch (error) {
+      console.error('Ürün önerileri yüklenemedi:', error);
+    }
+  }, 300);
+});
+
+// Aktif sayımları yükle
+async function loadActiveCounts() {
+  try {
+    const counts = await API.counts.list();
+    const activeCounts = counts.filter(c => c.status === 'active');
+    
+    if (activeCounts.length === 0) {
+      document.getElementById('activeCountsList').innerHTML = `
+        <div class="empty-state">
+          <span class="empty-icon">📊</span>
+          <p>Henüz aktif sayım bulunmuyor.</p>
+          <small>Yukarıdan yeni sayım başlatabilirsiniz.</small>
+        </div>`;
+      return;
+    }
+    
+    const countsHtml = activeCounts.map(count => `
+      <div class="count-item">
+        <div class="count-info">
+          <h4>${count.name}</h4>
+          <p>${count.description || ''}</p>
+          <div class="count-meta">
+            <span class="count-type">${count.type.toUpperCase()}</span>
+            <span class="count-date">${new Date(count.created_date).toLocaleDateString('tr-TR')}</span>
+          </div>
+        </div>
+        <div class="count-actions">
+          <button class="action-btn small" onclick="continueCount(${count.id})">
+            <span class="btn-icon">▶️</span>
+            <span class="btn-text">Devam Et</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+    
+    document.getElementById('activeCountsList').innerHTML = countsHtml;
+    
+  } catch (error) {
+    console.error('Aktif sayımlar yüklenemedi:', error);
+  }
+}
+
+// Sayım geçmişini yükle
+async function loadCountHistory() {
+  try {
+    const counts = await API.counts.list();
+    const completedCounts = counts.filter(c => c.status === 'completed');
+    
+    if (completedCounts.length === 0) {
+      document.getElementById('countHistoryList').innerHTML = `
+        <div class="empty-state">
+          <span class="empty-icon">📋</span>
+          <p>Henüz sayım geçmişi bulunmuyor.</p>
+        </div>`;
+      return;
+    }
+    
+    const historyHtml = completedCounts.map(count => `
+      <div class="history-item">
+        <div class="history-info">
+          <h4>${count.name}</h4>
+          <div class="history-meta">
+            <span class="history-type">${count.type.toUpperCase()}</span>
+            <span class="history-date">${new Date(count.completed_date).toLocaleDateString('tr-TR')}</span>
+          </div>
+          <div class="history-stats">
+            <span>Sayılan: ${count.counted_items || 0}</span>
+            <span>Fark: ${count.variance_items || 0}</span>
+          </div>
+        </div>
+        <div class="history-actions">
+          <button class="action-btn small" onclick="downloadReport(${count.id})">
+            <span class="btn-icon">📄</span>
+            <span class="btn-text">Rapor</span>
+          </button>
+        </div>
+      </div>
+    `).join('');
+    
+    document.getElementById('countHistoryList').innerHTML = historyHtml;
+    
+  } catch (error) {
+    console.error('Sayım geçmişi yüklenemedi:', error);
+  }
+}
+
+// Sayıma devam etme
+window.continueCount = async (countId) => {
+  try {
+    const count = await API.counts.get(countId);
+    startCountProcess(count);
+  } catch (error) {
+    alert('Sayım yüklenemedi: ' + error.message);
+  }
+};
+
+// Rapor indirme
+window.downloadReport = (countId) => {
+  window.open(`/api/inventory-counts/${countId}/report`, '_blank');
+};
+
+// Mobile navigation toggle
+document.getElementById('mobileNavToggle').addEventListener('click', () => {
+  const menu = document.getElementById('mobileNavMenu');
+  menu.classList.toggle('show');
+});
+
+// Close mobile menu when clicking outside
+document.addEventListener('click', (e) => {
+  const nav = document.getElementById('mobileNav');
+  const menu = document.getElementById('mobileNavMenu');
+  if (!nav.contains(e.target)) {
+    menu.classList.remove('show');
+  }
+});
+
+// Sayfa yüklendiğinde
+document.addEventListener('DOMContentLoaded', () => {
+  loadActiveCounts();
+  loadCountHistory();
+});
+
+// Lokasyon seçim modalı
+function showLocationSelectionModal(items, barcode) {
+  pendingLocationItems = items;
+  currentBarcode = barcode;
+  
+  const optionsHtml = items.map((item, index) => `
+    <div class="location-option">
+      <strong>${item.location_code}</strong> - ${item.expected_quantity} adet
+    </div>
+  `).join('');
+  
+  document.getElementById('locationOptions').innerHTML = optionsHtml;
+  document.getElementById('locationModalText').textContent = 
+    `Bu ürün ${items.length} farklı rafta bulunmakta. Hangi rafı saydığınızın raf kodunu girin:`;
+  
+  document.getElementById('locationModal').style.display = 'flex';
+  document.getElementById('locationModalScanner').focus();
+}
+
+// Lokasyon modal scanner
+document.getElementById('locationModalScanner').addEventListener('input', (e) => {
+  const shelfBarcode = e.target.value.trim();
+  
+  if (shelfBarcode.length > 0) {
+    // Eşleşen lokasyonu bul
+    const matchedItem = pendingLocationItems.find(item => 
+      item.location_code === shelfBarcode
+    );
+    
+    if (matchedItem) {
+      // Doğru raf bulundu
+      document.getElementById('locationScannerStatus').innerHTML = 
+        '<span style="color: var(--success);">✅ Raf bulundu: ' + matchedItem.location_code + '</span>';
+      
+      e.target.value = '';
+      
+      // Modal'ı kapat ve sayıma başla
+      setTimeout(() => {
+        document.getElementById('locationModal').style.display = 'none';
+        showCurrentScan(matchedItem, true); // true = modaldan geldi, lokasyon kontrolü atla
+      }, 500);
+    } else {
+      // Yanlış raf
+      const validLocations = pendingLocationItems.map(item => item.location_code).join(', ');
+      document.getElementById('locationScannerStatus').innerHTML = 
+        '<span style="color: var(--danger);">❌ Geçersiz raf! Geçerli raflar: ' + validLocations + '</span>';
+    }
+  }
+});
+
+// Lokasyon modal kapatma
+document.getElementById('cancelLocationModal').addEventListener('click', () => {
+  document.getElementById('locationModal').style.display = 'none';
+  document.getElementById('locationScannerStatus').innerHTML = '';
+  document.getElementById('countScanner').focus();
+});
+
+// Manuel sayım için ürün ekleme
+async function addManualCountItem(barcode) {
+  try {
+    const result = await API.counts.scan(currentCount.id, barcode);
+    
+    if (result.success) {
+      // Yeni ürün eklendi - listeyi güncelle
+      currentCountItems.push(result.item);
+      updateProgress();
+      
+      // Eklenen ürünü hemen sayıma göster
+      showCurrentScan(result.item, true); // Manuel sayımda lokasyon kontrolü yok
+      
+      // Başarı mesajı
+      const scannerHelp = document.querySelector('.scanner-help small');
+      const originalText = scannerHelp.textContent;
+      scannerHelp.innerHTML = '<span style="color: var(--success);">✅ Ürün eklendi: ' + result.item.product_name + '</span>';
+      
+      setTimeout(() => {
+        scannerHelp.textContent = originalText;
+      }, 2000);
+    }
+  } catch (error) {
+    const response = await error.response?.json();
+    alert(response?.error || 'Ürün eklenemedi');
+  }
+}
+
+// Geçmiş filtreler
+document.getElementById('historyFilter').addEventListener('change', loadCountHistory);
+document.getElementById('historyDate').addEventListener('change', loadCountHistory);
+
+// Farkları düzeltme butonu
+document.getElementById('fixVariances').addEventListener('click', () => {
+  if (window.currentVariances && window.currentVariances.length > 0) {
+    // Fark verilerini encode ederek Stock Management'a yönlendir
+    const varianceData = encodeURIComponent(JSON.stringify(window.currentVariances));
+    const stockUrl = `/stock-management.html?mode=variance&data=${varianceData}`;
+    window.location.href = stockUrl;
+  }
+});
+</script>
+
+<style>
+.inventory-count {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  gap: 20px;
+  display: flex;
+  flex-direction: column;
+}
+
+.count-type-selection {
+  text-align: center;
+}
+
+.count-type-buttons {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 15px;
+  margin-top: 20px;
+}
+
+.count-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 30px 20px;
+  border: 2px solid #e1e5e9;
+  border-radius: 12px;
+  background: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+}
+
+.count-type-btn:hover {
+  border-color: #007bff;
+  background: #f8f9fa;
+  transform: translateY(-2px);
+}
+
+.count-type-btn .btn-icon {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+}
+
+.count-type-btn .btn-text {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 5px;
+}
+
+.count-type-btn small {
+  color: #333333;
+  font-size: 0.9rem;
+}
+
+.count-form {
+  border: 2px solid #007bff;
+}
+
+.form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e1e5e9;
+}
+
+.btn-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6c757d;
+  padding: 5px;
+}
+
+.count-setup h4 {
+  color: #1a1a1a;
+  margin-bottom: 20px;
+}
+
+.suggestions {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 0 0 8px 8px;
+  max-height: 200px;
+  overflow-y: auto;
+  z-index: 1000;
+}
+
+.suggestion-item {
+  padding: 10px 15px;
+  cursor: pointer;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.suggestion-item:hover {
+  background: #f8f9fa;
+}
+
+.count-process {
+  border: 2px solid #28a745;
+}
+
+.process-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid #e1e5e9;
+}
+
+.process-info {
+  display: flex;
+  gap: 15px;
+  align-items: center;
+}
+
+.process-badge {
+  background: #007bff;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.scanner-section {
+  margin-bottom: 30px;
+}
+
+.scanner-input {
+  margin-bottom: 20px;
+}
+
+.scanner-input input {
+  width: 100%;
+  padding: 15px;
+  font-size: 1.1rem;
+  border: 2px solid #28a745;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.scanner-help {
+  text-align: center;
+  margin-top: 8px;
+}
+
+.current-scan {
+  background: var(--card);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.scan-info h4 {
+  color: #1a1a1a;
+  margin-bottom: 5px;
+}
+
+.scan-info p {
+  color: #333333;
+  margin-bottom: 15px;
+}
+
+.scan-expected {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 10px;
+  border-radius: 6px;
+  margin-bottom: 20px;
+  color: var(--fg);
+}
+
+.qty-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.qty-btn {
+  width: 40px;
+  height: 40px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  font-weight: bold;
+}
+
+.qty-controls input {
+  width: 80px;
+  text-align: center;
+  padding: 10px;
+  font-size: 1.1rem;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.scan-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 20px;
+}
+
+.confirm-btn {
+  background: #28a745;
+}
+
+.skip-btn {
+  background: #6c757d;
+}
+
+.count-summary {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 20px;
+  border-radius: 12px;
+  margin-top: 20px;
+}
+
+.summary-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.summary-item {
+  text-align: center;
+  padding: 15px;
+  background: var(--bg);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}
+
+.summary-label {
+  display: block;
+  font-size: 0.9rem;
+  color: #333333;
+  margin-bottom: 5px;
+}
+
+.summary-value {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: bold;
+  color: #1a1a1a;
+}
+
+.complete-btn {
+  width: 100%;
+  background: #dc3545;
+  font-size: 1.1rem;
+  padding: 15px;
+}
+
+.counts-list, .history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.count-item, .history-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px;
+  background: var(--card);
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+.count-info h4, .history-info h4 {
+  color: #1a1a1a;
+  margin-bottom: 5px;
+}
+
+.count-meta, .history-meta {
+  display: flex;
+  gap: 15px;
+  margin: 10px 0;
+}
+
+.count-type, .history-type {
+  background: #007bff;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.8rem;
+}
+
+.count-date, .history-date {
+  color: #444444;
+  font-size: 0.9rem;
+}
+
+.history-stats {
+  display: flex;
+  gap: 15px;
+  font-size: 0.9rem;
+  color: #333333;
+}
+
+.history-filters {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 20px;
+}
+
+.history-filters select,
+.history-filters input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+}
+
+.modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 30px;
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.modal-header h3 {
+  color: #1a1a1a;
+  margin-bottom: 20px;
+  text-align: center;
+}
+
+.completion-summary {
+  margin-bottom: 20px;
+}
+
+.summary-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 0;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.variance-details {
+  margin: 20px 0;
+}
+
+.variance-list {
+  max-height: 200px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.variance-item {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 15px;
+  padding: 10px 15px;
+  border-bottom: 1px solid var(--border);
+  align-items: center;
+  color: var(--fg);
+}
+
+.variance-diff.positive {
+  color: var(--success);
+  font-weight: bold;
+}
+
+.variance-diff.negative {
+  color: var(--danger);
+  font-weight: bold;
+}
+
+.location-verification {
+  background: var(--card);
+  border: 2px solid var(--warning);
+  border-radius: 8px;
+  padding: 15px;
+  margin: 15px 0;
+  color: var(--fg);
+}
+
+.location-verification label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: #2c2c2c;
+}
+
+.location-verification input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.1rem;
+  border: 2px solid var(--warning);
+  border-radius: 6px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.location-status {
+  margin-top: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* Projeye uygun dark theme renkleri */
+.card h2, .card h3, .card h4 {
+  color: var(--fg) !important;
+}
+
+.form-group label {
+  color: var(--fg) !important;
+  font-weight: 600;
+}
+
+.process-header h3 {
+  color: var(--fg) !important;
+}
+
+.scanner-input label {
+  color: var(--fg) !important;
+  font-weight: 600;
+}
+
+.quantity-input label {
+  color: var(--fg) !important;
+  font-weight: 600;
+}
+
+/* Lokasyon seçim modalı stilleri */
+.location-options {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 20px;
+}
+
+.location-option {
+  padding: 15px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--fg);
+  text-align: center;
+}
+
+.location-scanner-input {
+  margin-top: 20px;
+}
+
+.location-scanner-input label {
+  display: block;
+  font-weight: 600;
+  margin-bottom: 8px;
+  color: var(--fg);
+}
+
+.location-scanner-input input {
+  width: 100%;
+  padding: 12px;
+  font-size: 1.1rem;
+  border: 2px solid var(--accent);
+  border-radius: 6px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.location-scanner-status {
+  margin-top: 10px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.manual-count-info {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 15px;
+  margin: 15px 0;
+}
+
+.manual-count-info p {
+  color: var(--fg);
+  margin-bottom: 10px;
+}
+
+.manual-count-info ul {
+  color: var(--muted);
+  font-size: 0.9rem;
+  margin: 0;
+  padding-left: 20px;
+}
+
+.manual-count-info li {
+  margin: 5px 0;
+}
+
+/* Giriş modu seçimi */
+.input-mode-selection {
+  display: flex;
+  gap: 10px;
+  margin: 15px 0;
+  justify-content: center;
+}
+
+.mode-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 12px 16px;
+  border: 2px solid #e1e5e9;
+  border-radius: 8px;
+  background: var(--card);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: var(--fg);
+  min-width: 90px;
+}
+
+.mode-btn:hover {
+  border-color: var(--accent);
+}
+
+.mode-btn.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.mode-icon {
+  font-size: 1.2rem;
+  margin-bottom: 4px;
+}
+
+.mode-text {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+/* Tek tek okutma bölümü */
+.scan-input-section {
+  margin-top: 15px;
+}
+
+.scan-counter {
+  text-align: center;
+}
+
+.scan-display {
+  background: var(--card);
+  border: 2px solid var(--accent);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 15px;
+  transition: background 0.3s ease;
+}
+
+.scan-count {
+  display: block;
+  font-size: 2rem;
+  font-weight: bold;
+  color: var(--accent);
+  margin-bottom: 5px;
+}
+
+.scan-label {
+  display: block;
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.scan-counter input {
+  width: 100%;
+  padding: 15px;
+  font-size: 1.1rem;
+  border: 2px solid var(--accent);
+  border-radius: 8px;
+  text-align: center;
+  background: var(--bg);
+  color: var(--fg);
+  margin-bottom: 10px;
+}
+
+.qty-input-section {
+  margin-top: 15px;
+}
+
+/* Sayım önizleme stilleri */
+.count-preview {
+  margin: 20px 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+}
+
+.preview-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.preview-header h4 {
+  margin: 0;
+  color: var(--fg);
+}
+
+.preview-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 15px;
+  border: 1px solid var(--accent);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 0.9rem;
+  transition: all 0.3s ease;
+}
+
+.preview-toggle:hover {
+  background: var(--accent);
+  color: white;
+}
+
+.preview-content {
+  padding: 15px;
+}
+
+.preview-controls {
+  margin-bottom: 15px;
+}
+
+.preview-search {
+  margin-bottom: 15px;
+}
+
+.preview-search input {
+  width: 100%;
+  padding: 12px 15px;
+  border: 2px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 1rem;
+}
+
+.preview-search input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.preview-filters {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.preview-filters select {
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  flex: 1;
+  min-width: 140px;
+}
+
+.preview-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+}
+
+.preview-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid var(--border);
+}
+
+.preview-item:last-child {
+  border-bottom: none;
+}
+
+.preview-item.counted {
+  background: rgba(40, 167, 69, 0.1);
+}
+
+.preview-item.pending {
+  background: rgba(255, 193, 7, 0.1);
+}
+
+.preview-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+.preview-status {
+  font-size: 1.1rem;
+}
+
+.preview-details {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.preview-details strong {
+  color: var(--fg);
+  font-size: 0.95rem;
+}
+
+.preview-name {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.preview-location {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.preview-package {
+  color: var(--accent);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.preview-counts {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: right;
+  font-size: 0.85rem;
+}
+
+.expected {
+  color: var(--muted);
+}
+
+.counted {
+  color: var(--success);
+  font-weight: 600;
+}
+
+.pending-text {
+  color: var(--warning);
+  font-style: italic;
+}
+
+.variance.positive {
+  color: var(--success);
+  font-weight: bold;
+}
+
+.variance.negative {
+  color: var(--danger);
+  font-weight: bold;
+}
+
+.count-type-btn .btn-text {
+  color: var(--fg) !important;
+}
+
+.count-type-btn small {
+  color: var(--muted) !important;
+}
+
+.count-setup h4 {
+  color: var(--fg) !important;
+}
+
+.scan-info h4 {
+  color: var(--fg) !important;
+}
+
+.scan-info p {
+  color: var(--muted) !important;
+}
+
+.summary-label {
+  color: var(--muted) !important;
+}
+
+.summary-value {
+  color: var(--fg) !important;
+}
+
+.count-info h4, .history-info h4 {
+  color: var(--fg) !important;
+}
+
+.count-date, .history-date {
+  color: var(--muted) !important;
+}
+
+.history-stats {
+  color: var(--muted) !important;
+}
+
+.modal-header h3 {
+  color: var(--fg) !important;
+}
+
+.location-verification label {
+  color: var(--fg) !important;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+  margin-top: 30px;
+}
+
+.action-btn.warning {
+  background: #ff6b35;
+  color: white;
+}
+
+.action-btn.warning:hover {
+  background: #e55722;
+}
+
+@media (max-width: 768px) {
+  .count-type-buttons {
+    grid-template-columns: 1fr;
+  }
+  
+  .count-item, .history-item {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .scan-actions {
+    flex-direction: column;
+  }
+  
+  .modal-actions {
+    flex-direction: column;
+  }
+}
+</style>
+</body>
+</html>

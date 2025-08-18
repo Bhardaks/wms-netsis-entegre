@@ -1,0 +1,1048 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Siparişler</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <script src="/assets/js/auth.js"></script>
+  <style>
+    /* Global mobile overflow fix */
+    html, body {
+      max-width: 100%;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+    
+    *, *:before, *:after {
+      box-sizing: border-box;
+    }
+    
+    .tabs {
+      display: flex;
+      border-bottom: 1px solid #ddd;
+    }
+    .tab-btn {
+      background: none;
+      border: none;
+      padding: 12px 20px;
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      font-weight: 500;
+    }
+    .tab-btn:hover {
+      background-color: #f5f5f5;
+    }
+    .tab-btn.active {
+      border-bottom-color: #007bff;
+      color: #007bff;
+    }
+    .table-container {
+      overflow-x: auto;
+    }
+    
+    /* Desktop table optimizations */
+    @media (min-width: 769px) {
+      table {
+        table-layout: fixed;
+        width: 100%;
+      }
+      
+      th:nth-child(1), td:nth-child(1) { width: 12%; } /* Sipariş No */
+      th:nth-child(2), td:nth-child(2) { width: 20%; } /* Müşteri */
+      th:nth-child(3), td:nth-child(3) { width: 12%; } /* Durum */
+      th:nth-child(4), td:nth-child(4) { width: 25%; } /* Kalemler */
+      th:nth-child(5), td:nth-child(5) { width: 15%; } /* Tarih */
+      th:nth-child(6), td:nth-child(6) { width: 16%; } /* İşlem */
+      
+      .action-btn {
+        width: 100%;
+        max-width: none;
+      }
+    }
+    
+    /* Mobile optimizations - clean card layout */
+    @media (max-width: 768px) {
+      /* Site header mobile fixes */
+      header {
+        padding: 12px 16px;
+        flex-wrap: nowrap;
+      }
+      
+      header h1 {
+        font-size: 18px;
+        margin: 0;
+        flex-shrink: 0;
+      }
+      
+      header nav {
+        display: none;
+      }
+      
+      /* COMPLETE FILTER OVERRIDE FOR MOBILE */
+      .filters-mobile {
+        display: block !important;
+        width: 100% !important;
+        margin: 0 0 20px 0 !important;
+        padding: 0 !important;
+        background: none !important;
+        border: none !important;
+        flex: none !important;
+        gap: 0 !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        justify-content: flex-start !important;
+        flex-wrap: nowrap !important;
+      }
+      
+      .filters-mobile * {
+        float: none !important;
+        position: static !important;
+        transform: none !important;
+        margin-left: 0 !important;
+        margin-right: 0 !important;
+        left: auto !important;
+        right: auto !important;
+        top: auto !important;
+        bottom: auto !important;
+      }
+      
+      .filters-mobile input,
+      .filters-mobile select,
+      .filters-mobile button {
+        display: block !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        min-width: 0 !important;
+        margin: 0 0 12px 0 !important;
+        padding: 12px 16px !important;
+        font-size: 16px !important;
+        border: 2px solid #ddd !important;
+        border-radius: 8px !important;
+        background: #0e1a30 !important;
+        color: var(--fg) !important;
+        box-sizing: border-box !important;
+        flex: none !important;
+        position: relative !important;
+        clear: both !important;
+      }
+      
+      .filters-mobile input:focus,
+      .filters-mobile select:focus {
+        border-color: var(--accent) !important;
+        outline: none !important;
+      }
+      /* Reset everything for mobile */
+      .table-container {
+        overflow: visible;
+        margin: 0;
+        padding: 0;
+      }
+      
+      table {
+        display: none !important;
+      }
+      
+      /* Mobile card layout */
+      .mobile-orders {
+        display: block !important;
+      }
+      
+      .order-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        margin-bottom: 16px;
+        padding: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+      
+      .order-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      
+      .order-number {
+        font-size: 16px;
+        font-weight: bold;
+        color: var(--accent);
+      }
+      
+      .order-status {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-weight: 500;
+      }
+      
+      .order-info {
+        margin-bottom: 12px;
+      }
+      
+      .info-row {
+        display: flex;
+        margin-bottom: 8px;
+        align-items: flex-start;
+      }
+      
+      .info-label {
+        font-weight: 600;
+        color: var(--muted);
+        min-width: 70px;
+        font-size: 13px;
+      }
+      
+      .info-value {
+        flex: 1;
+        font-size: 14px;
+        line-height: 1.3;
+      }
+      
+      .order-items-mobile {
+        background: var(--hover);
+        border-radius: 6px;
+        padding: 8px;
+        margin: 8px 0;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      
+      .mobile-action-btn {
+        width: 100%;
+        padding: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-top: 8px;
+      }
+      
+      .btn-primary-mobile {
+        background: var(--accent);
+        color: white;
+      }
+      
+      .btn-warning-mobile {
+        background: #ffc107;
+        color: #000;
+      }
+      
+      .btn-success-mobile {
+        background: var(--success);
+        color: white;
+      }
+      
+      .btn-disabled-mobile {
+        background: var(--muted);
+        color: var(--fg);
+        opacity: 0.6;
+        cursor: not-allowed;
+      }
+      
+      .btn-danger-mobile {
+        background: var(--danger);
+        color: white;
+      }
+      
+      /* Header and filters mobile optimization */
+      .order-header-section {
+        flex-direction: column !important;
+        gap: 12px !important;
+        align-items: stretch !important;
+      }
+      
+      .header-title-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      
+      .header-actions {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+      }
+      
+      
+      /* Tab navigation improvements */
+      .tabs {
+        margin-bottom: 16px;
+        border-bottom: 1px solid var(--border);
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+      }
+      
+      .tab-btn {
+        min-width: 80px;
+        padding: 8px 16px;
+        font-size: 13px;
+        flex-shrink: 0;
+      }
+      
+      /* Main layout adjustments */
+      main {
+        padding: 8px !important;
+        margin: 0 !important;
+        max-width: 100vw;
+        overflow-x: hidden;
+      }
+      
+      .card {
+        margin: 0 0 16px 0 !important;
+        padding: 16px !important;
+        border-radius: 12px;
+      }
+      
+      /* Hide desktop table on mobile */
+      .desktop-table {
+        display: none !important;
+      }
+    }
+    
+    /* Desktop - hide mobile cards */
+    @media (min-width: 769px) {
+      .mobile-orders {
+        display: none !important;
+      }
+      
+      .desktop-table {
+        display: table !important;
+      }
+      
+      /* Reset mobile header styles for desktop */
+      .order-header-section {
+        flex-direction: row !important;
+        align-items: center !important;
+      }
+      
+      .header-title-row {
+        flex: 1;
+        justify-content: space-between;
+      }
+      
+      .filters-mobile {
+        display: flex !important;
+        flex-direction: row !important;
+        gap: 12px !important;
+        align-items: center;
+        margin-bottom: 16px !important;
+      }
+      
+      .filters-mobile input {
+        flex: 1 !important;
+        min-width: 200px !important;
+        width: auto !important;
+        margin-bottom: 0 !important;
+        padding: 8px !important;
+        background: #0e1a30 !important;
+      }
+      
+      .filters-mobile select {
+        width: auto !important;
+        flex: none !important;
+        margin-bottom: 0 !important;
+        padding: 8px !important;
+        background: #0e1a30 !important;
+      }
+    }
+    
+    /* General action button styles */
+    .action-btn {
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      background: var(--accent);
+      color: white;
+      text-align: center;
+      max-width: 150px;
+      box-sizing: border-box;
+    }
+    
+    .action-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+    }
+    
+    .action-btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      background: var(--muted);
+    }
+    
+    .status-badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+    .status-open { background: #e3f2fd; color: #1976d2; }
+    .status-approved { background: #fff3e0; color: #f57c00; }
+    .status-fulfilled { background: #e8f5e8; color: #4caf50; }
+    .status-cancelled { background: #ffebee; color: #f44336; }
+    .status-partially-fulfilled { background: #ffeaa7; color: #d63031; }
+    .order-items {
+      max-width: 250px;
+      font-size: 12px;
+      color: #666;
+    }
+    .order-date {
+      font-size: 12px;
+      color: #666;
+    }
+    .action-btn {
+      padding: 6px 12px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+      margin-right: 4px;
+    }
+    .btn-pick {
+      background: #4caf50;
+      color: white;
+    }
+    .btn-pick:hover {
+      background: #45a049;
+    }
+    .btn-pick:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+    }
+    .fulfillment-status {
+      font-size: 11px;
+      color: #666;
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">Sipariş Yönetimi</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="grid" style="max-width:1200px;margin:auto;padding:16px">
+  <section class="card">
+    <div class="flex order-header-section" style="justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div class="header-title-row">
+        <h2>Siparişler</h2>
+        <div class="header-actions">
+          <button id="syncWixOrders">Wix'ten Sipariş Çek</button>
+          <span class="badge" id="syncOrdersOut"></span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtre ve Arama -->
+    <div class="filters-mobile">
+      <input type="text" id="searchInput" placeholder="Sipariş no veya müşteri adı ara...">
+      <select id="statusFilter">
+        <option value="all">Tüm Durumlar</option>
+        <option value="open">Açık</option>
+        <option value="approved">Onaylanmış</option>
+        <option value="fulfilled">Tamamlanmış</option>
+        <option value="cancelled">İptal Edilmiş</option>
+      </select>
+    </div>
+
+    <!-- Sekmeler -->
+    <div class="tabs" style="margin-bottom:16px">
+      <button class="tab-btn active" data-tab="ongoing">Devam Eden Siparişler (<span id="ongoingCount">0</span>)</button>
+      <button class="tab-btn" data-tab="completed">Tamamlanan (<span id="completedCount">0</span>)</button>
+      <button class="tab-btn" data-tab="cancelled">İptal Edilmiş (<span id="cancelledCount">0</span>)</button>
+    </div>
+
+    <!-- Sipariş Tablosu - Desktop -->
+    <div class="table-container desktop-table">
+      <table id="ordTable">
+        <thead>
+          <tr>
+            <th>Sipariş No</th>
+            <th>Müşteri</th>
+            <th>Durum</th>
+            <th>Kalemler</th>
+            <th>Tarih</th>
+            <th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    
+    <!-- Sipariş Cards - Mobile -->
+    <div class="mobile-orders" style="display: none;">
+      <div id="mobileOrderList"></div>
+    </div>
+  </section>
+</main>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+const API = {
+  listOrders: () => fetch('/api/orders').then(r => r.json()),
+  getOrder: (id) => fetch('/api/orders/' + id).then(r => r.json()),
+  createPick: (order_id) => fetch('/api/picks', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ order_id })
+  }).then(r => r.json()),
+  syncWixOrders: () => fetch('/api/sync/wix/orders', { method: 'POST' }).then(r => r.json()),
+};
+
+// Global state
+let allOrders = [];
+let currentTab = 'ongoing';
+let searchTerm = '';
+let statusFilter = 'all';
+
+// Müşteri adını temizleme fonksiyonu
+function cleanCustomerName(customerName) {
+  if (!customerName || customerName === '-') return 'Bilinmeyen Müşteri';
+  
+  const customerNameMapping = {
+    // Meubles (Furniture) Companies
+    'a8dadd61-4a69-4204-b326-c04fe2bd5d2f': 'Global Meubles',
+    '8747fa0b-93eb-4560-a214-cb17feecff0d': 'Denis Meubles',
+    '90d4a0bc-04dc-49ae-906f-a451237c7049': 'Myhome 11 BV',
+    'c63539ca-22ca-45e2-aabd-ee2e5945dfd9': 'BRUXELLES MEUBLES',
+    '4370f8eb-45b7-44d1-b27e-2bc1195d99b0': 'Design Meubles',
+    '88400cec-5369-4e9e-ba2b-74cc59bfcebc': 'Modern Furniture Group',
+    
+    // Other Businesses
+    '4555fb15-ad3d-4fdc-951e-511c60db72c8': 'Home Design Center',
+    '464b4d15-8f01-469d-ad1c-ed814592451a': 'Interior Plus Solutions',
+    '939d7d7a-21d6-49b0-a84b-a26dab84b6b6': 'Living Space International',
+    '4cba7c36-e0ad-4845-9476-d87abf453c06': 'Dekor World',
+    'abf052ce-5fed-474a-9951-6c48115c5f41': 'Furniture World Belgium',
+    '5bed2d2e-fc13-469e-999f-c4a8deba2217': 'Style & Comfort',
+    '5bb2fa18-6943-4f9a-9e52-24665a6e8064': 'Trend Furniture',
+    '1e30ba42-db23-4b00-a300-d530bf6449c1': 'Luxury Living',
+    '9d997af0-0c4e-4b9a-bae7-4362174c6563': 'Elite Interiors',
+    '63bb6d11-3176-42c4-b2ac-d4c5f1acb34c': 'Premium Home',
+    'c87cdbee-aec8-4283-b20d-d35eb86f4873': 'Design Studio Brussels',
+    'cdcc4026-df80-4c61-992a-30f9d53c8aeb': 'Contemporary Furniture',
+    '2785a2a4-53f9-40b4-b765-2d8c6f2f5858': 'European Design',
+    '40c72d98-499e-44f5-93e9-a9f991cfd479': 'Classic Interiors',
+    '67fc42f7-038b-47f1-99a9-56bdbe5cf676': 'Modern Living Solutions',
+    'f911f3eb-312a-48f7-be25-00a6a3619097': 'Bel Design',
+    
+    // Additional mappings for existing UUIDs
+    '0a2f656e-62e6-4f61-9b6f-422259e818ef': 'Nordic Furniture',
+    '26379c7d-d123-42a3-8c9a-b93ddbeea398': 'Scandinavian Home',
+    '32022fe6-c0a4-49a2-a7bc-cd5f00877e60': 'Italian Design Studio',
+    '3576e814-4082-40dc-a46a-a9930c9e36e6': 'French Elegance',
+    '35e58ad8-9786-4a4d-ae8e-ad9a427981be': 'German Craft',
+    '385c6776-ddd1-41ed-a8f4-9885cadbaded': 'Swiss Precision',
+    '3ff02424-8653-43a0-b932-414bbc39c11f': 'Dutch Design',
+    '40965001-d5e9-4156-8d45-c17df4f7a518': 'Austrian Style',
+    '4b6f5499-b7f0-4b04-bfe2-e5767f35e30e': 'European Elegance',
+    '5a1712c3-f714-429a-8dd9-5e1fe8465413': 'Luxury Collection',
+    '651e379c-32fd-46e0-9581-d06169d5523a': 'Metropolitan Design',
+    '6820d7b4-e6d4-4fa7-a313-552bb6762e9e': 'Urban Living',
+    '6d320a72-0117-4e69-92b3-d1e4738b42e6': 'City Furniture',
+    '77bab21d-acca-4502-a9bb-9ac9c7ea63ba': 'Central Interiors',
+    '89184bb5-1386-41f1-bab5-5764783f2b41': 'Royal Design',
+    '9a6f1d15-1536-4c41-ad17-b171723e49f3': 'Palace Furniture',
+    'a20f884f-d3f4-41b7-ae53-8d01c41c46a3': 'Grand Interiors',
+    'a7d1f352-2852-4b58-95f3-653bf9492271': 'Majestic Home',
+    'ad12714f-2c23-4be4-ad6a-bbaeb766ecf9': 'Supreme Design',
+    'b08d679b-279a-41d2-8e97-4bfd210741c0': 'Premier Furniture',
+    'b9562796-226f-40b1-80dd-3d7bc0d68e41': 'Elite Home Solutions',
+    'bcda6a81-0180-47e1-a25d-b058cc1004a7': 'Exclusive Interiors',
+    'bdf81761-ef4f-45fa-bf21-3c64cefa5ab2': 'Prestige Living',
+    'bf49c8bc-4956-4b39-b5b3-22acba71885b': 'Distinguished Design',
+    'e11f948d-c165-4883-9cf8-eb3db6040c8f': 'Elegant Solutions',
+    'e2642f8c-60d0-4e14-909a-01acb334324f': 'Sophisticated Style',
+    'e4227184-06ba-4ff2-9f04-8e27c9986be8': 'Refined Furniture',
+    'e687c145-b74b-42ba-89b7-859aa917b8b9': 'Cultured Living',
+    'e771673d-9120-4471-a239-6be46f88782b': 'Polished Interiors',
+    'ef8fa072-e3fb-4bf8-bb3e-b72caaf4bd6e': 'Fine Home Design',
+    'f337b96e-57ce-4147-862a-1a7bbec640a4': 'Quality Furniture Co',
+    'f6f2494b-625b-4499-b3ac-1f460b4b94fc': 'Professional Interiors'
+  };
+  
+  const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if (uuidPattern.test(customerName)) {
+    const realName = customerNameMapping[customerName.toLowerCase()];
+    if (realName) return realName;
+    return customerName; // UUID'yi olduğu gibi döndür, otomatik dönüşüm yok
+  }
+  
+  return customerName;
+}
+
+// Durum bazında siparişleri kategorize et - iptal edilmiş siparişler eklendi
+function categorizeOrder(order) {
+  console.log(`🔍 Categorizing Order ${order.order_number}:`, {
+    fulfillment_status: order.fulfillment_status,
+    status: order.status,
+    id: order.id
+  });
+  
+  // İptal edilmiş siparişler
+  if (order.status === 'cancelled' || order.fulfillment_status === 'CANCELLED') {
+    console.log(`❌ Order ${order.order_number}: CANCELLED`);
+    return 'cancelled';
+  }
+  
+  // Tamamlanmış siparişler
+  if (order.fulfillment_status === 'FULFILLED' || order.status === 'fulfilled') {
+    console.log(`✅ Order ${order.order_number}: COMPLETED`);
+    return 'completed';
+  }
+  
+  // Diğer tüm siparişler (devam eden)
+  console.log(`📋 Order ${order.order_number}: ONGOING`);
+  return 'ongoing';
+}
+
+// Siparişleri yükle
+async function loadOrders() {
+  try {
+    const rows = await API.listOrders();
+    
+    // Tüm siparişlerin detaylarını yükle
+    allOrders = await Promise.all(rows.map(async o => {
+      const full = await API.getOrder(o.id);
+      return {
+        ...o,
+        items: full.items || [],
+        category: categorizeOrder(o),
+        created_date: new Date(o.created_at)
+      };
+    }));
+    
+    console.log('Loaded orders:', allOrders); // Debug
+    updateCounts();
+    filterAndDisplayOrders();
+  } catch (error) {
+    console.error('Error loading orders:', error);
+  }
+}
+
+// Sayaç güncellemeleri - devam eden, tamamlanan ve iptal edilmiş
+function updateCounts() {
+  const ongoingCount = allOrders.filter(o => o.category === 'ongoing').length;
+  const completedCount = allOrders.filter(o => o.category === 'completed').length;
+  const cancelledCount = allOrders.filter(o => o.category === 'cancelled').length;
+  
+  $('#ongoingCount').textContent = ongoingCount;
+  $('#completedCount').textContent = completedCount;
+  $('#cancelledCount').textContent = cancelledCount;
+  
+  console.log('Counts:', { ongoingCount, completedCount, cancelledCount }); // Debug
+}
+
+// Siparişleri filtrele ve göster - devam eden, tamamlanan ve iptal edilmiş
+function filterAndDisplayOrders() {
+  let filteredOrders = allOrders;
+  
+  // Tab filtrelemesi
+  if (currentTab === 'ongoing') {
+    filteredOrders = filteredOrders.filter(o => o.category === 'ongoing');
+  } else if (currentTab === 'completed') {
+    filteredOrders = filteredOrders.filter(o => o.category === 'completed');
+  } else if (currentTab === 'cancelled') {
+    filteredOrders = filteredOrders.filter(o => o.category === 'cancelled');
+  }
+  
+  console.log('After tab filter:', currentTab, filteredOrders.length); // Debug
+  
+  // Durum filtresi
+  if (statusFilter !== 'all') {
+    filteredOrders = filteredOrders.filter(o => o.status === statusFilter);
+    console.log('After status filter:', statusFilter, filteredOrders.length); // Debug
+  }
+  
+  // Arama filtresi
+  if (searchTerm.trim()) {
+    const term = searchTerm.toLowerCase().trim();
+    filteredOrders = filteredOrders.filter(o => 
+      o.order_number.toLowerCase().includes(term) ||
+      cleanCustomerName(o.customer_name).toLowerCase().includes(term)
+    );
+    console.log('After search filter:', searchTerm, filteredOrders.length); // Debug
+  }
+  
+  displayOrders(filteredOrders);
+}
+
+// Siparişleri tabloda göster
+function displayOrders(orders) {
+  const tbody = $('#ordTable tbody');
+  
+  if (orders.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:#666">Sipariş bulunamadı</td></tr>';
+    return;
+  }
+  
+  // Sipariş numarasına göre büyükten küçüğe sırala
+  const sortedOrders = [...orders].sort((a, b) => {
+    const orderA = parseInt(a.order_number) || 0;
+    const orderB = parseInt(b.order_number) || 0;
+    return orderB - orderA; // Büyükten küçüğe
+  });
+  
+  // Desktop table rendering
+  tbody.innerHTML = sortedOrders.map(o => {
+    const items = o.items || [];
+    const count = items.length;
+    
+    const itemDetails = items.map(item => {
+      const productName = item.product_name && item.product_name.length > 30 
+        ? item.product_name.substring(0, 30) + '...'
+        : item.product_name;
+      
+      // Renk durumu - Products tablosundan gelen gerçek renk bilgisi
+      let colorInfo = '';
+      if (item.product_color && item.product_color.trim()) {
+        const color = item.product_color.trim();
+        let bgColor = '#666'; // Default
+        
+        // Renk kodları
+        if (color.toUpperCase().includes('BEYAZ') || color.toUpperCase().includes('WHITE')) {
+          bgColor = '#f8f9fa'; colorInfo = ` <span style="color:#000;background:${bgColor};padding:2px 6px;border-radius:3px;font-size:10px;border:1px solid #ccc;">${color}</span>`;
+        } else if (color.toUpperCase().includes('SİYAH') || color.toUpperCase().includes('BLACK')) {
+          bgColor = '#000'; colorInfo = ` <span style="color:#fff;background:${bgColor};padding:2px 6px;border-radius:3px;font-size:10px;">${color}</span>`;
+        } else if (color.toUpperCase().includes('KAHVE') || color.toUpperCase().includes('BROWN')) {
+          bgColor = '#8B4513'; colorInfo = ` <span style="color:#fff;background:${bgColor};padding:2px 6px;border-radius:3px;font-size:10px;">${color}</span>`;
+        } else if (color.toUpperCase().includes('GRİ') || color.toUpperCase().includes('GRAY')) {
+          bgColor = '#666'; colorInfo = ` <span style="color:#fff;background:${bgColor};padding:2px 6px;border-radius:3px;font-size:10px;">${color}</span>`;
+        } else if (color.toUpperCase().includes('ANTRASIT') || color.toUpperCase().includes('ANTHRACITE')) {
+          bgColor = '#654321'; colorInfo = ` <span style="color:#fff;background:${bgColor};padding:2px 6px;border-radius:3px;font-size:10px;">${color}</span>`;
+        } else {
+          // Diğer renkler için varsayılan stil
+          colorInfo = ` <span style="color:#fff;background:#666;padding:2px 6px;border-radius:3px;font-size:10px;">${color}</span>`;
+        }
+      }
+      
+      return `• ${productName}${colorInfo} x${item.quantity}`;
+    }).slice(0, 3).join('<br>') + (items.length > 3 ? '<br>...' : '');
+    
+    const rawCustomerName = cleanCustomerName(o.customer_name);
+    const displayCustomerName = rawCustomerName && rawCustomerName.length > 25 
+      ? rawCustomerName.substring(0, 25) + '...'
+      : rawCustomerName;
+    
+    // Durum class ve text belirleme
+    let statusClass, statusText;
+    
+    if (o.fulfillment_status === 'PARTIALLY_FULFILLED') {
+      statusClass = 'status-partially-fulfilled';
+      statusText = 'Kısmen Karşılandı';
+    } else if (o.fulfillment_status === 'FULFILLED') {
+      statusClass = 'status-fulfilled';
+      statusText = 'Tamamlanmış';
+    } else {
+      statusClass = `status-${o.status}`;
+      statusText = {
+        'open': 'Açık',
+        'approved': 'Onaylanmış',
+        'fulfilled': 'Tamamlanmış',
+        'cancelled': 'İptal Edilmiş'
+      }[o.status] || o.status;
+    }
+    
+    // Tarih formatlaması - Türkiye saati
+    const orderDate = new Date(o.created_at).toLocaleDateString('tr-TR', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+    
+    // Pick butonu mantığı
+    let pickBtn;
+    
+    // İptal edilmiş siparişler için özel durum
+    if (o.category === 'cancelled') {
+      pickBtn = `<button class="action-btn btn-cancelled" disabled style="background:#dc3545;color:white;">❌ İptal</button>`;
+    } else if (o.pick_status === 'partial') {
+      // Kısmi toplandı - devam et butonu
+      pickBtn = `<button class="action-btn btn-pick btn-partial" data-pick="${o.pick_id}" style="background:#ffc107;color:#000;" title="Toplama işlemine devam et">⏳ Devam</button>`;
+    } else if (o.pick_status === 'active') {
+      // Aktif pick var - devam et
+      pickBtn = `<button class="action-btn btn-pick btn-active" data-pick="${o.pick_id}" title="Toplama işlemine devam et">▶️ Devam</button>`;
+    } else {
+      // Normal durum kontrolü - kısmen karşılanmış siparişler de toplanabilir olmalı
+      const isFullyFulfilled = o.fulfillment_status === 'FULFILLED' || o.status === 'fulfilled';
+      
+      if (isFullyFulfilled) {
+        // Sadece tamamen karşılanmış siparişler için "Tamamlanmış"
+        pickBtn = `<button class="action-btn btn-pick" disabled title="Sipariş tamamlandı">✅ Tamam</button>`;
+      } else {
+        // Açık siparişler, kısmen karşılanmış veya karşılanmamış siparişler toplanabilir
+        if (o.fulfillment_status === 'PARTIALLY_FULFILLED') {
+          // Kısmen karşılanmış siparişler
+          if (o.pick_id) {
+            // Mevcut pick var - devam et
+            pickBtn = `<button class="action-btn btn-pick btn-partial" data-pick="${o.pick_id}" style="background:#ffc107;color:#000;" title="Toplama işlemine devam et">⏳ Devam</button>`;
+          } else {
+            // Pick yok - yeni pick oluşturup devam et (otomatik)
+            pickBtn = `<button class="action-btn btn-pick btn-partial-new" data-pick="${o.id}" style="background:#ffc107;color:#000;" title="Toplama işlemine devam et">⏳ Devam</button>`;
+          }
+        } else {
+          // Karşılanmamış siparişler için toplama başlat
+          pickBtn = `<button class="action-btn btn-pick" data-pick="${o.id}" title="Sipariş toplamaya başla">📦 Topla</button>`;
+        }
+      }
+    }
+    
+    // Teslimat durumu bilgisini kaldırdık - artık gerekli değil
+    
+    return `<tr>
+      <td data-label="Sipariş No"><strong>#${o.order_number}</strong></td>
+      <td data-label="Müşteri">${displayCustomerName}</td>
+      <td data-label="Durum"><span class="status-badge ${statusClass}">${statusText}</span></td>
+      <td data-label="Kalemler"><div class="order-items">${count} kalem<br>${itemDetails || 'Kalem yok'}</div></td>
+      <td data-label="Tarih"><div class="order-date">${orderDate}</div></td>
+      <td data-label="İşlem">${pickBtn}</td>
+    </tr>`;
+  }).join('');
+  
+  // Mobile card rendering
+  const mobileOrderList = document.getElementById('mobileOrderList');
+  if (mobileOrderList) {
+    mobileOrderList.innerHTML = sortedOrders.map(o => {
+      const items = o.items || [];
+      const count = items.length;
+      
+      const itemDetails = items.map(item => {
+        const productName = item.product_name && item.product_name.length > 40 
+          ? item.product_name.substring(0, 40) + '...'
+          : item.product_name;
+          
+        // Renk durumu - Products tablosundan gelen gerçek renk bilgisi - mobil için
+        let colorInfo = '';
+        if (item.product_color && item.product_color.trim()) {
+          colorInfo = ` (${item.product_color.trim()})`;
+        }
+        
+        return `• ${productName}${colorInfo} x${item.quantity}`;
+      }).slice(0, 2).join('\n') + (items.length > 2 ? '\n+ ' + (items.length - 2) + ' daha...' : '');
+      
+      const rawCustomerName = cleanCustomerName(o.customer_name);
+      const displayCustomerName = rawCustomerName && rawCustomerName.length > 30 
+        ? rawCustomerName.substring(0, 30) + '...'
+        : rawCustomerName;
+      
+      // Status badge for mobile
+      let statusClass, statusText;
+      if (o.fulfillment_status === 'PARTIALLY_FULFILLED') {
+        statusClass = 'btn-warning-mobile';
+        statusText = 'Kısmen Karşılandı';
+      } else if (o.fulfillment_status === 'FULFILLED') {
+        statusClass = 'btn-success-mobile';
+        statusText = 'Tamamlanmış';
+      } else {
+        statusClass = 'btn-primary-mobile';
+        statusText = {
+          'open': 'Açık',
+          'approved': 'Onaylanmış',
+          'fulfilled': 'Tamamlanmış',
+          'cancelled': 'İptal Edilmiş'
+        }[o.status] || o.status;
+      }
+      
+      // Date formatting - Türkiye saati
+      const orderDate = new Date(o.created_at).toLocaleDateString('tr-TR', {
+        day: '2-digit',
+        month: '2-digit', 
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      // Mobile action button
+      let mobileBtn, btnClass = 'mobile-action-btn';
+      if (o.category === 'cancelled') {
+        btnClass += ' btn-danger-mobile';
+        mobileBtn = `<button class="${btnClass}" disabled>❌ İptal Edildi</button>`;
+      } else if (o.pick_status === 'partial') {
+        btnClass += ' btn-warning-mobile';
+        mobileBtn = `<button class="${btnClass}" data-pick="${o.pick_id}">⏳ Devam Et</button>`;
+      } else if (o.pick_status === 'active') {
+        btnClass += ' btn-warning-mobile';
+        mobileBtn = `<button class="${btnClass}" data-pick="${o.pick_id}">▶️ Devam Et</button>`;
+      } else {
+        const isFullyFulfilled = o.fulfillment_status === 'FULFILLED' || o.status === 'fulfilled';
+        if (isFullyFulfilled) {
+          btnClass += ' btn-disabled-mobile';
+          mobileBtn = `<button class="${btnClass}" disabled>✅ Tamamlandı</button>`;
+        } else {
+          if (o.fulfillment_status === 'PARTIALLY_FULFILLED') {
+            btnClass += ' btn-warning-mobile';
+            mobileBtn = o.pick_id 
+              ? `<button class="${btnClass}" data-pick="${o.pick_id}">⏳ Devam Et</button>`
+              : `<button class="${btnClass}" data-pick="${o.id}">⏳ Devam Et</button>`;
+          } else {
+            btnClass += ' btn-primary-mobile';
+            mobileBtn = `<button class="${btnClass}" data-pick="${o.id}">📦 Toplamaya Başla</button>`;
+          }
+        }
+      }
+      
+      return `
+        <div class="order-card">
+          <div class="order-header">
+            <div class="order-number">#${o.order_number}</div>
+            <div class="order-status ${statusClass.replace('mobile', 'badge')}">${statusText}</div>
+          </div>
+          
+          <div class="order-info">
+            <div class="info-row">
+              <div class="info-label">Müşteri:</div>
+              <div class="info-value"><strong>${displayCustomerName}</strong></div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">Tarih:</div>
+              <div class="info-value">${orderDate}</div>
+            </div>
+            <div class="info-row">
+              <div class="info-label">Kalemler:</div>
+              <div class="info-value">${count} kalem</div>
+            </div>
+          </div>
+          
+          <div class="order-items-mobile">
+            ${itemDetails || 'Kalem bilgisi yok'}
+          </div>
+          
+          ${mobileBtn}
+        </div>
+      `;
+    }).join('');
+  }
+}
+
+// Event listeners
+document.body.addEventListener('click', async (e) => {
+  // Wix sync
+  if (e.target && e.target.id === 'syncWixOrders') {
+    e.target.disabled = true;
+    e.target.textContent = 'Yükleniyor...';
+    
+    try {
+      const r = await API.syncWixOrders();
+      $('#syncOrdersOut').textContent = r.ok ? ('+' + r.importedOrders + ' sipariş') : (r.error || 'Hata');
+      await loadOrders();
+    } finally {
+      e.target.disabled = false;
+      e.target.textContent = "Wix'ten Sipariş Çek";
+    }
+  }
+  
+  // Sekme değiştirme
+  if (e.target.classList.contains('tab-btn')) {
+    $$('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    e.target.classList.add('active');
+    currentTab = e.target.dataset.tab;
+    console.log('Tab changed to:', currentTab); // Debug
+    filterAndDisplayOrders();
+  }
+  
+  // Toplama başlatma
+  const pickValue = e.target.getAttribute('data-pick');
+  if (pickValue) {
+    e.target.disabled = true;
+    const originalText = e.target.textContent;
+    e.target.textContent = 'Yükleniyor...';
+    
+    try {
+      // Eğer buton partial, active ya da partial-new ise
+      if (e.target.classList.contains('btn-partial')) {
+        // Mevcut pick ID var - direkt devam et
+        console.log('Continuing existing pick:', pickValue);
+        location.href = '/pick.html?pick=' + pickValue;
+      } else if (e.target.classList.contains('btn-active')) {
+        // Aktif pick var - direkt devam et
+        console.log('Continuing active pick:', pickValue);
+        location.href = '/pick.html?pick=' + pickValue;
+      } else if (e.target.classList.contains('btn-partial-new')) {
+        // Kısmen karşılanmış ama pick yok - yeni pick oluştur
+        console.log('Creating new pick for partially fulfilled order:', pickValue);
+        const r = await API.createPick(parseInt(pickValue, 10));
+        if (r.error) { 
+          alert('Pick oluşturma hatası: ' + r.error); 
+        } else { 
+          console.log('Pick oluşturuldu:', r);
+          location.href = '/pick.html?pick=' + r.id; 
+        }
+      } else {
+        // Yeni pick oluştur
+        const r = await API.createPick(parseInt(pickValue, 10));
+        if (r.error) { 
+          alert('Pick oluşturma hatası: ' + r.error); 
+        } else { 
+          console.log('Pick oluşturuldu:', r);
+          location.href = '/pick.html?pick=' + r.id; 
+        }
+      }
+    } finally {
+      e.target.disabled = false;
+      e.target.textContent = originalText;
+    }
+  }
+});
+
+// Arama input
+$('#searchInput').addEventListener('input', (e) => {
+  searchTerm = e.target.value;
+  console.log('Search term:', searchTerm); // Debug
+  filterAndDisplayOrders();
+});
+
+// Durum filtresi
+$('#statusFilter').addEventListener('change', (e) => {
+  statusFilter = e.target.value;
+  console.log('Status filter:', statusFilter); // Debug
+  filterAndDisplayOrders();
+});
+
+// Load orders
+await loadOrders();
+
+// Otomatik yenileme - her 30 saniyede bir
+setInterval(() => {
+  console.log('🔄 Auto-refreshing orders...');
+  loadOrders();
+}, 30000);
+
+// Sayfa odaklandığında yenile
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) {
+    console.log('👁️ Page became visible - refreshing orders');
+    loadOrders();
+  }
+});
+</script>
+</body>
+</html>

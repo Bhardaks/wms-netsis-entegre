@@ -1,0 +1,291 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Wix Entegrasyon Test</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <style>
+    .test-section {
+      background: rgba(31,42,68,0.3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    
+    .test-form {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      max-width: 500px;
+    }
+    
+    .test-form input, .test-form select, .test-form button {
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 14px;
+    }
+    
+    .test-form button {
+      background: var(--accent);
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      transition: all 0.2s;
+    }
+    
+    .test-form button:hover {
+      background: #0056b3;
+      transform: translateY(-1px);
+    }
+    
+    .test-form button:disabled {
+      background: #666;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .result {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    
+    .result.success {
+      background: rgba(34, 197, 94, 0.1);
+      border: 1px solid #22c55e;
+      color: #22c55e;
+    }
+    
+    .result.error {
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid #ef4444;
+      color: #ef4444;
+    }
+    
+    .wix-orders {
+      max-height: 400px;
+      overflow-y: auto;
+    }
+    
+    .order-card {
+      background: rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px;
+      margin: 8px 0;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    
+    .order-card:hover {
+      border-color: var(--accent);
+      background: rgba(31,42,68,0.5);
+    }
+    
+    .order-card.has-wix-id {
+      border-left: 4px solid #22c55e;
+    }
+    
+    .order-card.no-wix-id {
+      border-left: 4px solid #ef4444;
+    }
+    
+    .order-number {
+      font-weight: bold;
+      color: var(--accent);
+      font-size: 16px;
+    }
+    
+    .order-details {
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    
+    .wix-id {
+      font-family: 'Courier New', monospace;
+      background: rgba(0,0,0,0.3);
+      padding: 2px 6px;
+      border-radius: 3px;
+      margin-top: 4px;
+      display: inline-block;
+    }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🔗 Wix Entegrasyon Test</h1>
+  <div style="margin-top: 10px;">
+    <a href="/" class="btn">← Ana Sayfa</a>
+    <a href="/orders.html" class="btn">Siparişler</a>
+  </div>
+</header>
+
+<main style="max-width:1200px;margin:auto;padding:20px;">
+  
+  <div class="test-section">
+    <h2>📋 WMS Siparişleri (Wix ID Kontrolü)</h2>
+    <button id="loadOrders" class="btn">Siparişleri Yükle</button>
+    <div id="ordersResult"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>🧪 Manuel Wix Fulfillment Test</h2>
+    <form class="test-form" id="wixTestForm">
+      <input type="text" id="orderId" placeholder="Wix Order ID" required />
+      <select id="fulfillmentStatus" required>
+        <option value="">Fulfillment Status Seçin</option>
+        <option value="NOT_FULFILLED">NOT_FULFILLED</option>
+        <option value="PARTIALLY_FULFILLED">PARTIALLY_FULFILLED</option>
+        <option value="FULFILLED">FULFILLED</option>
+      </select>
+      <button type="submit">Wix'te Güncelle</button>
+    </form>
+    <div id="testResult"></div>
+  </div>
+  
+  <div class="test-section">
+    <h2>🔄 WMS Sipariş Durumu Test</h2>
+    <p>Bir WMS siparişinin durumunu değiştirin ve Wix'te otomatik güncellenip güncellenmedğini kontrol edin.</p>
+    <div id="wmsOrdersContainer" class="wix-orders"></div>
+  </div>
+
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => document.querySelectorAll(s);
+
+// Load WMS orders with Wix ID info
+async function loadWMSOrders() {
+  try {
+    $('#loadOrders').disabled = true;
+    $('#loadOrders').textContent = 'Yükleniyor...';
+    
+    const response = await fetch('/api/orders');
+    const orders = await response.json();
+    
+    console.log('📋 WMS Orders loaded:', orders.length);
+    
+    const hasWixId = orders.filter(o => o.wix_order_id);
+    const noWixId = orders.filter(o => !o.wix_order_id);
+    
+    const ordersHtml = `
+      <div style="margin: 15px 0;">
+        <strong>Toplam:</strong> ${orders.length} sipariş<br>
+        <span style="color: #22c55e;">✅ Wix ID'si olan:</span> ${hasWixId.length}<br>
+        <span style="color: #ef4444;">❌ Wix ID'si olmayan:</span> ${noWixId.length}
+      </div>
+      <div class="wix-orders">
+        ${orders.map(order => `
+          <div class="order-card ${order.wix_order_id ? 'has-wix-id' : 'no-wix-id'}" onclick="selectOrder('${order.id}', '${order.order_number}', '${order.wix_order_id || ''}')">
+            <div class="order-number">${order.order_number}</div>
+            <div class="order-details">
+              Müşteri: ${order.customer_name || '-'}<br>
+              Durum: ${order.status} / ${order.fulfillment_status || '-'}<br>
+              Pick: ${order.pick_status || 'Yok'}
+            </div>
+            ${order.wix_order_id ? `<div class="wix-id">Wix ID: ${order.wix_order_id}</div>` : '<div style="color: #ef4444; font-size: 11px;">Wix ID yok</div>'}
+          </div>
+        `).join('')}
+      </div>
+    `;
+    
+    $('#ordersResult').innerHTML = ordersHtml;
+    $('#wmsOrdersContainer').innerHTML = ordersHtml;
+    
+  } catch (error) {
+    console.error('Error loading orders:', error);
+    $('#ordersResult').innerHTML = `<div class="result error">Hata: ${error.message}</div>`;
+  } finally {
+    $('#loadOrders').disabled = false;
+    $('#loadOrders').textContent = 'Siparişleri Yükle';
+  }
+}
+
+// Select order for testing
+function selectOrder(orderId, orderNumber, wixOrderId) {
+  if (wixOrderId) {
+    $('#orderId').value = wixOrderId;
+    console.log(`📦 Selected order: ${orderNumber} (WMS ID: ${orderId}, Wix ID: ${wixOrderId})`);
+  } else {
+    alert(`Sipariş ${orderNumber} için Wix ID bulunamadı!`);
+  }
+}
+
+// Manual Wix test form
+$('#wixTestForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  
+  const orderId = $('#orderId').value.trim();
+  const fulfillmentStatus = $('#fulfillmentStatus').value;
+  
+  if (!orderId || !fulfillmentStatus) {
+    alert('Order ID ve Fulfillment Status gerekli!');
+    return;
+  }
+  
+  const submitBtn = $('#wixTestForm button');
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Gönderiliyor...';
+  
+  try {
+    console.log('🧪 Testing Wix update:', { orderId, fulfillmentStatus });
+    
+    const response = await fetch('/api/test/wix/order-fulfillment', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderId, fulfillmentStatus })
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      $('#testResult').innerHTML = `
+        <div class="result success">
+          ✅ Başarılı!
+          
+          ${JSON.stringify(result, null, 2)}
+        </div>
+      `;
+      console.log('✅ Wix test successful:', result);
+    } else {
+      throw new Error(result.error || 'Bilinmeyen hata');
+    }
+    
+  } catch (error) {
+    console.error('❌ Wix test error:', error);
+    $('#testResult').innerHTML = `
+      <div class="result error">
+        ❌ Hata: ${error.message}
+        
+        ${error.response ? JSON.stringify(error.response, null, 2) : ''}
+      </div>
+    `;
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Wix\'te Güncelle';
+  }
+});
+
+// Load orders on page load
+$('#loadOrders').addEventListener('click', loadWMSOrders);
+
+// Auto-load orders
+setTimeout(() => {
+  loadWMSOrders();
+}, 500);
+
+</script>
+</body>
+</html>

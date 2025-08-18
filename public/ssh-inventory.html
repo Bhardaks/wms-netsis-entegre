@@ -1,0 +1,549 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>SSH Envanter Yönetimi</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <style>
+    .inventory-overview {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .overview-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      text-align: center;
+    }
+    
+    .overview-number {
+      font-size: 2.5rem;
+      font-weight: bold;
+      color: var(--accent);
+      margin-bottom: 0.5rem;
+    }
+    
+    .overview-label {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    
+    .search-filters {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .filter-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr auto;
+      gap: 1rem;
+      align-items: end;
+    }
+    
+    .inventory-table {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    
+    .table-header {
+      background: var(--bg);
+      padding: 1rem 1.5rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    
+    .inventory-grid {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto auto auto 1fr auto;
+      gap: 0;
+    }
+    
+    .grid-header {
+      background: var(--accent);
+      color: white;
+      padding: 1rem;
+      font-weight: 600;
+      font-size: 0.9rem;
+      border-right: 1px solid rgba(255,255,255,0.2);
+    }
+    
+    .grid-header:last-child {
+      border-right: none;
+    }
+    
+    .grid-cell {
+      padding: 1rem;
+      border-right: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      font-size: 0.9rem;
+    }
+    
+    .grid-cell:last-child {
+      border-right: none;
+    }
+    
+    .grid-row:nth-child(even) {
+      background: rgba(0,0,0,0.02);
+    }
+    
+    .part-name {
+      font-weight: 600;
+      color: var(--fg);
+    }
+    
+    .product-info {
+      color: var(--muted);
+      font-size: 0.8rem;
+    }
+    
+    .quantity-badge {
+      background: var(--accent);
+      color: white;
+      padding: 0.25rem 0.75rem;
+      border-radius: 12px;
+      font-weight: 600;
+      font-size: 0.8rem;
+    }
+    
+    .location-tag {
+      background: var(--muted);
+      color: white;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.8rem;
+      font-family: monospace;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 0.5rem;
+    }
+    
+    .btn-small {
+      padding: 0.5rem 1rem;
+      font-size: 0.8rem;
+      border-radius: 4px;
+    }
+    
+    .empty-state {
+      text-align: center;
+      padding: 3rem;
+      color: var(--muted);
+    }
+    
+    .empty-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+    }
+    
+    @media (max-width: 768px) {
+      .filter-row {
+        grid-template-columns: 1fr;
+        gap: 0.75rem;
+      }
+      
+      .inventory-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .grid-header, .grid-cell {
+        padding: 0.75rem;
+      }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">SSH Envanter Yönetimi</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="main-content">
+  <div class="content-header">
+    <h2>📋 SSH Envanter Yönetimi</h2>
+    <p>SSH-01-01 alanındaki parça envanteri ve stok durumu</p>
+  </div>
+
+  <!-- Inventory Overview -->
+  <div class="inventory-overview">
+    <div class="overview-card">
+      <div class="overview-number" id="totalParts">-</div>
+      <div class="overview-label">Toplam Parça Çeşidi</div>
+    </div>
+    <div class="overview-card">
+      <div class="overview-number" id="totalQuantity">-</div>
+      <div class="overview-label">Toplam Adet</div>
+    </div>
+    <div class="overview-card">
+      <div class="overview-number" id="availableParts">-</div>
+      <div class="overview-label">Kullanılabilir Parça</div>
+    </div>
+    <div class="overview-card">
+      <div class="overview-number" id="recentTransfers">-</div>
+      <div class="overview-label">Son 7 Gün Transfer</div>
+    </div>
+  </div>
+
+  <!-- Search and Filters -->
+  <div class="search-filters">
+    <h3>🔍 Arama ve Filtreler</h3>
+    <div class="filter-row">
+      <div class="form-group">
+        <label for="searchInput">SKU Arama</label>
+        <input type="text" id="searchInput" placeholder="Ürün SKU ara..." onkeyup="filterInventory()">
+      </div>
+      <div class="form-group">
+        <label for="productFilter">Ürün</label>
+        <select id="productFilter" onchange="filterInventory()">
+          <option value="">Tümü</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="statusFilter">Durum</label>
+        <select id="statusFilter" onchange="filterInventory()">
+          <option value="">Tümü</option>
+          <option value="available">Kullanılabilir</option>
+          <option value="used">Kullanılmış</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <button class="btn btn-secondary" onclick="resetFilters()">Temizle</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Inventory Table -->
+  <div class="inventory-table">
+    <div class="table-header">
+      <h3>SSH Envanter Listesi</h3>
+      <button class="btn btn-primary" onclick="exportInventory()">📄 Rapor İndir</button>
+    </div>
+    
+    <div class="inventory-grid" id="inventoryGrid">
+      <div class="grid-header">ID</div>
+      <div class="grid-header">Parça Adı</div>
+      <div class="grid-header">Ürün</div>
+      <div class="grid-header">Adet</div>
+      <div class="grid-header">Konum</div>
+      <div class="grid-header">Kaynak</div>
+      <div class="grid-header">Notlar</div>
+      <div class="grid-header">İşlemler</div>
+      
+      <!-- Dynamic content will be inserted here -->
+    </div>
+    
+    <div id="emptyState" class="empty-state" style="display: none;">
+      <div class="empty-icon">📦</div>
+      <h3>SSH Envanteri Boş</h3>
+      <p>Henüz SSH alanına transfer edilmiş parça bulunmuyor.</p>
+    </div>
+  </div>
+</main>
+
+<script>
+let allInventory = [];
+let filteredInventory = [];
+let products = [];
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📋 SSH Envanter Yönetimi yüklendi');
+    loadProducts();
+    loadInventory();
+    loadOverviewStats();
+});
+
+// Load products for filter dropdown
+async function loadProducts() {
+    try {
+        const response = await fetch('/api/products');
+        products = await response.json();
+        
+        const productSelect = document.getElementById('productFilter');
+        productSelect.innerHTML = '<option value="">Tümü</option>' + 
+            products.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+    } catch (error) {
+        console.error('❌ Products loading error:', error);
+    }
+}
+
+// Load SSH inventory
+async function loadInventory() {
+    try {
+        const response = await fetch('/api/ssh-inventory');
+        const data = await response.json();
+        
+        if (data.success) {
+            allInventory = data.inventory;
+            filteredInventory = [...allInventory];
+            displayInventory();
+        } else {
+            console.error('❌ Inventory loading failed:', data.error);
+        }
+    } catch (error) {
+        console.error('❌ Inventory loading error:', error);
+        displayEmptyState();
+    }
+}
+
+// Load overview statistics
+async function loadOverviewStats() {
+    try {
+        const response = await fetch('/api/ssh-inventory/stats');
+        const data = await response.json();
+        
+        if (data.success) {
+            document.getElementById('totalParts').textContent = data.stats.total_parts || 0;
+            document.getElementById('totalQuantity').textContent = data.stats.total_quantity || 0;
+            document.getElementById('availableParts').textContent = data.stats.available_parts || 0;
+            document.getElementById('recentTransfers').textContent = data.stats.recent_transfers || 0;
+        }
+    } catch (error) {
+        console.error('❌ Stats loading error:', error);
+    }
+}
+
+// Display inventory grid
+function displayInventory() {
+    const grid = document.getElementById('inventoryGrid');
+    const emptyState = document.getElementById('emptyState');
+    
+    if (filteredInventory.length === 0) {
+        displayEmptyState();
+        return;
+    }
+    
+    emptyState.style.display = 'none';
+    
+    // Clear grid and rebuild with headers only
+    const headers = `
+        <div class="grid-header">ID</div>
+        <div class="grid-header">Parça Adı</div>
+        <div class="grid-header">Ürün</div>
+        <div class="grid-header">Adet</div>
+        <div class="grid-header">Konum</div>
+        <div class="grid-header">Kaynak</div>
+        <div class="grid-header">Notlar</div>
+        <div class="grid-header">İşlemler</div>
+    `;
+    
+    const dataRows = filteredInventory.map(item => `
+        <div class="grid-cell">#${item.id}</div>
+        <div class="grid-cell">
+            <div class="part-name">${item.part_name}</div>
+            <div class="product-info">${item.product_name}</div>
+        </div>
+        <div class="grid-cell">
+            <div>${item.product_name}</div>
+            <div class="product-info">SKU: ${item.product_sku || '-'}</div>
+        </div>
+        <div class="grid-cell">
+            <span class="quantity-badge">${item.quantity}</span>
+        </div>
+        <div class="grid-cell">
+            <span class="location-tag">${item.location_code}</span>
+        </div>
+        <div class="grid-cell">
+            <div style="font-size: 0.8rem;">
+                <div>Paket: ${item.package_number || item.source_package_barcode}</div>
+                <div style="color: var(--muted);">${formatDate(item.created_date)}</div>
+            </div>
+        </div>
+        <div class="grid-cell">
+            <textarea id="notes-${item.id}" placeholder="Paket içeriği notları..." style="width: 100%; min-height: 40px; font-size: 0.8rem; border: 1px solid var(--border); border-radius: 4px; padding: 4px;" onchange="updateNotes(${item.id})">${item.notes || ''}</textarea>
+        </div>
+        <div class="grid-cell">
+            <div class="action-buttons">
+                <button class="btn btn-small btn-secondary" onclick="viewPartHistory(${item.id})">
+                    📋 Geçmiş
+                </button>
+                <button class="btn btn-small btn-danger" onclick="emptyPackage(${item.id})" ${!item.is_available ? 'disabled' : ''}>
+                    🗑️ Paket Boşaldı
+                </button>
+            </div>
+        </div>
+    `).join('');
+    
+    grid.innerHTML = headers + dataRows;
+}
+
+// Display empty state
+function displayEmptyState() {
+    const grid = document.getElementById('inventoryGrid');
+    const emptyState = document.getElementById('emptyState');
+    
+    // Only show headers
+    grid.innerHTML = `
+        <div class="grid-header">ID</div>
+        <div class="grid-header">Parça Adı</div>
+        <div class="grid-header">Ürün</div>
+        <div class="grid-header">Adet</div>
+        <div class="grid-header">Konum</div>
+        <div class="grid-header">Kaynak</div>
+        <div class="grid-header">Notlar</div>
+        <div class="grid-header">İşlemler</div>
+    `;
+    
+    emptyState.style.display = 'block';
+}
+
+// Filter inventory
+function filterInventory() {
+    const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+    const productId = document.getElementById('productFilter').value;
+    const status = document.getElementById('statusFilter').value;
+    
+    filteredInventory = allInventory.filter(item => {
+        const matchesSearch = !searchTerm || 
+            (item.product_sku && item.product_sku.toLowerCase().includes(searchTerm));
+            
+        const matchesProduct = !productId || item.product_id.toString() === productId;
+        
+        const matchesStatus = !status || 
+            (status === 'available' && item.is_available) ||
+            (status === 'used' && !item.is_available);
+            
+        return matchesSearch && matchesProduct && matchesStatus;
+    });
+    
+    displayInventory();
+}
+
+// Reset filters
+function resetFilters() {
+    document.getElementById('searchInput').value = '';
+    document.getElementById('productFilter').value = '';
+    document.getElementById('statusFilter').value = '';
+    filteredInventory = [...allInventory];
+    displayInventory();
+}
+
+// View part history
+function viewPartHistory(inventoryId) {
+    const item = allInventory.find(i => i.id === inventoryId);
+    if (!item) return;
+    
+    alert(`📋 Parça Geçmişi\n\nParça: ${item.part_name}\nÜrün: ${item.product_name}\nKaynak Paket: ${item.source_package_barcode}\nOluşturma: ${formatDate(item.created_date)}\nSon Kullanım: ${item.last_used_date ? formatDate(item.last_used_date) : 'Henüz kullanılmamış'}\nDurum: ${item.is_available ? 'Kullanılabilir' : 'Kullanılmış'}`);
+}
+
+// Transfer part to service
+async function emptyPackage(inventoryId) {
+    const item = allInventory.find(i => i.id === inventoryId);
+    if (!item || !item.is_available) return;
+    
+    const confirmed = confirm(`🗑️ Paket Boşaltma\n\nParça: ${item.part_name}\nAdet: ${item.quantity}\n\nBu paketi SSH envanterinden kaldırmak istediğinize emin misiniz?\n(Bu işlem geri alınamaz)`);
+    
+    if (confirmed) {
+        try {
+            const response = await fetch(`/api/ssh-inventory/${inventoryId}/empty`, {
+                method: 'DELETE',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (data.success) {
+                alert('✅ Paket SSH envanterinden kaldırıldı!');
+                loadInventory();
+                loadOverviewStats();
+            } else {
+                alert('❌ Paket kaldırma hatası: ' + data.error);
+            }
+        } catch (error) {
+            console.error('❌ Empty package error:', error);
+            alert('Paket kaldırma sırasında hata oluştu: ' + error.message);
+        }
+    }
+}
+
+// Update notes for SSH inventory item
+async function updateNotes(inventoryId) {
+    const notesTextarea = document.getElementById(`notes-${inventoryId}`);
+    const notes = notesTextarea.value.trim();
+    
+    try {
+        const response = await fetch(`/api/ssh-inventory/${inventoryId}/notes`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ notes })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Visual feedback - briefly highlight the textarea
+            notesTextarea.style.borderColor = 'var(--success)';
+            setTimeout(() => {
+                notesTextarea.style.borderColor = 'var(--border)';
+            }, 1000);
+            console.log('✅ Notes updated for item:', inventoryId);
+        } else {
+            alert('❌ Not güncelleme hatası: ' + data.error);
+        }
+    } catch (error) {
+        console.error('❌ Notes update error:', error);
+        alert('Not güncelleme sırasında hata oluştu: ' + error.message);
+    }
+}
+
+// Export inventory report
+function exportInventory() {
+    const csvContent = [
+        ['ID', 'Parça Adı', 'Ürün', 'Adet', 'Konum', 'Kaynak Paket', 'Oluşturma Tarihi', 'Durum'].join(','),
+        ...filteredInventory.map(item => [
+            item.id,
+            `"${item.part_name}"`,
+            `"${item.product_name}"`,
+            item.quantity,
+            item.location_code,
+            item.source_package_barcode,
+            formatDate(item.created_date),
+            item.is_available ? 'Kullanılabilir' : 'Kullanılmış'
+        ].join(','))
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `ssh-envanter-${new Date().toISOString().split('T')[0]}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+// Utility functions
+function formatDate(dateString) {
+    if (!dateString) return '-';
+    const date = new Date(dateString);
+    return date.toLocaleString('tr-TR');
+}
+</script>
+</body>
+</html>

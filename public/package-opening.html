@@ -1,0 +1,1047 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Paket Açma İstasyonu</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <style>
+    /* Global mobile overflow fix */
+    html, body {
+      max-width: 100%;
+      overflow-x: hidden;
+      box-sizing: border-box;
+    }
+    
+    *, *:before, *:after {
+      box-sizing: border-box;
+    }
+    
+    .opening-station {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    
+    .station-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1.5rem;
+    }
+    
+    .station-card h3 {
+      margin: 0 0 1rem 0;
+      color: var(--accent);
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+    
+    .scan-area {
+      text-align: center;
+      padding: 2rem;
+      border: 2px dashed var(--border);
+      border-radius: 8px;
+      margin-bottom: 1rem;
+    }
+    
+    .scan-area.active {
+      border-color: var(--accent);
+      background: rgba(77, 163, 255, 0.1);
+    }
+    
+    .scan-icon {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      color: var(--muted);
+    }
+    
+    .scan-area.active .scan-icon {
+      color: var(--accent);
+    }
+    
+    .package-info-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    
+    .package-info-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+    
+    .package-info-row:last-child {
+      margin-bottom: 0;
+    }
+    
+    .info-label {
+      color: var(--muted);
+      font-weight: 500;
+    }
+    
+    .info-value {
+      color: var(--fg);
+      font-weight: 600;
+    }
+    
+    .quantity-control {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      justify-content: center;
+      margin: 1rem 0;
+    }
+    
+    .qty-btn {
+      background: var(--accent);
+      color: white;
+      border: none;
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      font-size: 1.2rem;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    
+    .qty-btn:hover {
+      background: #0056b3;
+    }
+    
+    .qty-input {
+      width: 80px;
+      text-align: center;
+      padding: 0.5rem;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      background: var(--bg);
+      color: var(--fg);
+      font-size: 1.1rem;
+      font-weight: 600;
+    }
+    
+    .opening-summary {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 1rem;
+      margin-top: 1rem;
+    }
+    
+    .summary-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid var(--border);
+    }
+    
+    .summary-row:last-child {
+      border-bottom: none;
+      margin-bottom: 0;
+      font-weight: 600;
+      color: var(--accent);
+    }
+    
+    .verification-result {
+      margin-top: 10px;
+      padding: 8px;
+      border-radius: 4px;
+    }
+    
+    .success-message {
+      color: var(--success);
+      background: rgba(39, 174, 96, 0.1);
+      padding: 8px;
+      border-radius: 4px;
+    }
+    
+    .error-message {
+      color: var(--danger);
+      background: rgba(231, 76, 60, 0.1);
+      padding: 8px;
+      border-radius: 4px;
+    }
+    
+    .method-options {
+      display: flex;
+      gap: 16px;
+      margin-top: 12px;
+    }
+    
+    .method-option {
+      flex: 1;
+      cursor: pointer;
+    }
+    
+    .method-option input[type="radio"] {
+      display: none;
+    }
+    
+    .method-card {
+      border: 2px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      text-align: center;
+      transition: all 0.2s ease;
+      background: var(--card);
+    }
+    
+    .method-option input:checked + .method-card {
+      border-color: var(--accent);
+      background: rgba(66, 165, 245, 0.1);
+    }
+    
+    .method-title {
+      font-weight: 600;
+      font-size: 16px;
+      margin-bottom: 8px;
+      color: var(--fg);
+    }
+    
+    .method-desc {
+      font-size: 14px;
+      color: var(--muted);
+      line-height: 1.4;
+    }
+    
+    .recent-openings {
+      margin-top: 2rem;
+    }
+    
+    .opening-history-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      margin-bottom: 1rem;
+    }
+    
+    .opening-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 0.75rem;
+    }
+    
+    .opening-title {
+      font-weight: 600;
+      color: var(--fg);
+    }
+    
+    .opening-date {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+    
+    .opening-details {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: 0.5rem;
+      font-size: 0.9rem;
+    }
+    
+    .opening-detail {
+      color: var(--muted);
+    }
+    
+    .opening-detail strong {
+      color: var(--fg);
+    }
+    
+    @media (max-width: 768px) {
+      .opening-station {
+        grid-template-columns: 1fr;
+        gap: 1rem;
+      }
+      
+      .quantity-control {
+        gap: 0.75rem;
+      }
+      
+      .qty-btn {
+        width: 35px;
+        height: 35px;
+      }
+      
+      .qty-input {
+        width: 60px;
+      }
+    }
+  </style>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Yönetim Sistemi</h1>
+    <span class="header-subtitle">Paket Açma İstasyonu</span>
+  </div>
+  <div class="header-actions">
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="main-content">
+  <div class="content-header">
+    <h2>📂 Paket Açma İstasyonu</h2>
+    <p>Servis talepleri için depo paket açma işlemleri</p>
+  </div>
+
+  <div class="opening-station">
+    <!-- Left Panel: Service Request Selection -->
+    <div class="station-card">
+      <h3>🔧 Servis Talebi Seç</h3>
+      
+      <div class="scan-area" id="requestScanArea">
+        <div class="scan-icon">📋</div>
+        <p>Servis talep ID'sini tarayın veya seçin</p>
+        <input type="text" id="requestIdInput" placeholder="Talep ID girin..." onkeyup="searchServiceRequest()" autocomplete="off">
+      </div>
+      
+      <!-- Service Request Info -->
+      <div id="selectedRequestInfo" style="display: none;">
+        <div class="package-info-card">
+          <h4>Seçilen Servis Talebi</h4>
+          <div id="requestInfoContent">
+            <!-- Dynamic content -->
+          </div>
+        </div>
+      </div>
+      
+      <!-- Available Service Requests -->
+      <div id="availableRequests">
+        <h4>Paket Açmaya Hazır Talepler</h4>
+        <div id="requestsList">
+          <!-- Dynamic list -->
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel: Package Opening -->
+    <div class="station-card">
+      <h3>📦 Paket Açma İşlemi</h3>
+      
+      <div class="scan-area" id="packageScanArea">
+        <div class="scan-icon">📱</div>
+        <p>Paket barkodunu tarayın</p>
+        <input type="text" id="packageBarcodeInput" placeholder="Paket barkodu tarayın..." oninput="handlePackageScanAuto()" autocomplete="off" disabled>
+      </div>
+      
+      <!-- Package Info -->
+      <div id="packageInfo" style="display: none;">
+        <div class="package-info-card">
+          <h4>Taranacak Paket</h4>
+          <div id="packageInfoContent">
+            <!-- Dynamic content -->
+          </div>
+        </div>
+        
+        <!-- Package Summary -->
+        <div class="package-summary-section">
+          <h4>Paket Bilgileri</h4>
+          <div class="package-summary">
+            <div class="summary-row">
+              <span class="summary-label">Toplam Adet:</span>
+              <span class="summary-value" id="totalPackageQty">-</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">Açılacak Adet:</span>
+              <span class="summary-value" id="openingQty">-</span>
+            </div>
+            <div class="summary-row">
+              <span class="summary-label">SSH'ye Gidecek:</span>
+              <span class="summary-value" id="sshQty">-</span>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Opening Method Selection -->
+        <div class="opening-method-section" id="openingMethodSection" style="display: none;">
+          <h4>Servis Karşılama Yöntemi Seçin</h4>
+          <div class="method-options">
+            <label class="method-option">
+              <input type="radio" name="openingMethod" value="partial">
+              <div class="method-card">
+                <div class="method-title">🔧 Kısmi Açma</div>
+                <div class="method-desc">Sadece gerekli parça alınır, kalan SSH'ye gider</div>
+              </div>
+            </label>
+            <label class="method-option">
+              <input type="radio" name="openingMethod" value="complete">
+              <div class="method-card">
+                <div class="method-title">📦 Tamamen Verme</div>
+                <div class="method-desc">Tüm paket servise verilir, SSH'ye hiçbir şey gitmez</div>
+              </div>
+            </label>
+            <label class="method-option">
+              <input type="radio" name="openingMethod" value="ssh_used">
+              <div class="method-card">
+                <div class="method-title">📋 SSH Paketi Kullanıldı</div>
+                <div class="method-desc">Daha önce açılan SSH paketinden parça kullanıldı</div>
+              </div>
+            </label>
+          </div>
+        </div>
+        
+        <!-- Shelf Location Verification -->
+        <div class="location-section" id="locationSection" style="display: none;">
+          <h4>Raf Konumu Doğrulama</h4>
+          <div class="form-group">
+            <label for="shelfLocationInput">Paketin Bulunduğu Raf Kodu</label>
+            <input type="text" id="shelfLocationInput" placeholder="Raf kodunu tarayın" 
+                   oninput="handleShelfScanAuto()" required>
+            <button type="button" onclick="verifyShelfLocation()" class="btn btn-secondary">Doğrula</button>
+          </div>
+          <div id="shelfVerificationResult" class="verification-result" style="display: none;"></div>
+        </div>
+        
+        <button class="action-btn primary" id="completeOpeningBtn" onclick="completePackageOpening()" disabled>
+          Paket Açma Tamamla
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Package Openings -->
+  <div class="recent-openings">
+    <h3>📋 Son Paket Açma İşlemleri</h3>
+    <div id="recentOpeningsList">
+      <!-- Dynamic content -->
+    </div>
+  </div>
+</main>
+
+
+<script>
+let selectedServiceRequest = null;
+let scannedPackage = null;
+let availableServiceRequests = [];
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    console.log('📂 Paket Açma İstasyonu yüklendi');
+    loadAvailableRequests();
+    loadRecentOpenings();
+    
+    // Check for preselected request from dashboard
+    const preselectedId = localStorage.getItem('preselected_request_id');
+    if (preselectedId) {
+        document.getElementById('requestIdInput').value = preselectedId;
+        searchServiceRequest();
+        localStorage.removeItem('preselected_request_id');
+    } else {
+        // Focus on request ID input
+        document.getElementById('requestIdInput').focus();
+    }
+});
+
+
+// Load service requests ready for package opening
+async function loadAvailableRequests() {
+    try {
+        const response = await fetch('/api/service-requests?status=sourcing');
+        const data = await response.json();
+        
+        // Get already opened service requests
+        const openingsResponse = await fetch('/api/package-openings');
+        const openingsData = await openingsResponse.json();
+        const openedRequestIds = openingsData.success ? 
+            openingsData.openings.map(o => o.service_request_id) : [];
+        
+        if (data.success) {
+            availableServiceRequests = data.requests.filter(r => 
+                (r.status === 'new' || r.status === 'pending' || r.status === 'sourcing') &&
+                !openedRequestIds.includes(r.id)
+            );
+            displayAvailableRequests();
+        }
+    } catch (error) {
+        console.error('❌ Available requests loading error:', error);
+    }
+}
+
+// Display available service requests
+function displayAvailableRequests() {
+    const requestsList = document.getElementById('requestsList');
+    
+    if (availableServiceRequests.length === 0) {
+        requestsList.innerHTML = '<p style="color: var(--muted); text-align: center;">Paket açmaya hazır talep yok</p>';
+        return;
+    }
+    
+    requestsList.innerHTML = availableServiceRequests.map(request => `
+        <div class="request-item" onclick="selectServiceRequest(${request.id})">
+            <div class="request-header">
+                <strong>#${request.id}</strong> - ${request.customer_name}
+                <span class="status-badge status-${request.status}">${getStatusText(request.status)}</span>
+            </div>
+            <div class="request-details">
+                <div><strong>${request.product_name}</strong></div>
+                <div style="color: var(--muted); font-size: 0.9rem;">
+                    ${request.package_number ? `Paket: ${request.package_number}` : 'Paket seçilmemiş'} • 
+                    Parça: ${request.required_part}
+                </div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Search service request by ID
+async function searchServiceRequest() {
+    const requestId = document.getElementById('requestIdInput').value.trim();
+    
+    if (!requestId) {
+        document.getElementById('selectedRequestInfo').style.display = 'none';
+        document.getElementById('packageScanArea').classList.remove('active');
+        document.getElementById('packageBarcodeInput').disabled = true;
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/service-requests`);
+        const data = await response.json();
+        
+        // Check if already opened
+        const openingsResponse = await fetch('/api/package-openings');
+        const openingsData = await openingsResponse.json();
+        const openedRequestIds = openingsData.success ? 
+            openingsData.openings.map(o => o.service_request_id) : [];
+        
+        if (data.success) {
+            const request = data.requests.find(r => r.id.toString() === requestId);
+            if (request) {
+                if (openedRequestIds.includes(request.id)) {
+                    alert(`❌ Bu servis talebi (#${request.id}) daha önce paket açma işlemi yapılmış!\nTekrar açma işlemi yapılamaz.`);
+                    document.getElementById('requestIdInput').value = '';
+                    document.getElementById('selectedRequestInfo').style.display = 'none';
+                    return;
+                }
+                selectServiceRequest(request.id, request);
+            } else {
+                document.getElementById('selectedRequestInfo').style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('❌ Request search error:', error);
+    }
+}
+
+// Select service request
+function selectServiceRequest(requestId, requestData = null) {
+    selectedServiceRequest = requestData || availableServiceRequests.find(r => r.id === requestId);
+    
+    if (!selectedServiceRequest) return;
+    
+    // Update UI
+    document.getElementById('requestIdInput').value = selectedServiceRequest.id;
+    
+    const requestInfoContent = document.getElementById('requestInfoContent');
+    requestInfoContent.innerHTML = `
+        <div class="package-info-row">
+            <span class="info-label">Talep ID:</span>
+            <span class="info-value">#${selectedServiceRequest.id}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Müşteri:</span>
+            <span class="info-value">${selectedServiceRequest.customer_name}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Ürün:</span>
+            <span class="info-value">${selectedServiceRequest.product_name}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">SKU:</span>
+            <span class="info-value">${selectedServiceRequest.product_sku}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Paket No:</span>
+            <span class="info-value">${selectedServiceRequest.package_number || '-'}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Gerekli Parça:</span>
+            <span class="info-value" style="color: var(--accent);">${selectedServiceRequest.required_part}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Durum:</span>
+            <span class="status-badge status-${selectedServiceRequest.status}">${getStatusText(selectedServiceRequest.status)}</span>
+        </div>
+    `;
+    
+    document.getElementById('selectedRequestInfo').style.display = 'block';
+    document.getElementById('packageScanArea').classList.add('active');
+    document.getElementById('packageBarcodeInput').disabled = false;
+    document.getElementById('packageBarcodeInput').focus();
+    
+    console.log('✅ Servis talebi seçildi:', selectedServiceRequest);
+}
+
+// Handle package barcode auto-processing
+let packageScanTimeout;
+function handlePackageScanAuto() {
+    const barcode = document.getElementById('packageBarcodeInput').value.trim();
+    
+    // Clear previous timeout
+    if (packageScanTimeout) {
+        clearTimeout(packageScanTimeout);
+    }
+    
+    // If barcode looks complete (common lengths: 8-13 characters), process immediately
+    if (barcode && (barcode.length >= 8 || barcode.endsWith('\n') || barcode.endsWith('\r'))) {
+        handlePackageScan();
+        return;
+    }
+    
+    // Otherwise set timeout for auto-processing after 800ms of no input
+    packageScanTimeout = setTimeout(() => {
+        if (barcode && barcode.length >= 2) { // Minimum barcode length
+            handlePackageScan();
+        }
+    }, 800);
+}
+
+// Handle package barcode scan
+async function handlePackageScan() {
+    const rawBarcode = document.getElementById('packageBarcodeInput').value;
+    const barcode = rawBarcode.replace(/[\n\r]/g, '').trim(); // Clean barcode scanner newlines
+    
+    // Update input with clean barcode
+    document.getElementById('packageBarcodeInput').value = barcode;
+    
+    console.log('🔍 Paket barkodu taranıyor:', barcode);
+    console.log('📋 Seçilen servis talebi:', selectedServiceRequest);
+    
+    if (!barcode || !selectedServiceRequest) {
+        document.getElementById('packageInfo').style.display = 'none';
+        return;
+    }
+    
+    // Check if barcode matches service request package
+    if (barcode !== selectedServiceRequest.package_barcode) {
+        alert(`❌ Bu paket bu servis talebine ait değil!\nBeklenen: ${selectedServiceRequest.package_barcode}\nTaranan: ${barcode}`);
+        document.getElementById('packageBarcodeInput').value = '';
+        return;
+    }
+    
+    try {
+        console.log('📡 API çağrısı yapılıyor:', `/api/products/${selectedServiceRequest.product_id}/packages`);
+        
+        // Find package by barcode
+        const response = await fetch(`/api/products/${selectedServiceRequest.product_id}/packages`);
+        const packages = await response.json();
+        
+        console.log('📦 API yanıtı:', packages);
+        
+        if (Array.isArray(packages)) {
+            scannedPackage = packages.find(p => p.barcode === barcode);
+            
+            console.log('🔍 Bulunan paket:', scannedPackage);
+            
+            if (scannedPackage) {
+                displayPackageInfo();
+                console.log('✅ Paket tarandı:', scannedPackage);
+            } else {
+                console.log('❌ Paket bulunamadı. Mevcut paketler:', packages);
+                alert('❌ Bu barkoda ait paket bulunamadı veya ürüne ait değil');
+                document.getElementById('packageBarcodeInput').value = '';
+            }
+        } else if (packages.success) {
+            // New API format support
+            scannedPackage = packages.packages.find(p => p.barcode === barcode);
+            
+            if (scannedPackage) {
+                displayPackageInfo();
+                console.log('✅ Paket tarandı:', scannedPackage);
+            } else {
+                console.log('❌ Paket bulunamadı. Mevcut paketler:', packages.packages);
+                alert('❌ Bu barkoda ait paket bulunamadı veya ürüne ait değil');
+                document.getElementById('packageBarcodeInput').value = '';
+            }
+        } else {
+            console.error('❌ API başarısız:', packages.error);
+            alert('Paket bilgileri alınamadı: ' + packages.error);
+        }
+    } catch (error) {
+        console.error('❌ Package scan error:', error);
+        alert('Paket bilgileri alınırken hata oluştu: ' + error.message);
+    }
+}
+
+// Display scanned package information
+function displayPackageInfo() {
+    if (!scannedPackage) return;
+    
+    const packageInfoContent = document.getElementById('packageInfoContent');
+    packageInfoContent.innerHTML = `
+        <div class="package-info-row">
+            <span class="info-label">Paket No:</span>
+            <span class="info-value">${scannedPackage.package_number}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">İçerik:</span>
+            <span class="info-value">${scannedPackage.package_name}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Barkod:</span>
+            <span class="info-value">${scannedPackage.barcode}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Toplam Miktar:</span>
+            <span class="info-value">${scannedPackage.quantity}</span>
+        </div>
+        <div class="package-info-row">
+            <span class="info-label">Ağırlık:</span>
+            <span class="info-value">${scannedPackage.weight_kg || '-'} kg</span>
+        </div>
+    `;
+    
+    // Update package summary display
+    const requiredQty = selectedServiceRequest.required_quantity || 1;
+    const totalQty = scannedPackage.quantity;
+    const sshQty = totalQty - requiredQty;
+    
+    document.getElementById('totalPackageQty').textContent = totalQty;
+    document.getElementById('openingQty').textContent = requiredQty;
+    document.getElementById('sshQty').textContent = Math.max(0, sshQty);
+    
+    document.getElementById('packageInfo').style.display = 'block';
+    
+    // Show opening method selection first
+    document.getElementById('openingMethodSection').style.display = 'block';
+    updateOpeningMethod(); // Update summary based on default selection
+    
+    // Don't enable complete button until all steps are done
+    document.getElementById('completeOpeningBtn').disabled = true;
+    
+    // Add event listeners for opening method radio buttons
+    document.querySelectorAll('input[name="openingMethod"]').forEach(radio => {
+        radio.addEventListener('change', handleMethodChange);
+    });
+    
+    // Hide location section initially until method is selected
+    document.getElementById('locationSection').style.display = 'none';
+}
+
+// Handle opening method change
+function handleMethodChange() {
+    updateOpeningMethod();
+    
+    const selectedMethod = document.querySelector('input[name="openingMethod"]:checked')?.value;
+    const locationSection = document.getElementById('locationSection');
+    const completeBtn = document.getElementById('completeOpeningBtn');
+    
+    if (selectedMethod === 'ssh_used') {
+        // SSH used - no shelf verification needed
+        locationSection.style.display = 'none';
+        completeBtn.disabled = false;
+        
+        // Auto-focus to complete button
+        setTimeout(() => {
+            completeBtn.focus();
+        }, 100);
+    } else {
+        // Physical package opening - shelf verification required
+        locationSection.style.display = 'block';
+        completeBtn.disabled = true;
+        
+        // Auto-focus to shelf location input
+        setTimeout(() => {
+            document.getElementById('shelfLocationInput').focus();
+        }, 100);
+    }
+}
+
+// Update opening method and summary
+function updateOpeningMethod() {
+    if (!selectedServiceRequest || !scannedPackage) return;
+    
+    const selectedMethod = document.querySelector('input[name="openingMethod"]:checked')?.value;
+    const requiredQty = selectedServiceRequest.required_quantity || 1;
+    const totalQty = scannedPackage.quantity;
+    
+    if (selectedMethod === 'complete') {
+        // Complete transfer - all to service, none to SSH
+        document.getElementById('openingQty').textContent = totalQty;
+        document.getElementById('sshQty').textContent = '0';
+    } else if (selectedMethod === 'ssh_used') {
+        // SSH package used - no inventory changes
+        document.getElementById('openingQty').textContent = requiredQty;
+        document.getElementById('sshQty').textContent = '0 (SSH kullanıldı)';
+    } else {
+        // Partial opening - required quantity to service, rest to SSH
+        // If package quantity equals required, still show 1 to SSH for tracking
+        document.getElementById('openingQty').textContent = requiredQty;
+        document.getElementById('sshQty').textContent = Math.max(1, totalQty - requiredQty);
+    }
+}
+
+// Handle shelf location auto-processing
+let shelfScanTimeout;
+function handleShelfScanAuto() {
+    const shelfCode = document.getElementById('shelfLocationInput').value.trim();
+    
+    // Clear previous timeout
+    if (shelfScanTimeout) {
+        clearTimeout(shelfScanTimeout);
+    }
+    
+    // If shelf code looks complete (common format: A1-01-359), process immediately
+    if (shelfCode && (shelfCode.length >= 6 || shelfCode.endsWith('\n') || shelfCode.endsWith('\r'))) {
+        verifyShelfLocation();
+        return;
+    }
+    
+    // Otherwise set timeout for auto-processing after 800ms of no input
+    shelfScanTimeout = setTimeout(() => {
+        if (shelfCode && shelfCode.length >= 3) { // Minimum shelf code length
+            verifyShelfLocation();
+        }
+    }, 800);
+}
+
+// Verify shelf location
+async function verifyShelfLocation() {
+    const rawShelfCode = document.getElementById('shelfLocationInput').value;
+    const shelfCode = rawShelfCode.replace(/[\n\r]/g, '').trim(); // Clean scanner newlines
+    
+    // Update input with clean shelf code
+    document.getElementById('shelfLocationInput').value = shelfCode;
+    const resultDiv = document.getElementById('shelfVerificationResult');
+    
+    if (!shelfCode || !scannedPackage) {
+        resultDiv.style.display = 'none';
+        return;
+    }
+    
+    try {
+        // Check if package is in this location
+        const response = await fetch(`/api/packages/${scannedPackage.id}/location`);
+        const data = await response.json();
+        
+        // Flexible matching: A1-01-359 should match A1-01
+        const expectedCode = data.location_code;
+        const isMatch = expectedCode && (
+            shelfCode === expectedCode || 
+            shelfCode.startsWith(expectedCode + '-') ||
+            expectedCode.startsWith(shelfCode + '-')
+        );
+        
+        if (data.success && isMatch) {
+            resultDiv.innerHTML = `<div class="success-message">✅ Raf konumu doğrulandı: ${shelfCode}</div>`;
+            resultDiv.style.display = 'block';
+            document.getElementById('completeOpeningBtn').disabled = false;
+            
+            // Auto-focus to complete button after successful verification
+            setTimeout(() => {
+                document.getElementById('completeOpeningBtn').focus();
+            }, 100);
+        } else {
+            resultDiv.innerHTML = `<div class="error-message">❌ Yanlış raf konumu! Beklenen: ${expectedCode || 'Bilinmiyor'} (veya alt bölümü)</div>`;
+            resultDiv.style.display = 'block';
+            document.getElementById('completeOpeningBtn').disabled = true;
+        }
+    } catch (error) {
+        console.error('Raf doğrulama hatası:', error);
+        resultDiv.innerHTML = `<div class="error-message">❌ Raf doğrulama hatası</div>`;
+        resultDiv.style.display = 'block';
+    }
+}
+
+
+// Complete package opening
+async function completePackageOpening() {
+    if (!selectedServiceRequest || !scannedPackage) {
+        alert('Servis talebi ve paket seçimi gerekli');
+        return;
+    }
+    
+    const selectedMethod = document.querySelector('input[name="openingMethod"]:checked')?.value;
+    const shelfCode = document.getElementById('shelfLocationInput').value.trim();
+    
+    // Shelf verification only required for physical package operations
+    if (selectedMethod !== 'ssh_used' && !shelfCode) {
+        alert('Raf konumu doğrulanmamış!');
+        return;
+    }
+    
+    if (!selectedMethod) {
+        alert('Açma yöntemi seçilmemiş!');
+        return;
+    }
+    
+    let usedQty, sshQty;
+    if (selectedMethod === 'complete') {
+        // Complete transfer - all to service
+        usedQty = scannedPackage.quantity;
+        sshQty = 0;
+    } else if (selectedMethod === 'ssh_used') {
+        // SSH package used - no inventory changes
+        usedQty = selectedServiceRequest.required_quantity || 1;
+        sshQty = 0;
+    } else {
+        // Partial opening - required quantity to service, rest to SSH
+        // If package quantity equals required, still send 1 to SSH for tracking
+        usedQty = selectedServiceRequest.required_quantity || 1;
+        sshQty = Math.max(1, scannedPackage.quantity - usedQty);
+    }
+    
+    try {
+        const response = await fetch('/api/package-openings', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                service_request_id: selectedServiceRequest.id,
+                package_id: scannedPackage.id,
+                original_package_barcode: scannedPackage.barcode,
+                opened_quantity: scannedPackage.quantity,
+                used_quantity: usedQty,
+                ssh_quantity: sshQty,
+                source_location: selectedMethod === 'ssh_used' ? 'SSH-VIRTUAL' : shelfCode,
+                opening_method: selectedMethod,
+                opened_by: 'Sistem Kullanıcısı'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Update service request status to completed
+            await updateServiceRequestStatus();
+            
+            console.log('✅ Paket açma tamamlandı:', data);
+        } else {
+            throw new Error(data.error || 'Paket açma işlemi başarısız');
+        }
+    } catch (error) {
+        console.error('❌ Package opening error:', error);
+        alert('Paket açma işlemi sırasında hata oluştu: ' + error.message);
+    }
+}
+
+// Reset opening station
+function resetOpeningStation() {
+    selectedServiceRequest = null;
+    scannedPackage = null;
+    
+    document.getElementById('requestIdInput').value = '';
+    document.getElementById('packageBarcodeInput').value = '';
+    document.getElementById('packageBarcodeInput').disabled = true;
+    document.getElementById('selectedRequestInfo').style.display = 'none';
+    document.getElementById('packageInfo').style.display = 'none';
+    document.getElementById('packageScanArea').classList.remove('active');
+    document.getElementById('openingMethodSection').style.display = 'none';
+    document.getElementById('locationSection').style.display = 'none';
+    document.getElementById('completeOpeningBtn').disabled = true;
+    
+    document.getElementById('requestIdInput').focus();
+}
+
+// Load recent package openings
+async function loadRecentOpenings() {
+    try {
+        const response = await fetch('/api/package-openings');
+        const data = await response.json();
+        
+        if (data.success) {
+            displayRecentOpenings(data.openings);
+        }
+    } catch (error) {
+        console.error('❌ Recent openings loading error:', error);
+    }
+}
+
+// Display recent openings
+function displayRecentOpenings(openings) {
+    const recentList = document.getElementById('recentOpeningsList');
+    
+    if (openings.length === 0) {
+        recentList.innerHTML = '<p style="color: var(--muted); text-align: center;">Henüz paket açma işlemi yapılmamış</p>';
+        return;
+    }
+    
+    recentList.innerHTML = openings.slice(0, 5).map(opening => `
+        <div class="opening-history-card">
+            <div class="opening-header">
+                <div class="opening-title">
+                    Talep #${opening.service_request_id} - ${opening.product_name}
+                </div>
+                <div class="opening-date">${formatDateTime(opening.opened_date)}</div>
+            </div>
+            <div class="opening-details">
+                <div class="opening-detail">Paket: <strong>${opening.package_number}</strong></div>
+                <div class="opening-detail">Toplam: <strong>${opening.opened_quantity}</strong></div>
+                <div class="opening-detail">Kullanılan: <strong>${opening.used_quantity}</strong></div>
+                <div class="opening-detail">SSH: <strong>${opening.ssh_quantity}</strong></div>
+                <div class="opening-detail">Açan: <strong>${opening.opened_by}</strong></div>
+            </div>
+        </div>
+    `).join('');
+}
+
+// Utility functions
+function getStatusText(status) {
+    const statuses = {
+        new: 'Yeni',
+        pending: 'Beklemede',
+        sourcing: 'Parça Temin',
+        package_opening: 'Paket Açma',
+        ssh_storage: 'SSH Depolama',
+        factory_order: 'Fabrika Sipariş',
+        completed: 'Tamamlandı',
+        cancelled: 'İptal'
+    };
+    return statuses[status] || status;
+}
+
+function formatDateTime(dateString) {
+    const date = new Date(dateString);
+    return date.toLocaleString('tr-TR');
+}
+
+// Update service request status to completed automatically
+async function updateServiceRequestStatus() {
+    if (!selectedServiceRequest) return;
+    
+    try {
+        const response = await fetch(`/api/service-requests/${selectedServiceRequest.id}/status`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                status: 'completed',
+                notes: 'Paket açma işlemi tamamlandı'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            alert('✅ Paket açma tamamlandı! Servis durumu "Tamamlandı" olarak güncellendi.');
+            
+            // Redirect to service dashboard
+            window.location.href = '/service-dashboard.html';
+        } else {
+            alert('❌ Durum güncelleme hatası: ' + data.error);
+        }
+    } catch (error) {
+        console.error('❌ Status update error:', error);
+        alert('Durum güncelleme sırasında hata oluştu: ' + error.message);
+    }
+}
+</script>
+</body>
+</html>

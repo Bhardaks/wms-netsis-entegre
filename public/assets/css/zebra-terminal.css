@@ -1,0 +1,137 @@
+/* Basit Mobil ve Terminal Optimizasyonu */
+
+@media screen and (max-width: 768px) {
+  /* Genel layout */
+  body {
+    font-size: 14px;
+    padding: 0;
+    margin: 0;
+  }
+
+  /* Header - kompakt */
+  header {
+    padding: 8px;
+    min-height: 50px;
+  }
+
+  header h1 {
+    font-size: 16px;
+    margin: 0;
+  }
+
+  nav a {
+    padding: 4px 8px;
+    font-size: 12px;
+    margin-left: 4px;
+  }
+
+  /* Ana grid - tek sütun */
+  .grid {
+    display: block;
+    padding: 8px;
+    gap: 8px;
+  }
+
+  /* Card'lar - daha az padding */
+  .card {
+    padding: 12px;
+    margin-bottom: 8px;
+  }
+
+  .card h2 {
+    font-size: 16px;
+    margin: 0 0 12px 0;
+  }
+
+  /* Butonlar - orta boy */
+  button, .btn {
+    padding: 8px 12px;
+    font-size: 14px;
+    min-height: 40px;
+  }
+
+  /* Input'lar - daha küçük */
+  input, select, textarea {
+    padding: 8px;
+    font-size: 14px;
+  }
+
+  /* Tablolar - scroll */
+  .table-container {
+    overflow-x: auto;
+    max-width: 100vw;
+  }
+
+  table {
+    font-size: 12px;
+    min-width: 600px;
+  }
+
+  th, td {
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+
+  /* Pick sayfası özel */
+  #manual {
+    width: 100% !important;
+    padding: 12px !important;
+    font-size: 16px !important;
+    text-align: center !important;
+  }
+
+  /* Video - gizle mobilde */
+  #preview {
+    display: none !important;
+  }
+
+  /* Tabs - kompakt */
+  .tabs {
+    flex-wrap: wrap;
+  }
+
+  .tab-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+    flex: 1;
+    min-width: auto;
+  }
+
+  /* Action butonlar - küçük */
+  .action-btn {
+    padding: 4px 8px;
+    font-size: 11px;
+    min-height: 32px;
+  }
+}
+
+/* Çok küçük ekranlar */
+@media screen and (max-width: 480px) {
+  header h1 {
+    font-size: 14px;
+  }
+  
+  nav {
+    display: none; /* Navigation gizle */
+  }
+
+  .card {
+    padding: 8px;
+  }
+
+  table {
+    font-size: 10px;
+  }
+
+  th, td {
+    padding: 4px 2px;
+  }
+}
+
+/* Auto-focus için */
+.scanner-input {
+  background: #000 !important;
+  color: #0f0 !important;
+  border: 2px solid #0f0 !important;
+  font-family: monospace !important;
+}
