@@ -6,6 +6,10 @@ const sqlite3 = require('sqlite3').verbose();
 const DB_PATH = path.join(__dirname, 'wms.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
+// Database Backup System
+const DatabaseBackup = require('./backup');
+const dbBackup = new DatabaseBackup(DB_PATH);
+
 const db = new sqlite3.Database(DB_PATH);
 
 function runSql(sql) {
@@ -37,6 +41,11 @@ function runSql(sql) {
   }
 
   try {
+    // Create backup before migration
+    console.log('📦 Creating pre-migration backup...');
+    await dbBackup.autoBackup();
+    console.log('✅ Pre-migration backup completed');
+    
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8');
     await runSql(schema);
 // post-schema upgrades for existing DBs

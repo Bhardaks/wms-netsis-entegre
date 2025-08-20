@@ -3,5 +3,8 @@ node_modules/
 *.log
 .DS_Store
 backend/db/wms.db
+backend/db/wms.db-shm
+backend/db/wms.db-wal
+backend/db/backups/
 temp/
 uploads/

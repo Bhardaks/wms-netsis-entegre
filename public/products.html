@@ -51,6 +51,10 @@
   <section class="card">
     <h2>Toplu İşlemler</h2>
     <div class="bulk-actions">
+      <button id="addNewProduct" class="action-btn" style="background: var(--success); color: white;">
+        <span class="btn-icon">➕</span>
+        <span class="btn-text">Yeni Ürün Ekle</span>
+      </button>
       <button id="syncWix" class="action-btn">
         <span class="btn-icon">🔄</span>
         <span class="btn-text">Wix'ten Ürün Çek</span>
@@ -181,6 +185,85 @@
   </div>
 </div>
 
+<!-- Yeni Ürün Ekleme Modal -->
+<div class="modal" id="newProductModal">
+  <div class="panel">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3 style="margin: 0; color: var(--success);">🆕 Yeni Ürün Ekle</h3>
+      <button onclick="closeNewProductModal()" style="background: none; border: none; color: var(--muted); font-size: 24px; cursor: pointer;">×</button>
+    </div>
+    
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">SKU * <small style="color: var(--muted);">(Benzersiz kod)</small></label>
+        <input id="newSku" required style="width: 100%;" placeholder="Örn: PRD-001" />
+        <small style="color: var(--muted); font-size: 11px;">Bu SKU daha önce kullanılmamalı</small>
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Fiyat (₺)</label>
+        <input id="newPrice" type="number" step="0.01" min="0" style="width: 100%;" placeholder="0.00" />
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Ürün Adı *</label>
+        <input id="newName" required style="width: 100%;" placeholder="Ürün adını girin" />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Ana Barkod <small style="color: var(--muted);">(Opsiyonel)</small></label>
+        <input id="newBarcode" style="width: 100%;" placeholder="1234567890123" />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Renk</label>
+        <div style="position: relative;">
+          <input 
+            id="newColor" 
+            list="newColorOptions" 
+            placeholder="Renk yazın veya listeden seçin" 
+            style="width: 100%;"
+          />
+          <datalist id="newColorOptions">
+            <option value="BEYAZ">
+            <option value="SİYAH">
+            <option value="KAHVE">
+            <option value="GRİ">
+            <option value="ANTRASIT">
+            <option value="KREM">
+            <option value="LACİVERT">
+            <option value="BORDO">
+            <option value="YEŞİL">
+            <option value="MAVİ">
+            <option value="MOR">
+            <option value="PEMBE">
+            <option value="TURUNCU">
+            <option value="SARI">
+          </datalist>
+        </div>
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Açıklama</label>
+        <textarea id="newDesc" rows="3" style="width: 100%; resize: vertical;" placeholder="Ürün hakkında detay bilgileri..."></textarea>
+      </div>
+    </div>
+    
+    <div class="card" style="background: var(--hover); margin-bottom: 20px; padding: 15px;">
+      <h4 style="margin: 0 0 10px 0; color: var(--success);">💡 Ürün Ekleme İpuçları</h4>
+      <ul style="margin: 0; padding-left: 20px; font-size: 0.9em; color: var(--muted);">
+        <li>SKU benzersiz olmalı (otomatik kontrol edilecek)</li>
+        <li>Ürün ekledikten sonra paketler ve konumlar ekleyebilirsiniz</li>
+        <li>Renk seçimi müşteri deneyimini artırır</li>
+        <li>Fiyat boş bırakılabilir, daha sonra güncellenebilir</li>
+        <li>Netsis entegrasyonu aktif olduğunda otomatik senkronizasyon</li>
+      </ul>
+    </div>
+    
+    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+      <button onclick="closeNewProductModal()" style="background: var(--muted); color: var(--fg);">❌ İptal</button>
+      <button id="saveNewProductBtn" onclick="saveNewProduct()" class="btn-primary" style="background: var(--success);">
+        ✅ Ürünü Ekle
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="modal" id="editProductModal">
   <div class="panel">
     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -251,6 +334,12 @@
 const $ = (s)=>document.querySelector(s);
 const API = {
   async listProducts(){ return fetch('/api/products').then(r=>r.json()) },
+  async addProduct(p){ 
+    const response = await fetch('/api/products',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Ürün eklenirken hata oluştu');
+    return result;
+  },
   async listPackages(id){ return fetch('/api/products/'+id+'/packages').then(r=>r.json()) },
   async addPackage(id,p){ 
     const response = await fetch('/api/products/'+id+'/packages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(p)});
@@ -336,9 +425,164 @@ function closeEditModal() {
   document.getElementById('editProductModal').classList.remove('show');
 }
 
+// New product modal functions
+function openNewProductModal() {
+  // Form temizle
+  clearNewProductForm();
+  document.getElementById('newProductModal').classList.add('show');
+}
+
+function closeNewProductModal() {
+  clearNewProductForm();
+  document.getElementById('newProductModal').classList.remove('show');
+}
+
+function clearNewProductForm() {
+  $('#newSku').value = '';
+  $('#newName').value = '';
+  $('#newPrice').value = '';
+  $('#newBarcode').value = '';
+  $('#newColor').value = '';
+  $('#newDesc').value = '';
+  
+  // Validation mesajlarını temizle
+  document.querySelectorAll('#newProductModal .validation-error').forEach(el => el.remove());
+  document.querySelectorAll('#newProductModal input, #newProductModal textarea').forEach(el => {
+    el.style.borderColor = '';
+  });
+}
+
+// SKU benzersizlik kontrolü
+async function validateSKU(sku) {
+  if (!sku) return { valid: false, message: 'SKU zorunludur' };
+  
+  // Format kontrolü (en az 3 karakter, harf-rakam-tire)
+  if (!/^[A-Z0-9\-]{3,}$/i.test(sku)) {
+    return { valid: false, message: 'SKU en az 3 karakter olmalı ve sadece harf, rakam, tire içermeli' };
+  }
+  
+  // Benzersizlik kontrolü
+  const existingProduct = products.find(p => p.sku.toLowerCase() === sku.toLowerCase());
+  if (existingProduct) {
+    return { valid: false, message: 'Bu SKU zaten kullanılıyor' };
+  }
+  
+  return { valid: true };
+}
+
+// Form validation
+function validateNewProductForm() {
+  const sku = $('#newSku').value.trim().toUpperCase();
+  const name = $('#newName').value.trim();
+  const price = $('#newPrice').value;
+  
+  // Önceki hata mesajlarını temizle
+  document.querySelectorAll('#newProductModal .validation-error').forEach(el => el.remove());
+  document.querySelectorAll('#newProductModal input, #newProductModal textarea').forEach(el => {
+    el.style.borderColor = '';
+  });
+  
+  let hasErrors = false;
+  
+  // SKU kontrolü
+  if (!sku) {
+    showValidationError('newSku', 'SKU zorunludur');
+    hasErrors = true;
+  }
+  
+  // İsim kontrolü
+  if (!name || name.length < 2) {
+    showValidationError('newName', 'Ürün adı en az 2 karakter olmalı');
+    hasErrors = true;
+  }
+  
+  // Fiyat kontrolü (opsiyonel ama pozitif olmalı)
+  if (price && (isNaN(price) || parseFloat(price) < 0)) {
+    showValidationError('newPrice', 'Fiyat pozitif bir sayı olmalı');
+    hasErrors = true;
+  }
+  
+  return !hasErrors;
+}
+
+function showValidationError(inputId, message) {
+  const input = document.getElementById(inputId);
+  input.style.borderColor = 'var(--danger)';
+  
+  const error = document.createElement('div');
+  error.className = 'validation-error';
+  error.style.cssText = 'color: var(--danger); font-size: 0.8em; margin-top: 5px;';
+  error.textContent = message;
+  
+  input.parentNode.appendChild(error);
+}
+
+async function saveNewProduct() {
+  // Form validation
+  if (!validateNewProductForm()) {
+    return;
+  }
+  
+  const sku = $('#newSku').value.trim().toUpperCase();
+  const name = $('#newName').value.trim();
+  
+  // SKU benzersizlik kontrolü
+  const skuValidation = await validateSKU(sku);
+  if (!skuValidation.valid) {
+    showValidationError('newSku', skuValidation.message);
+    return;
+  }
+  
+  const saveBtn = $('#saveNewProductBtn');
+  const originalText = saveBtn.innerHTML;
+  saveBtn.innerHTML = '⏳ Kaydediliyor...';
+  saveBtn.disabled = true;
+  
+  try {
+    const productData = {
+      sku: sku,
+      name: name,
+      price: parseFloat($('#newPrice').value) || 0,
+      main_barcode: $('#newBarcode').value.trim() || null,
+      color: $('#newColor').value.trim() || null,
+      description: $('#newDesc').value.trim() || null
+    };
+    
+    const newProduct = await API.addProduct(productData);
+    
+    // Başarı mesajı
+    alert(`✅ Ürün başarıyla eklendi!\n\nSKU: ${newProduct.sku}\nAd: ${newProduct.name}\n\nArtık paket ve konum ekleyebilirsiniz.`);
+    
+    await refresh();
+    closeNewProductModal();
+    
+    // Yeni eklenen ürünü vurgula (opsiyonel)
+    setTimeout(() => {
+      const newRow = document.querySelector(`[data-edit="${newProduct.id}"]`)?.closest('tr');
+      if (newRow) {
+        newRow.style.background = 'var(--success)';
+        newRow.style.color = 'white';
+        setTimeout(() => {
+          newRow.style.background = '';
+          newRow.style.color = '';
+        }, 2000);
+      }
+    }, 100);
+    
+  } catch (error) {
+    alert('❌ Ürün ekleme hatası:\n' + error.message);
+  } finally {
+    saveBtn.innerHTML = originalText;
+    saveBtn.disabled = false;
+  }
+}
+
 // Global scope için window'a ekle
 window.closeEditModal = closeEditModal;
 window.openEditModal = openEditModal;
+window.openNewProductModal = openNewProductModal;
+window.closeNewProductModal = closeNewProductModal;
+window.saveNewProduct = saveNewProduct;
 
 async function saveProduct() {
   if (!currentEditingProduct) return;
@@ -548,6 +792,9 @@ async function refresh(){
 
 // Event listeners
 document.addEventListener('DOMContentLoaded', () => {
+  // Yeni ürün ekleme butonu
+  $('#addNewProduct').addEventListener('click', openNewProductModal);
+  
   // Arama ve filtreler
   $('#searchInput').addEventListener('input', filterProducts);
   $('#statusFilter').addEventListener('change', filterProducts);
@@ -577,6 +824,26 @@ document.addEventListener('DOMContentLoaded', () => {
   // Package form cancel button
   $('#cancelPkgBtn').addEventListener('click', () => {
     clearPackageForm();
+  });
+  
+  // Real-time SKU validation
+  $('#newSku').addEventListener('input', async (e) => {
+    const sku = e.target.value.trim().toUpperCase();
+    e.target.value = sku; // Auto uppercase
+    
+    if (sku.length >= 3) {
+      const validation = await validateSKU(sku);
+      
+      // Önceki mesajları temizle
+      const existingError = e.target.parentNode.querySelector('.validation-error');
+      if (existingError) existingError.remove();
+      
+      if (!validation.valid) {
+        showValidationError('newSku', validation.message);
+      } else {
+        e.target.style.borderColor = 'var(--success)';
+      }
+    }
   });
   
 });

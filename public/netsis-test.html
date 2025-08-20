@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netsis Entegrasyon Test - WMS</title>
+    <link rel="stylesheet" href="assets/css/styles.css">
+    <style>
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        .test-section {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .test-button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        
+        .test-button:hover {
+            background: #0056b3;
+        }
+        
+        .test-button.success {
+            background: #28a745;
+        }
+        
+        .test-button.danger {
+            background: #dc3545;
+        }
+        
+        .result-box {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .status-success { background: #d4edda; color: #155724; }
+        .status-error { background: #f8d7da; color: #721c24; }
+        .status-warning { background: #fff3cd; color: #856404; }
+        .status-info { background: #d1ecf1; color: #0c5460; }
+        
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+        }
+        
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+        
+        .counter {
+            font-size: 18px;
+            font-weight: bold;
+            color: #007bff;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1>🔗 Netsis ERP Entegrasyon Test Merkezi</h1>
+        <p>WMS sisteminin Netsis ERP ile entegrasyonunu test etmek için aşağıdaki butonları kullanın.</p>
+        
+        <!-- Connection Test -->
+        <div class="test-section">
+            <h2>🔧 Bağlantı Testi</h2>
+            <button class="test-button" onclick="testConnection()">Netsis Bağlantısını Test Et</button>
+            <div id="connectionResult" class="result-box" style="display: none;"></div>
+        </div>
+        
+        <!-- Data Fetch Tests -->
+        <div class="grid">
+            <div class="test-section">
+                <h3>👥 Müşteri Verileri</h3>
+                <button class="test-button" onclick="fetchCustomers()">Müşteri Listesi Al</button>
+                <div class="counter" id="customerCount"></div>
+                <div id="customersResult" class="result-box" style="display: none;"></div>
+            </div>
+            
+            <div class="test-section">
+                <h3>📦 Ürün Verileri</h3>
+                <button class="test-button" onclick="fetchProducts()">Ürün Listesi Al</button>
+                <div class="counter" id="productCount"></div>
+                <div id="productsResult" class="result-box" style="display: none;"></div>
+            </div>
+            
+            <div class="test-section">
+                <h3>📊 Stok Verileri</h3>
+                <button class="test-button" onclick="fetchStock()">Stok Kartları Al</button>
+                <div class="counter" id="stockCount"></div>
+                <div id="stockResult" class="result-box" style="display: none;"></div>
+            </div>
+        </div>
+        
+        <!-- Sync Operations -->
+        <div class="test-section">
+            <h2>🔄 Senkronizasyon İşlemleri</h2>
+            <button class="test-button" onclick="syncProducts()">Ürünleri Netsis'ten Senkronize Et</button>
+            <div id="syncResult" class="result-box" style="display: none;"></div>
+        </div>
+        
+        <!-- Status Dashboard -->
+        <div class="test-section">
+            <h2>📈 Entegrasyon Durumu</h2>
+            <div class="grid">
+                <div>
+                    <h4>Son Test Sonuçları</h4>
+                    <div id="statusSummary">
+                        <div>🔗 Bağlantı: <span id="connectionStatus" class="status-badge status-info">Test edilmedi</span></div>
+                        <div>👥 Müşteriler: <span id="customersStatus" class="status-badge status-info">Test edilmedi</span></div>
+                        <div>📦 Ürünler: <span id="productsStatus" class="status-badge status-info">Test edilmedi</span></div>
+                        <div>📊 Stok: <span id="stockStatus" class="status-badge status-info">Test edilmedi</span></div>
+                    </div>
+                </div>
+                <div>
+                    <h4>API Konfigürasyonu</h4>
+                    <div id="configInfo">
+                        <div>📍 API URL: <code>http://localhost:7070/api/v2</code></div>
+                        <div>🔐 Kimlik Doğrulama: OAuth2 Token</div>
+                        <div>📊 Netsis Sürüm: 8.06+</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Test connection
+        async function testConnection() {
+            const button = event.target;
+            const resultDiv = document.getElementById('connectionResult');
+            
+            button.textContent = 'Test ediliyor...';
+            button.disabled = true;
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Netsis bağlantısı test ediliyor...';
+            
+            try {
+                const response = await fetch('/api/netsis/test');
+                const result = await response.json();
+                
+                resultDiv.textContent = JSON.stringify(result, null, 2);
+                
+                const status = document.getElementById('connectionStatus');
+                if (result.success) {
+                    status.textContent = 'Başarılı';
+                    status.className = 'status-badge status-success';
+                    button.className = 'test-button success';
+                } else {
+                    status.textContent = 'Başarısız';
+                    status.className = 'status-badge status-error';
+                    button.className = 'test-button danger';
+                }
+            } catch (error) {
+                resultDiv.textContent = 'Hata: ' + error.message;
+                document.getElementById('connectionStatus').textContent = 'Hata';
+                document.getElementById('connectionStatus').className = 'status-badge status-error';
+                button.className = 'test-button danger';
+            }
+            
+            button.textContent = 'Netsis Bağlantısını Test Et';
+            button.disabled = false;
+        }
+        
+        // Fetch customers
+        async function fetchCustomers() {
+            await fetchData('customers', 'customersResult', 'customersStatus', 'customerCount');
+        }
+        
+        // Fetch products
+        async function fetchProducts() {
+            await fetchData('products', 'productsResult', 'productsStatus', 'productCount');
+        }
+        
+        // Fetch stock
+        async function fetchStock() {
+            await fetchData('stock', 'stockResult', 'stockStatus', 'stockCount');
+        }
+        
+        // Generic fetch function
+        async function fetchData(endpoint, resultId, statusId, countId) {
+            const button = event.target;
+            const resultDiv = document.getElementById(resultId);
+            const statusElement = document.getElementById(statusId);
+            const countElement = document.getElementById(countId);
+            
+            button.textContent = 'Yükleniyor...';
+            button.disabled = true;
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = `Netsis'ten ${endpoint} verileri alınıyor...`;
+            
+            try {
+                const response = await fetch(`/api/netsis/${endpoint}?limit=10`);
+                const result = await response.json();
+                
+                resultDiv.textContent = JSON.stringify(result, null, 2);
+                
+                if (result.success && result[endpoint]) {
+                    const count = Array.isArray(result[endpoint]) ? result[endpoint].length 
+                                : result[endpoint].data ? result[endpoint].data.length : 0;
+                    countElement.textContent = `${count} kayıt alındı`;
+                    statusElement.textContent = 'Başarılı';
+                    statusElement.className = 'status-badge status-success';
+                    button.className = 'test-button success';
+                } else {
+                    countElement.textContent = '0 kayıt';
+                    statusElement.textContent = 'Başarısız';
+                    statusElement.className = 'status-badge status-error';
+                    button.className = 'test-button danger';
+                }
+            } catch (error) {
+                resultDiv.textContent = 'Hata: ' + error.message;
+                countElement.textContent = 'Hata';
+                statusElement.textContent = 'Hata';
+                statusElement.className = 'status-badge status-error';
+                button.className = 'test-button danger';
+            }
+            
+            button.textContent = button.textContent.replace('Yükleniyor...', 'Listesi Al');
+            button.disabled = false;
+        }
+        
+        // Sync products
+        async function syncProducts() {
+            const button = event.target;
+            const resultDiv = document.getElementById('syncResult');
+            
+            button.textContent = 'Senkronize ediliyor...';
+            button.disabled = true;
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'Ürünler Netsis\'ten WMS veritabanına senkronize ediliyor...';
+            
+            try {
+                const response = await fetch('/api/netsis/sync/products', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                const result = await response.json();
+                
+                resultDiv.textContent = JSON.stringify(result, null, 2);
+                
+                if (result.success) {
+                    button.className = 'test-button success';
+                } else {
+                    button.className = 'test-button danger';
+                }
+            } catch (error) {
+                resultDiv.textContent = 'Hata: ' + error.message;
+                button.className = 'test-button danger';
+            }
+            
+            button.textContent = 'Ürünleri Netsis\'ten Senkronize Et';
+            button.disabled = false;
+        }
+        
+        // Auto-refresh status every 30 seconds
+        setInterval(() => {
+            const now = new Date().toLocaleTimeString('tr-TR');
+            document.querySelector('h1').textContent = `🔗 Netsis ERP Entegrasyon Test Merkezi (${now})`;
+        }, 30000);
+        
+        // Initialize page
+        window.addEventListener('load', () => {
+            console.log('Netsis Test sayfası yüklendi');
+        });
+    </script>
+</body>
+</html>

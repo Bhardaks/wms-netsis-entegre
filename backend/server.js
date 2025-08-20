@@ -7,13 +7,23 @@ const sqlite3 = require('sqlite3').verbose();
 const PDFDocument = require('pdfkit');
 const session = require('express-session');
 const bcrypt = require('bcryptjs');
+const { netsisAPI } = require('./services/netsis');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Database Backup System
+const DatabaseBackup = require('./db/backup');
+const dbBackup = new DatabaseBackup();
+
 // DB
 const DB_PATH = path.join(__dirname, 'db', 'wms.db');
 const db = new sqlite3.Database(DB_PATH);
+
+// Create automatic backup on startup
+dbBackup.autoBackup().catch(err => {
+  console.warn('⚠️ Could not create startup backup:', err.message);
+});
 
 // Middleware
 app.use(cors({
@@ -1367,14 +1377,69 @@ app.get('/api/products', async (req, res) => {
 });
 
 app.post('/api/products', async (req, res) => {
-  const { sku, name, description, main_barcode, price } = req.body;
+  const { sku, name, description, main_barcode, price, color } = req.body;
+  
   try {
-    await run(`INSERT INTO products (sku, name, description, main_barcode, price) VALUES (?,?,?,?,?)`,
-      [sku, name, description || null, main_barcode || null, price || 0]);
-    const prod = await get('SELECT * FROM products WHERE sku=?', [sku]);
-    res.status(201).json(prod);
+    // Validation
+    if (!sku || !name) {
+      return res.status(400).json({ 
+        error: 'SKU ve ürün adı zorunludur' 
+      });
+    }
+    
+    // SKU format validation
+    if (!/^[A-Z0-9\-]{3,}$/i.test(sku)) {
+      return res.status(400).json({ 
+        error: 'SKU en az 3 karakter olmalı ve sadece harf, rakam, tire içermeli' 
+      });
+    }
+    
+    // Check if SKU already exists
+    const existingProduct = await get('SELECT id, sku FROM products WHERE LOWER(sku) = LOWER(?)', [sku]);
+    if (existingProduct) {
+      return res.status(400).json({ 
+        error: `SKU "${sku}" zaten kullanılıyor (ID: ${existingProduct.id})` 
+      });
+    }
+    
+    // Insert new product
+    const result = await run(`
+      INSERT INTO products (sku, name, description, main_barcode, price, color, created_at, updated_at) 
+      VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, [
+      sku.toUpperCase().trim(), 
+      name.trim(), 
+      description?.trim() || null, 
+      main_barcode?.trim() || null, 
+      price || 0,
+      color?.trim() || null
+    ]);
+    
+    // Get the newly created product
+    const newProduct = await get('SELECT * FROM products WHERE id = ?', [result.lastID]);
+    
+    console.log(`✅ New product created: ${newProduct.sku} - ${newProduct.name}`);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Ürün başarıyla eklendi',
+      product: newProduct,
+      ...newProduct  // Backward compatibility
+    });
+    
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    console.error('❌ Product creation error:', e);
+    
+    // SQLite unique constraint error
+    if (e.message.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Bu SKU zaten kullanılıyor' 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Ürün oluşturulurken hata: ' + e.message 
+    });
   }
 });
 
@@ -1501,6 +1566,112 @@ app.get('/api/debug/packages-count', async (req, res) => {
     });
   } catch (e) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+// ---- NETSIS API ENDPOINTS ----
+
+// Test Netsis connection
+app.get('/api/netsis/test', async (req, res) => {
+  try {
+    const result = await netsisAPI.testConnection();
+    res.json(result);
+  } catch (error) {
+    res.status(500).json({ 
+      success: false, 
+      message: 'Netsis test failed', 
+      error: error.message 
+    });
+  }
+});
+
+// Get customers from Netsis
+app.get('/api/netsis/customers', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const customers = await netsisAPI.getCustomers(limit, offset);
+    res.json({ success: true, customers });
+  } catch (error) {
+    console.error('❌ Netsis customers fetch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get products from Netsis
+app.get('/api/netsis/products', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const products = await netsisAPI.getProducts(limit, offset);
+    res.json({ success: true, products });
+  } catch (error) {
+    console.error('❌ Netsis products fetch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get stock from Netsis
+app.get('/api/netsis/stock', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 50;
+    const offset = parseInt(req.query.offset) || 0;
+    
+    const stock = await netsisAPI.getStockCards(limit, offset);
+    res.json({ success: true, stock });
+  } catch (error) {
+    console.error('❌ Netsis stock fetch error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Sync products from Netsis to local DB
+app.post('/api/netsis/sync/products', async (req, res) => {
+  try {
+    console.log('🔄 Netsis ürün senkronizasyonu başlatılıyor...');
+    
+    const products = await netsisAPI.getProducts(1000, 0);
+    let syncCount = 0;
+    
+    if (products && products.data && Array.isArray(products.data)) {
+      for (const product of products.data) {
+        try {
+          // Netsis'ten gelen ürün verilerini WMS formatına çevir
+          const sku = product.Code || product.ItemCode;
+          const name = product.Description || product.Name;
+          const barcode = product.Barcode;
+          
+          if (sku && name) {
+            await run(`
+              INSERT INTO products (sku, name, barcode, netsis_id, created_at) 
+              VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+              ON CONFLICT(sku) DO UPDATE SET
+                name=excluded.name,
+                barcode=excluded.barcode,
+                netsis_id=excluded.netsis_id,
+                updated_at=CURRENT_TIMESTAMP
+            `, [sku, name, barcode || null, product.Id]);
+            
+            syncCount++;
+          }
+        } catch (error) {
+          console.warn(`⚠️ Ürün senkronizasyon hatası (${product.Code}):`, error.message);
+        }
+      }
+    }
+    
+    console.log(`✅ ${syncCount} ürün Netsis'ten senkronize edildi`);
+    res.json({ 
+      success: true, 
+      message: `${syncCount} ürün başarıyla senkronize edildi`,
+      syncedCount: syncCount
+    });
+    
+  } catch (error) {
+    console.error('❌ Netsis product sync error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -3428,6 +3599,17 @@ app.put('/api/ssh-inventory/:id/notes', async (req, res) => {
 app.listen(PORT, '0.0.0.0', async () => {
   // Initialize database and users
   await initDatabase();
+  
+  // Test Netsis connection on startup
+  console.log('🔄 Netsis bağlantısı test ediliyor...');
+  const connectionTest = await netsisAPI.testConnection();
+  
+  if (connectionTest.success) {
+    console.log('✅ Netsis entegrasyonu aktif');
+  } else {
+    console.log('⚠️ Netsis bağlantısı başarısız, uygulama yerel modda çalışacak');
+    console.log('   Hata:', connectionTest.message);
+  }
   
   // Add color column to products table if not exists
   try {

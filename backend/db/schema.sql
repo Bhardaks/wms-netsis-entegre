@@ -10,6 +10,8 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT,
   main_barcode TEXT,
   price REAL DEFAULT 0,
+  netsis_id TEXT UNIQUE, -- Netsis'teki ürün ID'si
+  netsis_code TEXT,      -- Netsis'teki ürün kodu
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
