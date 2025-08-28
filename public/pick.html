@@ -241,7 +241,6 @@
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
       <h2>Tarayıcı</h2>
       <div style="display:flex;gap:8px;">
-        <button id="debugBtn" style="background:#6f42c1;color:white;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">Debug</button>
         <div id="locationVerifyStatus" style="background:#6c757d;color:white;padding:8px 16px;border-radius:6px;display:flex;align-items:center;gap:8px;cursor:pointer;font-weight:bold;">
           <span id="locationVerifyIcon">🔓</span>
           <span id="locationVerifyText">Lokasyon Teyit: OPSİYONEL</span>
@@ -276,6 +275,7 @@
 const $ = (s)=>document.querySelector(s);
 const url = new URL(location.href);
 const pickId = url.searchParams.get('pick');
+const externalOrderId = url.searchParams.get('external');
 
 let pickData=null;
 let currentlyViewedItemId = null; // Hangi item'ın package details'i açık
@@ -301,7 +301,36 @@ function createColorBadge(color) {
 }
 
 async function loadPick(){
-  console.log('Loading pick with ID:', pickId);
+  // External order için özel işlem
+  if(externalOrderId && !pickId){
+    console.log('External order detected, creating pick for order:', externalOrderId);
+    try {
+      const response = await fetch('/api/picks', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_id: parseInt(externalOrderId, 10) })
+      });
+      
+      if(!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      }
+      
+      const result = await response.json();
+      if(result.error) {
+        alert('External pick oluşturma hatası: ' + result.error);
+        return;
+      }
+      
+      // Yeni oluşturulan pick ID ile sayfayı yenile
+      window.location.href = `/pick.html?pick=${result.id}`;
+      return;
+    } catch (error) {
+      console.error('External pick creation error:', error);
+      alert('External pick oluşturulamadı: ' + error.message);
+      return;
+    }
+  }
+
   if(!pickId){
     alert('Pick ID bulunamadı! URL\'de ?pick=X parametresi eksik.');
     return;
@@ -313,26 +342,6 @@ async function loadPick(){
       throw new Error(`HTTP ${r.status}: ${r.statusText}`);
     }
     pickData = await r.json();
-    console.log('Pick data loaded:', pickData);
-    
-    // Debug: Paket lokasyonlarını kontrol et
-    if (pickData.items) {
-      pickData.items.forEach((item, itemIndex) => {
-        console.log(`🔍 Item ${itemIndex}: ${item.sku} - ${item.product_name}`);
-        if (item.packages) {
-          item.packages.forEach((pkg, pkgIndex) => {
-            console.log(`  📦 Package ${pkgIndex}: ${pkg.package_name} (${pkg.barcode})`);
-            if (pkg.locations && pkg.locations.length > 0) {
-              console.log(`    📍 Locations:`, pkg.locations);
-            } else {
-              console.log(`    ❌ No locations found for this package`);
-            }
-          });
-        } else {
-          console.log(`  ❌ No packages found for this item`);
-        }
-      });
-    }
     
     if(!pickData.order) {
       throw new Error('Sipariş bilgisi bulunamadı');
@@ -346,11 +355,8 @@ async function loadPick(){
     `;
     
     const tb = $('#items tbody');
-    console.log('📦 Items data:', pickData.items);
-    console.log('📦 Items length:', pickData.items ? pickData.items.length : 'undefined');
     
     if(!pickData.items || pickData.items.length === 0) {
-      console.warn('⚠️ No items found in pick data!');
       tb.innerHTML = '<tr><td colspan="5">Bu siparişte hiç kalem yok</td></tr>';
     } else {
       // Desktop table
@@ -438,7 +444,6 @@ async function loadPick(){
 }
 
 async function submitBarcode(code){
-  console.log('🔍 Submitting barcode:', code);
   
   // Lokasyon teyit modunda lokasyon taraması bekleniyor
   if (isWaitingForLocationScan) {
@@ -472,8 +477,6 @@ async function submitBarcode(code){
   });
   const res = await r.json();
   
-  console.log('📡 Barcode scan response:', res);
-  
   if(res.success){
     $('#last').textContent = code;
     document.getElementById('beepOk').play().catch(()=>{});
@@ -486,10 +489,7 @@ async function submitBarcode(code){
       $('#last').style.fontWeight = '';
     }, 2000);
     
-    console.log('🔄 Reloading pick data after successful scan...');
     await loadPick();
-    
-    console.log('📊 Updated pickData after scan:', pickData);
     
     // Eğer package details açıksa otomatik yenile
     if(currentlyViewedItemId) {
@@ -507,8 +507,6 @@ async function submitBarcode(code){
 
 // Lokasyon teyit fonksiyonu
 async function handleLocationScan(shelfCode) {
-  console.log('📍 Location scan:', shelfCode, 'for package:', pendingPackageBarcode);
-  
   try {
     // Lokasyon teyit API'sini çağır
     const response = await fetch(`/api/picks/${pickId}/verify-location`, {
@@ -521,7 +519,6 @@ async function handleLocationScan(shelfCode) {
     });
     
     const result = await response.json();
-    console.log('📍 Location verification result:', result);
     
     if (response.ok && result.success) {
       // Teyit sonucunu göster
@@ -533,17 +530,20 @@ async function handleLocationScan(shelfCode) {
         // Başarılı teyit sonrası normal taramaya geç
         await processVerifiedScan(pendingPackageBarcode, shelfCode);
       } else {
-        // Yanlış lokasyon
-        $('#last').textContent = `⚠️ ${result.message}`;
-        $('#last').style.color = '#f59e0b';
+        // Yanlış lokasyon - Zorunlu modda ret et
+        $('#last').textContent = `❌ ${result.message}`;
+        $('#last').style.color = '#dc3545';
+        $('#last').style.fontWeight = 'bold';
         
-        // Alternatif seçenekler sun
-        if (confirm(`Yanlış lokasyon!\n\nBeklenen: ${result.expectedLocation.shelf_code}\nTaranan: ${shelfCode}\n\nYine de devam etmek istiyor musunuz?`)) {
-          await processVerifiedScan(pendingPackageBarcode, shelfCode, false);
-        } else {
-          resetLocationVerification();
-          return;
-        }
+        // Hata sesini çal
+        document.getElementById('beepErr').play().catch(()=>{});
+        
+        // Zorunlu modda ret mesajı göster
+        alert(`❌ LOKASYON HATASI - İŞLEM REDDEDİLDİ\n\n🔍 Beklenen Raf: ${result.expectedLocation.shelf_code}\n📍 Taranan Raf: ${shelfCode}\n\n⚠️ Lokasyon teyit zorunlu modda olduğu için yanlış raf girişi kabul edilmez.\n\n✅ Lütfen doğru rafı tarayın: ${result.expectedLocation.shelf_code}`);
+        
+        // Tarama durumunu sıfırla ve tekrar denemeye hazırla
+        resetLocationVerification();
+        return;
       }
     } else {
       throw new Error(result.error || 'Lokasyon teyit hatası');
@@ -572,12 +572,9 @@ async function processVerifiedScan(packageBarcode, shelfCode, isCorrectLocation 
     });
     const res = await r.json();
     
-    console.log('📡 Verified scan response:', res);
-    
     if(res.success){
       document.getElementById('beepOk').play().catch(()=>{});
       
-      console.log('🔄 Reloading pick data after successful verified scan...');
       await loadPick();
       
       // Eğer package details açıksa otomatik yenile
@@ -635,25 +632,64 @@ $('#manual').addEventListener('keypress', (e)=>{
 
 
 
-// Auto-submit for barcode scanners (Zebra terminals)
+// Auto-submit for barcode scanners (Zebra terminals) - improved logic
 let autoSubmitTimer = null;
+let isManualTyping = false;
+let lastKeystrokeTime = Date.now();
+
 $('#manual').addEventListener('input', (e) => {
   const value = e.target.value.trim();
+  const currentTime = Date.now();
+  
+  // Detect if user is typing manually (slow keystrokes) vs barcode scanner (fast burst)
+  const timeSinceLastKeystroke = currentTime - lastKeystrokeTime;
+  if (timeSinceLastKeystroke > 50) { // More than 50ms between keystrokes = manual typing
+    isManualTyping = true;
+  } else if (timeSinceLastKeystroke < 20) { // Less than 20ms = likely scanner
+    isManualTyping = false;
+  }
+  
+  lastKeystrokeTime = currentTime;
   
   // Clear existing timer
   if (autoSubmitTimer) {
     clearTimeout(autoSubmitTimer);
   }
   
-  // If value is long enough to be a barcode (usually 6+ chars), auto-submit after delay
+  // Auto-submit logic based on input type
   if (value.length >= 6) {
+    let delay;
+    if (isManualTyping) {
+      delay = 2000; // 2 seconds for manual typing - gives time to complete
+    } else {
+      delay = 300; // 300ms for barcode scanners
+    }
+    
     autoSubmitTimer = setTimeout(() => {
-      console.log('🤖 Auto-submitting barcode:', value);
+      console.log(isManualTyping ? '👤 Manual input detected' : '🤖 Barcode scanner detected');
+      console.log('🔍 Submitting barcode:', value);
       if ($('#manual').value.trim() === value) { // Make sure it hasn't changed
         submitBarcode(value);
         $('#manual').value = '';
       }
-    }, 300); // 300ms delay for barcode scanners
+    }, delay);
+  }
+});
+
+// Enter key support for manual input
+$('#manual').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const value = e.target.value.trim();
+    if (value.length >= 6) {
+      // Clear timer and submit immediately
+      if (autoSubmitTimer) {
+        clearTimeout(autoSubmitTimer);
+      }
+      console.log('⌨️ Enter key pressed - submitting:', value);
+      submitBarcode(value);
+      e.target.value = '';
+    }
   }
 });
 
@@ -733,74 +769,43 @@ function showPackageDetails(itemId) {
   $('#packageDetails').innerHTML = packageHtml;
 }
 
-// Manuel tarama fonksiyonu - artık kullanılmıyor, sadece uyumluluk için bırakıldı
-function manualScan(barcode) {
-  $('#manual').value = barcode;
-  submitBarcode(barcode);
-  
-  // Input alanını temizle
-  setTimeout(() => {
-    $('#manual').value = '';
-  }, 1000);
-}
 
 // Global fonksiyon olarak tanımla
 window.showPackageDetails = showPackageDetails;
-window.manualScan = manualScan;
 
-// Yeni çıkış mantığı - 3 senaryo
 function checkForScannedItems() {
-  console.log('🔍 Checking for scanned items...');
-  console.log('🔍 pickData exists:', !!pickData);
-  
   if (!pickData) {
-    console.log('❌ No pickData');
     return false;
   }
   
-  // En önce scans kontrolü yap - bu en güvenilir yöntem
   if (pickData.scans && pickData.scans.length > 0) {
-    console.log('✅ Found scans data:', pickData.scans.length, 'scans');
     return true;
   }
   
-  // pickData.items kontrolü
   if (pickData.items && pickData.items.length > 0) {
-    console.log('✅ Found pickData.items');
-    
     const scannedItems = pickData.items.filter(item => item.picked_qty > 0);
-    console.log('📋 Items with picked_qty > 0:', scannedItems.length);
-    
     if (scannedItems.length > 0) {
       return true;
     }
   }
   
-  // pickData.order.items kontrolü (fallback)
   if (pickData.order && pickData.order.items) {
     const scannedItems = pickData.order.items.filter(item => item.picked_qty > 0);
-    console.log('📋 Order items with picked_qty > 0:', scannedItems.length);
     return scannedItems.length > 0;
   }
   
-  console.log('❌ No scanned items detected');
   return false;
 }
 
 function showExitModal() {
-  console.log('🚀 Creating exit modal...');
-  
-  // Eğer zaten modal varsa kaldır
   const existingModal = document.getElementById('exitModal');
   if (existingModal) {
-    console.log('🗑️ Removing existing modal');
     existingModal.remove();
   }
   
   const modal = document.createElement('div');
   modal.id = 'exitModal';
   
-  console.log('📝 Setting modal styles...');
   modal.style.cssText = `
     position: fixed;
     top: 0;
@@ -892,11 +897,8 @@ function showExitModal() {
     </div>
   `;
   
-  console.log('📦 Adding modal to DOM...');
   modal.appendChild(modalContent);
   document.body.appendChild(modal);
-  
-  console.log('✅ Modal added to DOM, should be visible');
   
   // Modal'a tıklama önle
   modal.addEventListener('click', (e) => {
@@ -946,9 +948,6 @@ function closeExitModal() {
 }
 
 function showOrderCompletedModal() {
-  console.log('🎉 Creating order completed modal...');
-  
-  // Eğer zaten modal varsa kaldır
   const existingModal = document.getElementById('completedModal');
   if (existingModal) {
     existingModal.remove();
@@ -1019,16 +1018,13 @@ function showOrderCompletedModal() {
   
   // Event listeners
   document.getElementById('goToOrders').addEventListener('click', () => {
-    console.log('🔄 Redirecting to orders page...');
-    window.location.href = '/orders.html';
+    window.location.href = '/orders.html?refresh=true';
   });
   
   return modal;
 }
 
 async function handleCancelOrder() {
-  console.log('🗑️ Canceling order and resetting...');
-  
   try {
     // Sipariş toplamayı sıfırla
     const response = await fetch(`/api/picks/${pickId}/reset`, {
@@ -1037,22 +1033,17 @@ async function handleCancelOrder() {
     });
     
     if (response.ok) {
-      console.log('✅ Order picking reset successfully');
       closeExitModal();
       window.location.href = '/orders.html';
     } else {
-      console.error('❌ Failed to reset order picking');
       alert('Sipariş iptal edilirken hata oluştu. Lütfen tekrar deneyin.');
     }
   } catch (error) {
-    console.error('❌ Error resetting order:', error);
     alert('Sipariş iptal edilirken hata oluştu: ' + error.message);
   }
 }
 
 async function handleSavePartial() {
-  console.log('💾 Saving partial pick...');
-  
   try {
     // Kısmi toplama olarak kaydet
     const response = await fetch(`/api/picks/${pickId}/partial`, {
@@ -1061,7 +1052,6 @@ async function handleSavePartial() {
     });
     
     if (response.ok) {
-      console.log('✅ Partial pick saved successfully');
       closeExitModal();
       
       // Başarı mesajı göster
@@ -1090,58 +1080,30 @@ async function handleSavePartial() {
       }, 2000);
       
     } else {
-      console.error('❌ Failed to save partial pick');
       alert('Kısmi toplama kaydedilirken hata oluştu. Lütfen tekrar deneyin.');
     }
   } catch (error) {
-    console.error('❌ Error saving partial pick:', error);
     alert('Kısmi toplama kaydedilirken hata oluştu: ' + error.message);
   }
 }
 
 function handleContinuePicking() {
-  console.log('▶️ Continuing picking...');
   closeExitModal();
-  
-  // Focus'u manuel input'a ver
   setTimeout(() => $('#manual').focus(), 100);
 }
 
 async function handleExit() {
-  console.log('🚪 Exit button clicked!');
-  console.log('🔍 Current pickData state:', pickData);
-  
   const hasScannedItems = checkForScannedItems();
-  console.log('📦 Has scanned items result:', hasScannedItems);
   
   if (!hasScannedItems) {
-    // Senaryo 1: Hiç tarama yapılmamış - direkt çık
-    console.log('✅ No scanned items detected, proceeding with direct exit');
-    console.log('🔄 Redirecting to orders page...');
     window.location.href = '/orders.html';
   } else {
-    // Senaryo 2: Bazı ürünler taratılmış - modal göster
-    console.log('⚠️ Scanned items detected! Showing exit modal...');
-    
-    // Try-catch ile modal gösterme
     try {
       const modal = showExitModal();
-      console.log('✅ Exit modal created and should be visible now');
-      
-      // Modal'ın DOM'da olduğunu kontrol et
-      const modalInDom = document.getElementById('exitModal');
-      if (modalInDom) {
-        console.log('✅ Modal confirmed in DOM');
-      } else {
-        console.error('❌ Modal not found in DOM after creation');
-      }
       
     } catch (error) {
-      console.error('❌ Error showing exit modal:', error);
-      // Fallback: Simple confirm dialog
       const confirmExit = confirm('Sipariş toplama yarım kaldı. Ne yapmak istiyorsunuz?\n\n✅ Tamam = Çıkış yap\n❌ İptal = Devam et');
       if (confirmExit) {
-        // Eğer kullanıcı çıkış seçerse reset API'sini çağır
         try {
           const response = await fetch(`/api/picks/${pickId}/reset`, {
             method: 'POST',
@@ -1149,15 +1111,12 @@ async function handleExit() {
           });
           
           if (response.ok) {
-            console.log('✅ Order picking reset successfully');
             window.location.href = '/orders.html';
           } else {
-            console.error('❌ Failed to reset order picking');
             alert('Sipariş iptal edilirken hata oluştu. Yine de çıkış yapılacak.');
             window.location.href = '/orders.html';
           }
         } catch (resetError) {
-          console.error('❌ Error resetting order:', resetError);
           window.location.href = '/orders.html';
         }
       }
@@ -1201,22 +1160,11 @@ function toggleLocationVerification() {
       : 'Ürün Barkodunu Okutun';
   }
   
-  console.log('🔄 Location verification toggled:', locationVerificationEnabled ? 'MANDATORY' : 'OPTIONAL');
 }
 
 // Location verification toggle button event listener
 $('#locationVerifyStatus').addEventListener('click', toggleLocationVerification);
 
-// Debug button event listener
-$('#debugBtn').addEventListener('click', () => {
-  console.log('🐛 DEBUG INFORMATION:');
-  console.log('📊 pickData:', pickData);
-  console.log('🔍 checkForScannedItems result:', checkForScannedItems());
-  
-  // Test modal'ı göster
-  console.log('🧪 Testing exit modal...');
-  showExitModal();
-});
 
 await loadPick();
 
@@ -1224,41 +1172,31 @@ await loadPick();
 $('#manual').focus();
 console.log('📱 Started in manual input mode.');
 
-// Zebra Terminal Optimizasyonları - Sayfa yüklenince çalıştır
+// Zebra Terminal Optimizasyonları
 setTimeout(() => {
   const manualInput = $('#manual');
   
-  console.log('🔧 Setting up barcode auto-focus...');
-  
   if (manualInput) {
-    // İlk focus
     manualInput.focus();
-    manualInput.click(); // iOS için gerekli
+    manualInput.click();
     
-    console.log('✅ Initial focus set');
-    
-    // Focus kaybını sürekli kontrol et
     setInterval(() => {
       if (document.activeElement !== manualInput) {
         manualInput.focus();
       }
     }, 500);
     
-    // Her tıklamada focus
     document.addEventListener('click', (e) => {
       if (e.target !== manualInput) {
         setTimeout(() => manualInput.focus(), 50);
       }
     });
     
-    // Sayfa görünür olduğunda focus
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) {
         setTimeout(() => manualInput.focus(), 100);
       }
     });
-    
-    console.log('✅ Auto-focus system activated');
   }
 }, 1000);
 
@@ -1281,80 +1219,48 @@ const isZebraDevice = /Android/.test(navigator.userAgent) &&
 
 if (isZebraDevice) {
   document.body.classList.add('zebra-optimized');
-  console.log('🦓 Zebra device detected - enabling optimizations');
   
-  // Prevent screen dim during operation
   if ('wakeLock' in navigator) {
-    navigator.wakeLock.request('screen').catch(e => 
-      console.log('Wake lock not supported:', e)
-    );
+    navigator.wakeLock.request('screen').catch(e => {});
   }
 }
 
-// Çıkış butonu event listener - load sonrası ekle
-console.log('🔧 Adding exit button event listener...');
+// Çıkış butonu event listener
 const exitBtn = document.getElementById('exitPick');
-console.log('🔧 Exit button found:', exitBtn);
 
 if (exitBtn) {
-  // Multiple ways to add event listener for debugging
-  
-  // Multiple event types to catch any click
   ['mousedown', 'touchstart', 'click', 'pointerdown'].forEach(eventType => {
     exitBtn.addEventListener(eventType, function(e) {
-      console.log(`🔥 EXIT BUTTON CLICKED (${eventType})!`);
       e.preventDefault();
       e.stopPropagation();
-      
-      // Yeni exit logic'i kullan
       handleExit();
     });
   });
   
-  // Method 3: Direct style test
   exitBtn.style.pointerEvents = 'all';
   exitBtn.style.zIndex = '9999';
   
-  console.log('✅ Exit button listener added with multiple methods');
-  
-  // Since click doesn't work, use double hover as trigger
   let hoverCount = 0;
   let hoverTimeout = null;
   
   exitBtn.addEventListener('mouseenter', () => {
     hoverCount++;
-    console.log(`🖱️ Mouse entered exit button! (${hoverCount})`);
-    exitBtn.style.backgroundColor = '#b02a37'; // Darker red on hover
+    exitBtn.style.backgroundColor = '#b02a37';
     
-    // Reset counter after 1 second
     if (hoverTimeout) clearTimeout(hoverTimeout);
     hoverTimeout = setTimeout(() => {
       hoverCount = 0;
     }, 1000);
     
-    // Trigger exit on double hover
     if (hoverCount >= 2) {
-      console.log('🔥 DOUBLE HOVER DETECTED - TRIGGERING EXIT!');
       hoverCount = 0;
-      
-      // Yeni exit logic'i kullan
       handleExit();
     }
   });
   
   exitBtn.addEventListener('mouseleave', () => {
-    exitBtn.style.backgroundColor = '#dc3545'; // Original red
+    exitBtn.style.backgroundColor = '#dc3545';
   });
-  
-  // Test click with setTimeout
-  setTimeout(() => {
-    console.log('🧪 Testing button click programmatically...');
-    // Don't actually click, just test if button exists
-    console.log('🧪 Button still exists after 2 seconds:', !!document.getElementById('exitPick'));
-  }, 2000);
-  
-} else {
-  console.error('❌ Exit button not found!');
 }
 </script>
 </body>

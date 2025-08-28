@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WMS - Ürünler</title>
+    <link rel="stylesheet" href="/assets/css/styles.css" />
+    <script src="/assets/js/auth.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📦 Ürün Yönetimi</h1>
+            <div class="header-actions">
+                <button class="btn btn-primary" onclick="openBarcodeActionsModal()">
+                    🏷️ Barkod İşlemleri
+                </button>
+            </div>
+        </div>
+
+        <div class="content">
+            <div class="filters">
+                <input type="text" id="searchInput" placeholder="Ürün ara..." />
+                <button class="btn" onclick="refresh()">🔄 Yenile</button>
+            </div>
+
+            <div class="table-container">
+                <table id="prodTable">
+                    <thead>
+                        <tr>
+                            <th><input type="checkbox" id="selectAll" /></th>
+                            <th>Resim</th>
+                            <th>SKU</th>
+                            <th>Ürün Adı</th>
+                            <th>Fiyat</th>
+                            <th>Stok</th>
+                            <th>İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Barkod İşlemleri Modal -->
+    <div id="barcodeActionsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Barkod İşlemleri</h2>
+                <span class="close" onclick="closeBarcodeActionsModal()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div id="packageSelectionArea" style="display: none;"></div>
+                
+                <div class="print-options">
+                    <h3>Yazdırma Seçenekleri</h3>
+                    <label><input type="radio" name="printOption" value="selected" checked> Seçili ürünler</label>
+                    <label><input type="radio" name="printOption" value="all"> Tüm ürünler</label>
+                    
+                    <div class="form-row">
+                        <div>
+                            <label>Template:</label>
+                            <select id="templateSelect">
+                                <option value="default">Varsayılan</option>
+                                <option value="compact">Kompakt</option>
+                                <option value="detailed">Detaylı</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label>Kopya Sayısı:</label>
+                            <input type="number" id="copyCount" value="1" min="1">
+                        </div>
+                    </div>
+                    
+                    <button class="btn btn-primary" onclick="printBarcodes()">🖨️ Yazdır</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🚀 Script başlıyor...');
+        
+        // Temel değişkenler
+        const $ = (s) => document.querySelector(s);
+        let products = [];
+        let filteredProducts = [];
+        
+        // API
+        const API = {
+            async listProducts() {
+                const response = await fetch('/api/products');
+                return response.json();
+            },
+            async listPackages(id) {
+                const response = await fetch(`/api/products/${id}/packages`);
+                return response.json();
+            }
+        };
+        
+        // Ana refresh fonksiyonu
+        async function refresh() {
+            try {
+                console.log('🔄 Ürünler yükleniyor...');
+                products = await API.listProducts();
+                console.log('✅ Ürünler yüklendi:', products.length, 'ürün');
+                filteredProducts = [...products];
+                renderProducts();
+            } catch (error) {
+                console.error('❌ Ürünler yüklenirken hata:', error);
+                alert('Ürünler yüklenirken hata oluştu: ' + error.message);
+            }
+        }
+        
+        // Ürünleri render et
+        function renderProducts() {
+            console.log('📋 Render başlatılıyor:', filteredProducts.length, 'ürün');
+            const tbody = $('#prodTable tbody');
+            
+            if (filteredProducts.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align: center; padding: 2rem;">Ürün bulunamadı</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = filteredProducts.slice(0, 20).map(product => `
+                <tr>
+                    <td><input type="checkbox" class="product-select" value="${product.id}"></td>
+                    <td>📦</td>
+                    <td><code>${product.sku}</code></td>
+                    <td>${product.name}</td>
+                    <td>₺${(product.price || 0).toFixed(2)}</td>
+                    <td>${product.inventory_quantity || 0}</td>
+                    <td>
+                        <button class="btn btn-sm" onclick="openBarcodeForProduct(${product.id})">
+                            🏷️ Barkod
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+            
+            console.log('✅ Render tamamlandı');
+        }
+        
+        // Seçili ürünleri al
+        function getSelectedProducts() {
+            const checkboxes = document.querySelectorAll('.product-select:checked');
+            return Array.from(checkboxes).map(cb => {
+                const productId = cb.value;
+                return products.find(p => p.id == productId);
+            }).filter(p => p);
+        }
+        
+        // Barkod modal fonksiyonları
+        function openBarcodeActionsModal() {
+            console.log('📦 Barkod modal açılıyor...');
+            $('#barcodeActionsModal').style.display = 'block';
+            
+            const selectedProducts = getSelectedProducts();
+            if (selectedProducts.length === 1) {
+                loadProductPackages(selectedProducts[0].id);
+            } else {
+                hidePackageSelection();
+            }
+        }
+        
+        function closeBarcodeActionsModal() {
+            $('#barcodeActionsModal').style.display = 'none';
+            hidePackageSelection();
+        }
+        
+        function openBarcodeForProduct(productId) {
+            // Önce ürünü seç
+            const checkbox = document.querySelector(`input[value="${productId}"]`);
+            if (checkbox) checkbox.checked = true;
+            
+            openBarcodeActionsModal();
+        }
+        
+        // Alt paket yükleme
+        async function loadProductPackages(productId) {
+            try {
+                console.log('📦 Alt paketler yükleniyor...', productId);
+                const packages = await API.listPackages(productId);
+                
+                if (packages.length > 0) {
+                    showPackageSelection(packages);
+                } else {
+                    hidePackageSelection();
+                }
+            } catch (error) {
+                console.error('Alt paketler yüklenemedi:', error);
+                hidePackageSelection();
+            }
+        }
+        
+        function showPackageSelection(packages) {
+            const packageSelectionArea = $('#packageSelectionArea');
+            
+            packageSelectionArea.innerHTML = `
+                <div style="background: var(--section); border: 1px solid var(--border); border-radius: 8px; padding: 1rem; margin-bottom: 1rem;">
+                    <h4 style="color: var(--accent); margin-bottom: 1rem;">
+                        📦 Alt Paket Seçimi (${packages.length} paket)
+                    </h4>
+                    
+                    <div style="margin-bottom: 1rem;">
+                        <label>
+                            <input type="checkbox" id="selectAllPackages" onchange="toggleAllPackages()">
+                            <span style="color: var(--accent);">Tüm Paketleri Seç</span>
+                        </label>
+                    </div>
+                    
+                    <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 1rem; max-height: 200px; overflow-y: auto;">
+                        ${packages.map(pkg => `
+                            <label style="display: flex; align-items: center; background: var(--card); border: 1px solid var(--border); border-radius: 6px; padding: 0.75rem; cursor: pointer;">
+                                <input type="checkbox" class="package-checkbox" value="${pkg.id}" data-package='${JSON.stringify(pkg)}' style="margin-right: 0.75rem;">
+                                <div>
+                                    <div style="font-weight: 600; margin-bottom: 0.25rem;">
+                                        ${pkg.package_name || 'İsimsiz Paket'}
+                                    </div>
+                                    <div style="font-size: 0.9rem; color: var(--muted);">
+                                        Barkod: <code>${pkg.barcode}</code>
+                                    </div>
+                                    <div style="font-size: 0.85rem; color: var(--muted);">
+                                        Adet: ${pkg.quantity || 1}
+                                    </div>
+                                </div>
+                            </label>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+            
+            packageSelectionArea.style.display = 'block';
+        }
+        
+        function hidePackageSelection() {
+            const packageSelectionArea = $('#packageSelectionArea');
+            if (packageSelectionArea) {
+                packageSelectionArea.style.display = 'none';
+            }
+        }
+        
+        function toggleAllPackages() {
+            const selectAll = document.getElementById('selectAllPackages').checked;
+            const checkboxes = document.querySelectorAll('.package-checkbox');
+            checkboxes.forEach(checkbox => checkbox.checked = selectAll);
+        }
+        
+        function getSelectedPackages() {
+            const checkboxes = document.querySelectorAll('.package-checkbox:checked');
+            return Array.from(checkboxes).map(cb => JSON.parse(cb.dataset.package));
+        }
+        
+        // Yazdırma fonksiyonları
+        function printBarcodes() {
+            const selectedPackages = getSelectedPackages();
+            
+            if (selectedPackages.length > 0) {
+                console.log('📦 Alt paket yazdırma:', selectedPackages.length, 'paket');
+                printPackageBarcodes(selectedPackages);
+            } else {
+                console.log('📄 Ana ürün yazdırma');
+                printProductBarcodes();
+            }
+        }
+        
+        function printPackageBarcodes(packages) {
+            const template = $('#templateSelect').value;
+            const copyCount = parseInt($('#copyCount').value) || 1;
+            
+            let printHTML = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Alt Paket Barkod Etiketleri</title>
+                    <style>
+                        body { margin: 0; padding: 1rem; font-family: Arial, sans-serif; }
+                        .barcode { border: 1px solid #000; padding: 0.5rem; margin: 0.25rem; width: 50mm; text-align: center; }
+                        @media print { body { margin: 0; padding: 0; } .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="no-print">
+                        <h2>📦 Alt Paket Barkod Yazdırma</h2>
+                        <p>${packages.length} paket x ${copyCount} kopya = ${packages.length * copyCount} etiket</p>
+                        <button onclick="window.print()">🖨️ Yazdır</button>
+                        <button onclick="window.close()">Kapat</button>
+                    </div>
+                    <div>
+            `;
+            
+            packages.forEach(pkg => {
+                for (let i = 0; i < copyCount; i++) {
+                    printHTML += `
+                        <div class="barcode">
+                            <div style="font-weight: bold;">${pkg.barcode}</div>
+                            <div style="font-family: monospace;">|||||||||||||||</div>
+                            <div>${pkg.package_name || 'Paket'}</div>
+                            <div>Adet: ${pkg.quantity || 1}</div>
+                        </div>
+                    `;
+                }
+            });
+            
+            printHTML += `
+                    </div>
+                </body>
+                </html>
+            `;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printHTML);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => printWindow.print(), 500);
+        }
+        
+        function printProductBarcodes() {
+            const selectedProducts = getSelectedProducts();
+            const template = $('#templateSelect').value;
+            const copyCount = parseInt($('#copyCount').value) || 1;
+            
+            if (selectedProducts.length === 0) {
+                alert('Yazdırılacak ürün seçin!');
+                return;
+            }
+            
+            let printHTML = `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Ana Ürün Barkod Etiketleri</title>
+                    <style>
+                        body { margin: 0; padding: 1rem; font-family: Arial, sans-serif; }
+                        .barcode { border: 1px solid #000; padding: 0.5rem; margin: 0.25rem; width: 50mm; text-align: center; }
+                        @media print { body { margin: 0; padding: 0; } .no-print { display: none; } }
+                    </style>
+                </head>
+                <body>
+                    <div class="no-print">
+                        <h2>📄 Ana Ürün Barkod Yazdırma</h2>
+                        <p>${selectedProducts.length} ürün x ${copyCount} kopya = ${selectedProducts.length * copyCount} etiket</p>
+                        <button onclick="window.print()">🖨️ Yazdır</button>
+                        <button onclick="window.close()">Kapat</button>
+                    </div>
+                    <div>
+            `;
+            
+            selectedProducts.forEach(product => {
+                for (let i = 0; i < copyCount; i++) {
+                    printHTML += `
+                        <div class="barcode">
+                            <div style="font-weight: bold;">${product.sku}</div>
+                            <div style="font-family: monospace;">|||||||||||||||</div>
+                            <div>${product.name}</div>
+                            <div>₺${(product.price || 0).toFixed(2)}</div>
+                        </div>
+                    `;
+                }
+            });
+            
+            printHTML += `
+                    </div>
+                </body>
+                </html>
+            `;
+            
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(printHTML);
+            printWindow.document.close();
+            printWindow.focus();
+            setTimeout(() => printWindow.print(), 500);
+        }
+        
+        // Modal kapatma
+        window.onclick = function(event) {
+            const modal = $('#barcodeActionsModal');
+            if (event.target === modal) {
+                closeBarcodeActionsModal();
+            }
+        }
+        
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 DOM hazır, ürünler yükleniyor...');
+            refresh();
+        });
+        
+        console.log('✅ Script tamamlandı!');
+    </script>
+</body>
+</html>

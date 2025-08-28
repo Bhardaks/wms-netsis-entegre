@@ -1,0 +1,528 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
+  <title>Manuel Sipariş Ekleme</title>
+  <link rel="stylesheet" href="/assets/css/styles.css" />
+  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+  <script src="/assets/js/auth.js"></script>
+</head>
+<body>
+<header>
+  <div class="header-brand">
+    <h1>WMS Netsis Entegre</h1>
+    <span class="header-subtitle">Manuel Sipariş Ekleme</span>
+  </div>
+  <div class="header-actions">
+    <a href="/orders.html" class="action-btn">
+      <span class="btn-icon">📋</span>
+      <span class="btn-text">Sipariş Listesi</span>
+    </a>
+    <a href="/index.html" class="home-btn">
+      <span class="home-icon">🏠</span>
+      <span class="home-text">Ana Sayfa</span>
+    </a>
+  </div>
+</header>
+
+<main class="grid" style="max-width:900px;margin:auto;padding:16px">
+
+  <!-- Sipariş Bilgileri -->
+  <section class="card">
+    <h2>📝 Sipariş Bilgileri</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Sipariş No * <small style="color: var(--muted);">(Otomatik oluşturulacak)</small></label>
+        <input id="orderNumber" readonly style="width: 100%; background: var(--hover);" placeholder="Otomatik oluşturulacak..." />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Sipariş Tarihi</label>
+        <input id="orderDate" type="date" style="width: 100%;" />
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Müşteri Adı *</label>
+        <input id="customerName" required style="width: 100%;" placeholder="Müşteri adını girin" />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Müşteri Telefon</label>
+        <input id="customerPhone" type="tel" style="width: 100%;" placeholder="+90 555 123 4567" />
+      </div>
+      <div>
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Müşteri Email</label>
+        <input id="customerEmail" type="email" style="width: 100%;" placeholder="musteri@example.com" />
+      </div>
+      <div style="grid-column: 1 / -1;">
+        <label style="display: block; margin-bottom: 5px; font-weight: 500;">Teslimat Adresi</label>
+        <textarea id="deliveryAddress" rows="2" style="width: 100%; resize: vertical;" placeholder="Teslimat adresi bilgileri..."></textarea>
+      </div>
+    </div>
+    
+    <div class="card" style="background: var(--hover); margin-top: 15px; padding: 15px;">
+      <h4 style="margin: 0 0 10px 0; color: var(--accent);">🔗 Netsis Entegrasyon</h4>
+      <ul style="margin: 0; padding-left: 20px; font-size: 0.9em; color: var(--muted);">
+        <li>Bu sipariş manuel olarak oluşturulacak ve Netsis ERP ile senkronize edilebilecek</li>
+        <li>Sipariş numaraları Netsis formatında otomatik oluşturulur</li>
+        <li>Müşteri bilgileri gelecekte Netsis müşteri kartları ile eşleştirilecek</li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- Ürün Ekleme -->
+  <section class="card">
+    <h2>🛍️ Sipariş Kalemleri</h2>
+    
+    <div class="card" style="background: var(--hover); margin-bottom: 20px; padding: 15px;">
+      <h3 style="margin: 0 0 15px 0;">Ürün Ekle</h3>
+      <div style="display: grid; grid-template-columns: 2fr 1fr 1fr 100px; gap: 10px; align-items: end;">
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Ürün Seç *</label>
+          <select id="productSelect" style="width: 100%;">
+            <option value="">Ürün seçin...</option>
+          </select>
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Mevcut Stok</label>
+          <input id="availableStock" readonly style="width: 100%; background: var(--muted); color: var(--fg);" placeholder="0" />
+        </div>
+        <div>
+          <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Miktar *</label>
+          <input id="orderQuantity" type="number" min="1" style="width: 100%;" placeholder="1" />
+        </div>
+        <div>
+          <button id="addProductBtn" class="btn-primary" style="height: 40px;">
+            ➕ Ekle
+          </button>
+        </div>
+      </div>
+      <div id="productWarning" style="display: none; color: var(--warning); margin-top: 10px; font-size: 0.9em;">
+        ⚠️ Seçilen miktar mevcut stoktan fazla!
+      </div>
+    </div>
+
+    <!-- Sipariş Kalemleri Listesi -->
+    <div class="table-container">
+      <table id="orderItemsTable">
+        <thead>
+          <tr>
+            <th>Ürün</th>
+            <th>SKU</th>
+            <th>Birim Fiyat</th>
+            <th>Miktar</th>
+            <th>Toplam</th>
+            <th>İşlem</th>
+          </tr>
+        </thead>
+        <tbody id="orderItemsList">
+          <tr id="emptyRow">
+            <td colspan="6" style="text-align: center; padding: 30px; color: var(--muted);">
+              <em>Henüz ürün eklenmedi. Yukarıdaki formdan ürün ekleyin.</em>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Sipariş Özeti -->
+    <div class="card" style="background: var(--accent); color: white; margin-top: 20px; padding: 15px;">
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 20px; text-align: center;">
+        <div>
+          <div style="font-size: 1.2em; font-weight: bold;" id="totalItems">0</div>
+          <div style="font-size: 0.9em; opacity: 0.8;">Toplam Ürün</div>
+        </div>
+        <div>
+          <div style="font-size: 1.2em; font-weight: bold;" id="totalQuantity">0</div>
+          <div style="font-size: 0.9em; opacity: 0.8;">Toplam Adet</div>
+        </div>
+        <div>
+          <div style="font-size: 1.5em; font-weight: bold;" id="totalPrice">₺0.00</div>
+          <div style="font-size: 0.9em; opacity: 0.8;">Toplam Tutar</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Sipariş Notları -->
+  <section class="card">
+    <h2>📋 Sipariş Notları</h2>
+    <textarea id="orderNotes" rows="3" style="width: 100%; resize: vertical;" placeholder="Sipariş ile ilgili özel notlar, talimatlar..."></textarea>
+  </section>
+
+  <!-- İşlem Butonları -->
+  <section class="card">
+    <div style="display: flex; gap: 15px; justify-content: flex-end;">
+      <button onclick="clearForm()" style="background: var(--muted); color: var(--fg); padding: 12px 24px;">
+        🗑️ Formu Temizle
+      </button>
+      <button onclick="saveDraft()" style="background: var(--warning); color: white; padding: 12px 24px;">
+        💾 Taslak Kaydet
+      </button>
+      <button id="createOrderBtn" onclick="createOrder()" class="btn-primary" style="padding: 12px 24px; font-size: 1.1em;">
+        ✅ Siparişi Oluştur
+      </button>
+    </div>
+  </section>
+</main>
+
+<!-- Başarı Modal -->
+<div class="modal" id="successModal">
+  <div class="panel" style="max-width: 500px;">
+    <div style="text-align: center; padding: 20px;">
+      <div style="font-size: 3em; margin-bottom: 15px;">🎉</div>
+      <h3 style="color: var(--success); margin-bottom: 15px;">Sipariş Başarıyla Oluşturuldu!</h3>
+      <div style="background: var(--hover); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+        <div><strong>Sipariş No:</strong> <span id="createdOrderNumber"></span></div>
+        <div><strong>Müşteri:</strong> <span id="createdCustomerName"></span></div>
+        <div><strong>Toplam Tutar:</strong> <span id="createdTotalPrice"></span></div>
+      </div>
+      <div class="card" style="background: var(--accent); color: white; padding: 10px; margin-bottom: 15px; font-size: 0.9em;">
+        🔗 Netsis entegrasyonu aktif olduğunda bu sipariş otomatik senkronize edilecek
+      </div>
+      <div style="display: flex; gap: 10px; justify-content: center;">
+        <button onclick="viewOrder()" class="btn-primary">📋 Siparişi Görüntüle</button>
+        <button onclick="createAnother()" style="background: var(--success); color: white;">➕ Yeni Sipariş</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+const $ = (s) => document.querySelector(s);
+const API = {
+  async listProducts() { return fetch('/api/products').then(r => r.json()) },
+  async createOrder(orderData) { 
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(orderData)
+    });
+    const result = await response.json();
+    if (!response.ok) throw new Error(result.error || 'Sipariş oluşturulurken hata oluştu');
+    return result;
+  },
+  async generateOrderNumber() {
+    return fetch('/api/orders/generate-number').then(r => r.json());
+  }
+};
+
+let products = [];
+let orderItems = [];
+let currentOrderNumber = '';
+
+// Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+  // Set today's date
+  const today = new Date().toISOString().split('T')[0];
+  $('#orderDate').value = today;
+  
+  // Generate order number
+  try {
+    const orderNumberData = await API.generateOrderNumber();
+    currentOrderNumber = orderNumberData.orderNumber;
+    $('#orderNumber').value = currentOrderNumber;
+  } catch (error) {
+    // Fallback order number generation
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+    currentOrderNumber = `NETSIS-${timestamp}`;
+    $('#orderNumber').value = currentOrderNumber;
+  }
+  
+  // Load products
+  await loadProducts();
+  
+  // Event listeners
+  $('#productSelect').addEventListener('change', onProductSelect);
+  $('#orderQuantity').addEventListener('input', validateQuantity);
+  $('#addProductBtn').addEventListener('click', addProductToOrder);
+});
+
+async function loadProducts() {
+  try {
+    products = await API.listProducts();
+    const select = $('#productSelect');
+    select.innerHTML = '<option value="">Ürün seçin...</option>';
+    
+    products.forEach(product => {
+      const option = document.createElement('option');
+      option.value = product.id;
+      option.textContent = `${product.name} (${product.sku}) - ₺${(product.price || 0).toFixed(2)}`;
+      option.dataset.product = JSON.stringify(product);
+      select.appendChild(option);
+    });
+    
+    console.log(`✅ ${products.length} ürün yüklendi (Netsis entegre)`);
+  } catch (error) {
+    console.error('❌ Ürün yükleme hatası:', error);
+    alert('Ürünler yüklenirken hata oluştu: ' + error.message);
+  }
+}
+
+function onProductSelect() {
+  const select = $('#productSelect');
+  const selectedOption = select.selectedOptions[0];
+  
+  if (!selectedOption || !selectedOption.value) {
+    $('#availableStock').value = '';
+    $('#orderQuantity').value = '';
+    return;
+  }
+  
+  const product = JSON.parse(selectedOption.dataset.product);
+  $('#availableStock').value = product.inventory_quantity || 0;
+  $('#orderQuantity').value = 1;
+  $('#orderQuantity').focus();
+  
+  validateQuantity();
+}
+
+function validateQuantity() {
+  const select = $('#productSelect');
+  const selectedOption = select.selectedOptions[0];
+  
+  if (!selectedOption || !selectedOption.value) return;
+  
+  const product = JSON.parse(selectedOption.dataset.product);
+  const requestedQty = parseInt($('#orderQuantity').value) || 0;
+  const availableStock = product.inventory_quantity || 0;
+  
+  const warning = $('#productWarning');
+  const addBtn = $('#addProductBtn');
+  
+  if (requestedQty > availableStock) {
+    warning.style.display = 'block';
+    warning.innerHTML = `⚠️ İstenen miktar (${requestedQty}) mevcut stoktan (${availableStock}) fazla!`;
+    addBtn.style.background = 'var(--warning)';
+    addBtn.innerHTML = '⚠️ Yine de Ekle';
+  } else {
+    warning.style.display = 'none';
+    addBtn.style.background = '';
+    addBtn.innerHTML = '➕ Ekle';
+  }
+}
+
+function addProductToOrder() {
+  const select = $('#productSelect');
+  const selectedOption = select.selectedOptions[0];
+  
+  if (!selectedOption || !selectedOption.value) {
+    alert('Lütfen bir ürün seçin!');
+    return;
+  }
+  
+  const quantity = parseInt($('#orderQuantity').value);
+  if (!quantity || quantity < 1) {
+    alert('Lütfen geçerli bir miktar girin!');
+    return;
+  }
+  
+  const product = JSON.parse(selectedOption.dataset.product);
+  
+  // Check if product already in order
+  const existingItem = orderItems.find(item => item.productId === product.id);
+  if (existingItem) {
+    alert('Bu ürün zaten siparişte var! Miktarını değiştirmek için tablodan düzenleyin.');
+    return;
+  }
+  
+  // Add to order items
+  const orderItem = {
+    productId: product.id,
+    sku: product.sku,
+    name: product.name,
+    price: product.price || 0,
+    quantity: quantity,
+    total: (product.price || 0) * quantity
+  };
+  
+  orderItems.push(orderItem);
+  updateOrderItemsTable();
+  updateOrderSummary();
+  
+  // Clear form
+  $('#productSelect').value = '';
+  $('#availableStock').value = '';
+  $('#orderQuantity').value = '';
+  $('#productWarning').style.display = 'none';
+  
+  console.log('✅ Ürün siparişe eklendi:', orderItem);
+}
+
+function updateOrderItemsTable() {
+  const tbody = $('#orderItemsList');
+  
+  if (orderItems.length === 0) {
+    tbody.innerHTML = `
+      <tr id="emptyRow">
+        <td colspan="6" style="text-align: center; padding: 30px; color: var(--muted);">
+          <em>Henüz ürün eklenmedi. Yukarıdaki formdan ürün ekleyin.</em>
+        </td>
+      </tr>`;
+    return;
+  }
+  
+  tbody.innerHTML = orderItems.map((item, index) => `
+    <tr>
+      <td><strong>${item.name}</strong></td>
+      <td><code style="background: var(--hover); padding: 2px 6px; border-radius: 4px;">${item.sku}</code></td>
+      <td>₺${item.price.toFixed(2)}</td>
+      <td>
+        <input type="number" min="1" value="${item.quantity}" 
+               onchange="updateItemQuantity(${index}, this.value)"
+               style="width: 80px; text-align: center;" />
+      </td>
+      <td><strong>₺${item.total.toFixed(2)}</strong></td>
+      <td>
+        <button onclick="removeOrderItem(${index})" 
+                style="background: var(--danger); color: white; border: none; padding: 5px 10px; border-radius: 4px;">
+          🗑️ Sil
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function updateItemQuantity(index, newQuantity) {
+  const quantity = parseInt(newQuantity) || 1;
+  orderItems[index].quantity = quantity;
+  orderItems[index].total = orderItems[index].price * quantity;
+  updateOrderItemsTable();
+  updateOrderSummary();
+}
+
+function removeOrderItem(index) {
+  const item = orderItems[index];
+  if (confirm(`"${item.name}" ürününü siparişten çıkarmak istediğinizden emin misiniz?`)) {
+    orderItems.splice(index, 1);
+    updateOrderItemsTable();
+    updateOrderSummary();
+  }
+}
+
+function updateOrderSummary() {
+  const totalItems = orderItems.length;
+  const totalQuantity = orderItems.reduce((sum, item) => sum + item.quantity, 0);
+  const totalPrice = orderItems.reduce((sum, item) => sum + item.total, 0);
+  
+  $('#totalItems').textContent = totalItems;
+  $('#totalQuantity').textContent = totalQuantity;
+  $('#totalPrice').textContent = `₺${totalPrice.toFixed(2)}`;
+}
+
+function clearForm() {
+  if (orderItems.length > 0) {
+    if (!confirm('Formu temizlemek istediğinizden emin misiniz? Tüm girilen bilgiler silinecek.')) {
+      return;
+    }
+  }
+  
+  // Clear customer info
+  $('#customerName').value = '';
+  $('#customerPhone').value = '';
+  $('#customerEmail').value = '';
+  $('#deliveryAddress').value = '';
+  $('#orderNotes').value = '';
+  
+  // Clear order items
+  orderItems = [];
+  updateOrderItemsTable();
+  updateOrderSummary();
+  
+  // Clear product selection
+  $('#productSelect').value = '';
+  $('#availableStock').value = '';
+  $('#orderQuantity').value = '';
+  $('#productWarning').style.display = 'none';
+  
+  console.log('🗑️ Form temizlendi');
+}
+
+function saveDraft() {
+  // TODO: Implement draft saving functionality
+  alert('💾 Taslak kaydetme özelliği gelecek versiyonlarda eklenecek!');
+}
+
+async function createOrder() {
+  // Validation
+  const customerName = $('#customerName').value.trim();
+  if (!customerName) {
+    alert('❌ Müşteri adı zorunludur!');
+    $('#customerName').focus();
+    return;
+  }
+  
+  if (orderItems.length === 0) {
+    alert('❌ Sipariş için en az bir ürün eklemelisiniz!');
+    return;
+  }
+  
+  const createBtn = $('#createOrderBtn');
+  const originalText = createBtn.innerHTML;
+  createBtn.innerHTML = '⏳ Sipariş Oluşturuluyor...';
+  createBtn.disabled = true;
+  
+  try {
+    const orderData = {
+      order_number: currentOrderNumber,
+      customer_name: customerName,
+      customer_phone: $('#customerPhone').value.trim() || null,
+      customer_email: $('#customerEmail').value.trim() || null,
+      delivery_address: $('#deliveryAddress').value.trim() || null,
+      order_date: $('#orderDate').value,
+      notes: $('#orderNotes').value.trim() || null,
+      items: orderItems.map(item => ({
+        product_id: item.productId,
+        sku: item.sku,
+        product_name: item.name,
+        quantity: item.quantity,
+        unit_price: item.price
+      }))
+    };
+    
+    console.log('📤 Netsis entegre sipariş gönderiliyor:', orderData);
+    
+    const result = await API.createOrder(orderData);
+    
+    console.log('✅ Netsis entegre sipariş oluşturuldu:', result);
+    
+    // Show success modal
+    $('#createdOrderNumber').textContent = result.order_number;
+    $('#createdCustomerName').textContent = customerName;
+    $('#createdTotalPrice').textContent = $('#totalPrice').textContent;
+    document.getElementById('successModal').classList.add('show');
+    
+  } catch (error) {
+    console.error('❌ Sipariş oluşturma hatası:', error);
+    alert('❌ Sipariş oluşturulurken hata oluştu:\n' + error.message);
+  } finally {
+    createBtn.innerHTML = originalText;
+    createBtn.disabled = false;
+  }
+}
+
+function viewOrder() {
+  document.getElementById('successModal').classList.remove('show');
+  window.location.href = '/orders.html';
+}
+
+function createAnother() {
+  document.getElementById('successModal').classList.remove('show');
+  clearForm();
+  
+  // Generate new order number
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+  currentOrderNumber = `NETSIS-${timestamp}`;
+  $('#orderNumber').value = currentOrderNumber;
+}
+
+// Global functions
+window.updateItemQuantity = updateItemQuantity;
+window.removeOrderItem = removeOrderItem;
+window.clearForm = clearForm;
+window.saveDraft = saveDraft;
+window.createOrder = createOrder;
+window.viewOrder = viewOrder;
+window.createAnother = createAnother;
+
+</script>
+</body>
+</html>

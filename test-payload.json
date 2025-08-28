@@ -1,0 +1,33 @@
+{
+  "external_order": {
+    "id": "0000000010088-1",
+    "order_number": "0000000010088-1",
+    "customer_code": "00 0003",
+    "customer_name": "00 0003",
+    "order_date": "2024-12-16",
+    "total_amount": 141.57,
+    "kdv_amount": 24.57,
+    "kdv_included": false,
+    "items": [
+      {
+        "id": "0000000010088-1-1",
+        "product_sku": "LOV-UN-B-BE-03",
+        "stokKodu": "LOV-UN-B-BE-03",
+        "product_name": "LOV-UN-B-BE-03",
+        "quantity": 1,
+        "unit_price": 117.00,
+        "line_number": 1,
+        "warehouse_code": "2",
+        "description": "00 0003",
+        "unit": "1",
+        "vat_rate": 21.00
+      }
+    ],
+    "status": "open",
+    "fulfillment_status": "UNFULFILLED",
+    "created_at": "2024-12-16",
+    "source": "external",
+    "category": "ongoing"
+  },
+  "source": "external_api"
+}

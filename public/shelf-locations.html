@@ -1,25 +1,39 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
-  <title>Raf Lokasyonları</title>
-  <link rel="stylesheet" href="/assets/css/styles.css" />
-  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Raf Lokasyonları - WMS</title>
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/zebra-terminal.css">
+    
+    <!-- Core Scripts -->
+    <script src="/assets/js/auth.js"></script>
 </head>
 <body>
-<header>
-  <div class="header-brand">
-    <h1>WMS Yönetim Sistemi</h1>
-    <span class="header-subtitle">Raf Lokasyonları</span>
-  </div>
-  <div class="header-actions">
-    <a href="/index.html" class="home-btn">
-      <span class="home-icon">🏠</span>
-      <span class="home-text">Ana Sayfa</span>
-    </a>
-  </div>
-</header>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Yükleniyor...</div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <button onclick="location.href='/index.html'" class="btn btn-secondary">
+                ← Ana Sayfa
+            </button>
+            <h1>Raf Lokasyonları</h1>
+        </div>
+        <div class="header-right">
+            <button onclick="refreshData()" class="btn btn-outline">
+                <span class="btn-icon">↻</span>
+                <span class="btn-text">Yenile</span>
+            </button>
+        </div>
+    </div>
 
 <main class="grid" style="max-width:1200px;margin:auto;padding:16px">
 
@@ -166,10 +180,13 @@
   </section>
 
 
-  <!-- Ürün Haritası -->
+  <!-- Ürün Haritası (Minimized) -->
   <section class="card">
-    <h2>🗺️ Ürün Lokasyon Haritası</h2>
-    <div class="map-container">
+    <div class="map-header" onclick="toggleMapSection()">
+      <h2>🗺️ Ürün Lokasyon Haritası</h2>
+      <button class="toggle-btn" id="mapToggleBtn">📌 Göster</button>
+    </div>
+    <div class="map-container" id="mapContainer" style="display: none;">
       <div class="map-filters">
         <input type="text" id="productSearchMap" placeholder="Ürün adı, SKU veya barkod ara..." />
         <select id="selectedProductFilter">
@@ -564,6 +581,33 @@ function showSuccess(message) {
   alert('Başarılı: ' + message);
 }
 
+// Verileri yenile
+async function refreshData() {
+  try {
+    console.log('🔄 Veriler yenileniyor...');
+    
+    // Loading göster
+    document.getElementById('loadingOverlay').style.display = 'flex';
+    
+    // Tüm veriyi yeniden yükle
+    await Promise.all([
+      loadData(),        // Raf atamaları için
+      loadMapData(),     // Harita için 
+      loadAnalyticsData('optimization'), // Analitik tab
+      loadTransferSuggestions()
+    ]);
+    
+    console.log('✅ Veriler başarıyla yenilendi');
+    showSuccess('Veriler yenilendi');
+  } catch (error) {
+    console.error('❌ Veri yenileme hatası:', error);
+    showError('Veriler yenilenirken hata oluştu');
+  } finally {
+    // Loading gizle
+    document.getElementById('loadingOverlay').style.display = 'none';
+  }
+}
+
 // ============== ÜRÜN HARİTASI VE HAREKET TAKİBİ ===============
 
 let allShelves = [];
@@ -573,15 +617,19 @@ let tooltip = null;
 // Harita verilerini yükle
 async function loadMapData() {
   try {
+    console.log('🔄 Harita verileri yükleniyor...');
+    
     // Tüm rafları al
     const shelvesResponse = await fetch('/api/shelves');
     const shelvesData = await shelvesResponse.json();
     allShelves = shelvesData.shelves || [];
+    console.log(`📚 Yüklenen raf sayısı: ${allShelves.length}`);
     
     // Raf atamalarını al
     const assignmentsResponse = await fetch('/api/shelf-assignments');
     const assignmentsData = await assignmentsResponse.json();
     const assignments = assignmentsData.assignments || [];
+    console.log(`📦 Yüklenen assignment sayısı: ${assignments.length}`);
     
     // Rafları atama bilgileriyle zenginleştir
     enrichShelvesWithAssignments(assignments);
@@ -600,6 +648,12 @@ async function loadMapData() {
 
 // Rafları atama bilgileriyle zenginleştir
 function enrichShelvesWithAssignments(assignments) {
+  console.log(`🔍 enrichShelvesWithAssignments çalışıyor. Assignment sayısı: ${assignments.length}`);
+  
+  if (assignments.length > 0) {
+    console.log('📋 İlk assignment:', assignments[0]);
+  }
+  
   const shelfAssignments = {};
   
   assignments.forEach(assignment => {
@@ -617,7 +671,7 @@ function enrichShelvesWithAssignments(assignments) {
       packageName: assignment.package_name,
       barcode: assignment.barcode,
       quantity: assignment.quantity,
-      productId: assignment.product_id
+      productId: assignment.product_id || assignment.id // Fallback için id de kullan
     });
     
     shelfAssignments[assignment.shelf_id].totalQuantity += assignment.quantity || 0;
@@ -664,6 +718,19 @@ function populateProductFilter(assignments) {
 // Raf haritasını render et
 function renderShelfMap() {
   const mapContainer = document.getElementById('shelfMap');
+  
+  console.log(`🗺️ Harita render ediliyor... Toplam ${allShelves.length} raf`);
+  
+  // Rafların ürün durumunu kontrol et
+  let shelvesWithProducts = allShelves.filter(shelf => shelf.products && shelf.products.length > 0);
+  console.log(`📦 Ürün içeren raf sayısı: ${shelvesWithProducts.length}`);
+  
+  if (shelvesWithProducts.length > 0) {
+    console.log('📋 İlk birkaç ürünlü raf:');
+    shelvesWithProducts.slice(0, 3).forEach(shelf => {
+      console.log(`  - ${shelf.shelf_code}: ${shelf.products.length} ürün, Toplam: ${shelf.totalQuantity}`);
+    });
+  }
   
   // Bölgelere göre grupla
   const zoneGroups = {};
@@ -1255,20 +1322,44 @@ function consolidateProducts(shelfCode) {
 }
 
 // Sayfa yüklendiğinde harita sistemini başlat
-document.addEventListener('DOMContentLoaded', function() {
-  // Mevcut initialization'lar
-  loadData();
-  setupEventListeners();
-  
-  // Yeni harita sistemi
-  loadMapData();
-  setupMapFilters();
-  
-  // Analitik sistemleri
-  setupAnalyticsTabs();
-  loadAnalyticsData('optimization'); // İlk tab'ı yükle
-  loadTransferSuggestions();
+document.addEventListener('DOMContentLoaded', async function() {
+  try {
+    // Event listener'ları kur
+    setupEventListeners();
+    setupMapFilters();
+    setupAnalyticsTabs();
+    
+    // Tüm veriyi paralel yükle (harita hariç)
+    await Promise.all([
+      loadData(),        // Raf atamaları için
+      // loadMapData(),     // Harita lazy load edilecek
+      loadAnalyticsData('optimization'), // İlk analitik tab
+      loadTransferSuggestions()
+    ]);
+    
+    console.log('✅ Tüm veriler yüklendi');
+  } catch (error) {
+    console.error('❌ Sayfa yüklenirken hata:', error);
+  }
 });
+
+// Harita bölümünü toggle et
+function toggleMapSection() {
+  const container = document.getElementById('mapContainer');
+  const toggleBtn = document.getElementById('mapToggleBtn');
+  
+  if (container.style.display === 'none') {
+    container.style.display = 'block';
+    toggleBtn.textContent = '📍 Gizle';
+    // İlk kez açılıyorsa harita verilerini yükle
+    if (!allShelves.length) {
+      loadMapData();
+    }
+  } else {
+    container.style.display = 'none';
+    toggleBtn.textContent = '📌 Göster';
+  }
+}
 
 </script>
 
@@ -1540,6 +1631,37 @@ document.addEventListener('DOMContentLoaded', function() {
   color: var(--muted);
 }
 
+/* Map Section Styling */
+.map-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  padding: 10px 0;
+}
+
+.toggle-btn {
+  background: var(--accent);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-2px);
+}
+
+.map-container {
+  margin-top: 15px;
+  border-top: 2px solid var(--border);
+  padding-top: 20px;
+}
+
 @media (max-width: 768px) {
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
@@ -1559,6 +1681,15 @@ document.addEventListener('DOMContentLoaded', function() {
   
   .detail-actions {
     flex-direction: column;
+  }
+  
+  .map-header h2 {
+    font-size: 1.4em;
+  }
+  
+  .toggle-btn {
+    padding: 6px 12px;
+    font-size: 12px;
   }
 }
 </style>

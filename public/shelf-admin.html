@@ -8,19 +8,21 @@
   <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
   <script src="/assets/js/auth.js"></script>
 </head>
-<body>
-<header>
-  <div class="header-brand">
-    <h1>WMS Yönetim Sistemi</h1>
-    <span class="header-subtitle">Raf Yönetimi</span>
+<body style="background: var(--bg); min-height: 100vh; margin: 0; font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; color: var(--fg);">
+<div class="header">
+  <div class="header-left">
+    <button onclick="location.href='/index.html'" class="btn btn-secondary">
+      ← Ana Sayfa
+    </button>
+    <h1>📋 Raf Yönetimi</h1>
   </div>
-  <div class="header-actions">
-    <a href="/index.html" class="home-btn">
-      <span class="home-icon">🏠</span>
-      <span class="home-text">Ana Sayfa</span>
-    </a>
+  <div class="header-right">
+    <button onclick="loadShelves()" class="btn btn-outline">
+      <span class="btn-icon">🔄</span>
+      <span class="btn-text">Yenile</span>
+    </button>
   </div>
-</header>
+</div>
 
 <main class="grid" style="max-width:1400px;margin:auto;padding:16px">
 
@@ -227,6 +229,105 @@
       <div class="empty-text">Henüz raf eklenmemiş</div>
     </div>
   </section>
+
+  <style>
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    
+    /* Table Dark Theme Styling */
+    .table-container {
+      background: var(--card);
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+    
+    #shelvesTable {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    
+    #shelvesTable thead {
+      background: var(--accent);
+      color: white;
+    }
+    
+    #shelvesTable th {
+      padding: 12px 16px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 13px;
+      border: none;
+    }
+    
+    #shelvesTable td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      color: var(--fg);
+      font-weight: 500;
+    }
+    
+    #shelvesTable tbody tr:hover {
+      background: var(--hover);
+    }
+    
+    #shelvesTable tbody tr:last-child td {
+      border-bottom: none;
+    }
+    
+    .action-buttons {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    
+    .btn-sm {
+      padding: 6px 10px;
+      font-size: 11px;
+      font-weight: 600;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    
+    .btn-sm.btn-primary {
+      background: var(--accent);
+      color: white;
+    }
+    
+    .btn-sm.btn-primary:hover {
+      opacity: 0.8;
+    }
+    
+    .btn-sm.btn-secondary {
+      background: rgba(239, 68, 68, 0.1);
+      color: var(--danger);
+      border: 1px solid rgba(239, 68, 68, 0.2);
+    }
+    
+    .btn-sm.btn-secondary:hover {
+      background: var(--danger);
+      color: white;
+    }
+    
+    .zone-badge {
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+    
+    .zone-A { background: rgba(34, 197, 94, 0.2); color: var(--success); }
+    .zone-B { background: rgba(77, 163, 255, 0.2); color: var(--accent); }
+    .zone-C { background: rgba(168, 85, 247, 0.2); color: #a855f7; }
+    .zone-D { background: rgba(239, 68, 68, 0.2); color: var(--danger); }
+    .zone-RETURN { background: rgba(249, 115, 22, 0.2); color: var(--warning); }
+    .zone-QUARANTINE { background: rgba(234, 179, 8, 0.2); color: #eab308; }
+    .zone-CUSTOM { background: rgba(107, 114, 128, 0.2); color: var(--muted); }
+  </style>
 
 </main>
 
@@ -704,41 +805,217 @@ function showSuccess(message) {
     alert('✅ ' + message);
 }
 
+// Initialize when DOM is ready
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if auth is already complete
+    if (window.isAuthComplete) {
+        initializePage();
+    }
+});
+
 // Global scope'a fonksiyonları ekle
 window.regenerateBarcode = regenerateBarcode;
 window.toggleManualBarcode = toggleManualBarcode;
 window.clearForm = clearForm;
 window.printShelfBarcode = printShelfBarcode;
 window.deleteShelf = deleteShelf;
+window.loadShelves = loadShelves;
+window.filterShelves = filterShelves;
 </script>
 
 <style>
-/* Modern Form Styles */
+/* Mobile-First Responsive Styles */
+@media (max-width: 768px) {
+    .table-container {
+        display: none !important;
+    }
+    
+    .mobile-shelves {
+        display: block !important;
+    }
+    
+    .shelf-card {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        margin-bottom: 16px;
+        padding: 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    
+    .shelf-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+    }
+    
+    .shelf-code {
+        font-size: 16px;
+        font-weight: bold;
+        color: var(--accent);
+        font-family: 'Courier New', monospace;
+    }
+    
+    .shelf-zone {
+        font-size: 11px;
+        padding: 4px 8px;
+        border-radius: 12px;
+        font-weight: 500;
+    }
+    
+    .shelf-name {
+        font-weight: 500;
+        margin-bottom: 12px;
+        color: var(--fg);
+    }
+    
+    .shelf-details {
+        margin-bottom: 16px;
+    }
+    
+    .detail-item {
+        display: flex;
+        margin-bottom: 6px;
+        align-items: center;
+    }
+    
+    .detail-label {
+        font-weight: 600;
+        color: var(--muted);
+        min-width: 70px;
+        font-size: 13px;
+    }
+    
+    .detail-value {
+        flex: 1;
+        font-size: 14px;
+    }
+    
+    .shelf-actions {
+        display: flex;
+        gap: 8px;
+    }
+    
+    .mobile-action-btn {
+        flex: 1;
+        padding: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+    }
+    
+    .btn-primary-mobile {
+        background: var(--accent);
+        color: white;
+    }
+    
+    .btn-danger-mobile {
+        background: var(--danger);
+        color: white;
+    }
+    
+    .stats-row {
+        display: grid !important;
+        grid-template-columns: 1fr !important;
+        gap: 12px !important;
+        margin-bottom: 20px !important;
+    }
+}
+
+@media (min-width: 769px) {
+    .mobile-shelves {
+        display: none !important;
+    }
+    
+    .table-container {
+        display: block !important;
+    }
+}
+
+/* Stats Row */
+.stats-row {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 20px;
+    margin-bottom: 30px;
+}
+
+.stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.stat-value {
+    font-size: 2.5rem;
+    font-weight: bold;
+    color: var(--accent);
+    margin-bottom: 8px;
+}
+
+.stat-label {
+    color: var(--muted);
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Modern Form Styles - Dark Theme */
 .user-friendly-form {
-  background: linear-gradient(135deg, #f8fafc 0%, #ffffff 100%);
-  border: 1px solid #e2e8f0;
-  border-radius: 16px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .form-header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, #3b8fff 100%);
   color: white;
   padding: 24px;
   text-align: center;
+  position: relative;
+  overflow: hidden;
+}
+
+.form-header::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: radial-gradient(circle at 30% 20%, rgba(255, 255, 255, 0.1) 0%, transparent 50%);
+  pointer-events: none;
 }
 
 .form-header h2 {
   margin: 0 0 8px 0;
   font-size: 24px;
   font-weight: 600;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+  position: relative;
+  z-index: 1;
 }
 
 .form-description {
   margin: 0;
   opacity: 0.9;
   font-size: 14px;
+  font-weight: 400;
+  position: relative;
+  z-index: 1;
 }
 
 .form-container {
@@ -747,6 +1024,15 @@ window.deleteShelf = deleteShelf;
 
 .form-section {
   margin-bottom: 32px;
+  padding: 20px;
+  background: var(--hover);
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  transition: all 0.3s ease;
+}
+
+.form-section:hover {
+  border-color: var(--accent);
 }
 
 .form-section:last-child {
@@ -758,11 +1044,11 @@ window.deleteShelf = deleteShelf;
   align-items: center;
   gap: 8px;
   margin: 0 0 16px 0;
-  color: #374151;
+  color: var(--fg);
   font-size: 16px;
   font-weight: 600;
   padding-bottom: 8px;
-  border-bottom: 2px solid #e5e7eb;
+  border-bottom: 2px solid var(--border);
 }
 
 .form-row {
@@ -786,45 +1072,46 @@ window.deleteShelf = deleteShelf;
   align-items: center;
   gap: 8px;
   font-weight: 600;
-  color: #374151;
+  color: var(--fg);
   margin-bottom: 8px;
   font-size: 14px;
 }
 
 .label-icon {
   font-size: 16px;
+  color: var(--accent);
 }
 
 .modern-input, .modern-select {
   padding: 12px 16px;
-  border: 2px solid #e5e7eb;
+  border: 2px solid var(--border);
   border-radius: 8px;
   font-size: 14px;
   transition: all 0.2s ease;
-  background: white;
-  color: #1f2937;
+  background: var(--bg);
+  color: var(--fg);
   font-weight: 500;
 }
 
 .modern-input:focus, .modern-select:focus {
   outline: none;
-  border-color: #667eea;
-  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(77, 163, 255, 0.1);
 }
 
 .modern-input::placeholder {
-  color: #9ca3af;
+  color: var(--muted);
   font-weight: 400;
 }
 
 .modern-input:disabled, .modern-select:disabled {
-  background: #f9fafb;
-  color: #6b7280;
+  background: var(--hover);
+  color: var(--muted);
   cursor: not-allowed;
 }
 
 .help-text {
-  color: #6b7280;
+  color: var(--muted);
   font-size: 12px;
   margin-top: 4px;
 }
@@ -832,18 +1119,19 @@ window.deleteShelf = deleteShelf;
 /* Input Mode Toggle */
 .input-mode-toggle {
   display: flex;
-  background: #f3f4f6;
+  background: var(--hover);
   border-radius: 8px;
   padding: 4px;
   margin-bottom: 20px;
   width: fit-content;
+  border: 1px solid var(--border);
 }
 
 .toggle-btn {
   padding: 8px 16px;
   border: none;
   background: transparent;
-  color: #6b7280;
+  color: var(--muted);
   font-weight: 500;
   border-radius: 6px;
   cursor: pointer;
@@ -852,8 +1140,8 @@ window.deleteShelf = deleteShelf;
 }
 
 .toggle-btn.active {
-  background: white;
-  color: #667eea;
+  background: var(--accent);
+  color: white;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
@@ -884,9 +1172,9 @@ window.deleteShelf = deleteShelf;
 
 .btn.btn-outline {
   padding: 6px 12px;
-  border: 2px solid #e5e7eb;
-  background: white;
-  color: #374151;
+  border: 2px solid var(--border);
+  background: var(--card);
+  color: var(--fg);
   border-radius: 6px;
   font-size: 12px;
   cursor: pointer;
@@ -895,23 +1183,23 @@ window.deleteShelf = deleteShelf;
 }
 
 .btn.btn-outline:hover {
-  border-color: #667eea;
-  color: #667eea;
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* Modern Actions */
 .modern-actions {
-  background: #f8fafc;
+  background: var(--hover);
   margin: 0 -24px -24px -24px;
   padding: 20px 24px;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  border-top: 1px solid #e5e7eb;
+  border-top: 1px solid var(--border);
 }
 
 .btn.btn-primary {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: linear-gradient(135deg, var(--accent) 0%, #3b8fff 100%);
   color: white;
   border: none;
   padding: 12px 24px;
@@ -919,18 +1207,18 @@ window.deleteShelf = deleteShelf;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(102, 126, 234, 0.2);
+  box-shadow: 0 2px 4px rgba(77, 163, 255, 0.2);
 }
 
 .btn.btn-primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+  box-shadow: 0 4px 8px rgba(77, 163, 255, 0.3);
 }
 
 .btn.btn-secondary {
-  background: white;
-  color: #6b7280;
-  border: 2px solid #e5e7eb;
+  background: var(--card);
+  color: var(--muted);
+  border: 2px solid var(--border);
   padding: 12px 24px;
   border-radius: 8px;
   font-weight: 600;
@@ -939,8 +1227,8 @@ window.deleteShelf = deleteShelf;
 }
 
 .btn.btn-secondary:hover {
-  border-color: #9ca3af;
-  color: #374151;
+  border-color: var(--accent);
+  color: var(--fg);
 }
 
 /* Responsive Design */

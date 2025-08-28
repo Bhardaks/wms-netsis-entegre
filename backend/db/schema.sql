@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS products (
   price REAL DEFAULT 0,
   netsis_id TEXT UNIQUE, -- Netsis'teki ürün ID'si
   netsis_code TEXT,      -- Netsis'teki ürün kodu
+  netsis_data TEXT,      -- Netsis'ten gelen tüm JSON verisi
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
@@ -19,9 +20,22 @@ CREATE TABLE IF NOT EXISTS products (
 CREATE TABLE IF NOT EXISTS product_packages (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-  package_name TEXT NOT NULL,
+  package_number TEXT, -- Paket numarası (PK-CC-BE-S-GR5-1)
+  product_name TEXT, -- Ürün adı (Türkçe) - paket formundaki "Ürün Adı *" alanı
+  product_name_en TEXT, -- Ürün adı (İngilizce) - paket formundaki "Product Name" alanı
+  package_name TEXT NOT NULL, -- Paket adı (Türkçe) - paket formundaki "Paket Adı *" alanı
+  package_name_en TEXT, -- Paket adı (İngilizce) - paket formundaki "Package Name" alanı
+  color TEXT, -- Ürün rengi (Türkçe)
+  color_en TEXT, -- Ürün rengi (İngilizce)
   barcode TEXT NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 1,
+  width REAL DEFAULT 0, -- En (cm)
+  length REAL DEFAULT 0, -- Boy (cm) 
+  height REAL DEFAULT 0, -- Yükseklik (cm)
+  weight_kg REAL DEFAULT 0, -- Ağırlık (kg)
+  volume_m3 REAL DEFAULT 0, -- Hacim (m³)
+  contents TEXT, -- Paket içeriği (Türkçe)
+  contents_en TEXT, -- Paket içeriği (İngilizce)
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   UNIQUE(product_id, barcode)

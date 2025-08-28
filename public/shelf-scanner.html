@@ -1,25 +1,39 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
-  <title>Raf Barkod Tarayıcı</title>
-  <link rel="stylesheet" href="/assets/css/styles.css" />
-  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Raf Barkod Tarayıcı - WMS</title>
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/zebra-terminal.css">
+    
+    <!-- Core Scripts -->
+    <script src="/assets/js/auth.js"></script>
 </head>
 <body>
-<header>
-  <div class="header-brand">
-    <h1>WMS Yönetim Sistemi</h1>
-    <span class="header-subtitle">Raf Barkod Tarayıcı</span>
-  </div>
-  <div class="header-actions">
-    <a href="/index.html" class="home-btn">
-      <span class="home-icon">🏠</span>
-      <span class="home-text">Ana Sayfa</span>
-    </a>
-  </div>
-</header>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Yükleniyor...</div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <button onclick="location.href='/index.html'" class="btn btn-secondary">
+                ← Ana Sayfa
+            </button>
+            <h1>Raf Barkod Tarayıcı</h1>
+        </div>
+        <div class="header-right">
+            <button onclick="clearScanner()" class="btn btn-outline">
+                <span class="btn-icon">🗑️</span>
+                <span class="btn-text">Temizle</span>
+            </button>
+        </div>
+    </div>
 
 <main class="grid" style="max-width:800px;margin:auto;padding:16px">
 

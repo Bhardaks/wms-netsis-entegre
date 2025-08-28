@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Orders Reset</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: 0 auto; }
+        .button { padding: 10px 20px; background: #ff4444; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 10px 0; }
+        .button:hover { background: #cc3333; }
+        .result { margin-top: 20px; padding: 15px; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 5px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔄 Orders Reset Tool</h1>
+    <p><strong>DİKKAT:</strong> Bu işlem tüm tamamlanmış siparişleri açık duruma getirecek ve irsaliye kayıtlarını temizleyecek!</p>
+    
+    <button class="button" onclick="resetOrders()">🗑️ Siparişleri Sıfırla</button>
+    
+    <div id="result"></div>
+
+    <script>
+        async function resetOrders() {
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '<p>⏳ İşlem başlıyor...</p>';
+            
+            try {
+                const response = await fetch('/api/admin/reset-orders', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include' // Session cookie için
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    resultDiv.innerHTML = `
+                        <div class="result success">
+                            <h3>✅ İşlem Başarılı!</h3>
+                            <p>${result.message}</p>
+                            <pre>${JSON.stringify(result.stats, null, 2)}</pre>
+                        </div>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <div class="result error">
+                            <h3>❌ Hata!</h3>
+                            <p>${result.error || result.message}</p>
+                            ${result.details ? `<pre>${result.details}</pre>` : ''}
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                resultDiv.innerHTML = `
+                    <div class="result error">
+                        <h3>❌ İstek Hatası!</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        // Sayfa yüklendiğinde login kontrolü
+        window.onload = async function() {
+            try {
+                const response = await fetch('/api/auth/check', { credentials: 'include' });
+                const auth = await response.json();
+                
+                if (!auth.authenticated) {
+                    document.body.innerHTML = `
+                        <h1>🔐 Giriş Gerekli</h1>
+                        <p>Bu sayfaya erişmek için önce giriş yapmalısınız.</p>
+                        <a href="/login.html">Giriş Sayfası</a>
+                    `;
+                } else if (auth.user.role !== 'admin') {
+                    document.body.innerHTML = `
+                        <h1>⛔ Yetkisiz Erişim</h1>
+                        <p>Bu işlem sadece admin kullanıcıları tarafından yapılabilir.</p>
+                        <p>Mevcut rol: ${auth.user.role}</p>
+                    `;
+                }
+            } catch (error) {
+                console.error('Auth check error:', error);
+            }
+        };
+    </script>
+</body>
+</html>

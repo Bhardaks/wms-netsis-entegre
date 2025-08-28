@@ -388,7 +388,7 @@ const API = {
     scan: (countId, barcode) => fetch(`/api/inventory-counts/${countId}/scan`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({barcode})}).then(r => r.json())
   },
   products: () => fetch('/api/products').then(r => r.json()),
-  shelves: () => fetch('/api/shelves').then(r => r.json())
+  locations: () => fetch('/api/locations').then(r => r.json())
 };
 
 let currentCount = null;
@@ -451,7 +451,11 @@ document.getElementById('startFullCount').addEventListener('click', async () => 
       description: description
     });
     
-    startCountProcess(result.count);
+    if (result.success && result.count) {
+      startCountProcess(result.count);
+    } else {
+      throw new Error(result.error || 'Sayım oluşturulamadı');
+    }
   } catch (error) {
     alert('Sayım başlatılamadı: ' + error.message);
   }
@@ -473,7 +477,11 @@ document.getElementById('startSpotCount').addEventListener('click', async () => 
       product_filter: productSearch
     });
     
-    startCountProcess(result.count);
+    if (result.success && result.count) {
+      startCountProcess(result.count);
+    } else {
+      throw new Error(result.error || 'Sayım oluşturulamadı');
+    }
   } catch (error) {
     alert('Sayım başlatılamadı: ' + error.message);
   }
@@ -495,7 +503,11 @@ document.getElementById('startShelfCount').addEventListener('click', async () =>
       shelf_filter: shelfCode
     });
     
-    startCountProcess(result.count);
+    if (result.success && result.count) {
+      startCountProcess(result.count);
+    } else {
+      throw new Error(result.error || 'Sayım oluşturulamadı');
+    }
   } catch (error) {
     alert('Sayım başlatılamadı: ' + error.message);
   }
@@ -518,7 +530,11 @@ document.getElementById('startManualCount').addEventListener('click', async () =
       description: description
     });
     
-    startCountProcess(result.count);
+    if (result.success && result.count) {
+      startCountProcess(result.count);
+    } else {
+      throw new Error(result.error || 'Sayım oluşturulamadı');
+    }
   } catch (error) {
     alert('Sayım başlatılamadı: ' + error.message);
   }
@@ -529,26 +545,32 @@ async function startCountProcess(count) {
   currentCount = count;
   currentScanIndex = 0;
   
-  // Sayım kalemlerini yükle
-  currentCountItems = await API.counts.items(count.id);
-  
-  // UI'ı sayım moduna geç
-  document.getElementById('countForm').style.display = 'none';
-  document.getElementById('countProcess').style.display = 'block';
-  document.getElementById('processTitle').textContent = count.name;
-  document.getElementById('processType').textContent = count.type.toUpperCase();
-  
-  updateProgress();
-  
-  // Scanner'ı aktif et
-  document.getElementById('countScanner').focus();
+  try {
+    // Sayım kalemlerini yükle
+    const itemsResponse = await API.counts.items(count.id);
+    currentCountItems = itemsResponse.success ? itemsResponse.items : [];
+    
+    // UI'ı sayım moduna geç
+    document.getElementById('countForm').style.display = 'none';
+    document.getElementById('countProcess').style.display = 'block';
+    document.getElementById('processTitle').textContent = count.name;
+    document.getElementById('processType').textContent = count.type.toUpperCase();
+    
+    updateProgress();
+    
+    // Scanner'ı aktif et
+    document.getElementById('countScanner').focus();
+  } catch (error) {
+    console.error('Sayım kalemleri yüklenemedi:', error);
+    alert('Sayım kalemleri yüklenirken hata oluştu: ' + error.message);
+  }
 }
 
 // İlerleme güncelleme
 function updateProgress() {
-  const counted = currentCountItems.filter(item => item.status === 'counted').length;
+  const counted = currentCountItems.filter(item => item && item.status === 'counted').length;
   const total = currentCountItems.length;
-  const variance = currentCountItems.filter(item => item.variance !== 0).length;
+  const variance = currentCountItems.filter(item => item && item.variance !== 0).length;
   
   document.getElementById('processProgress').textContent = `${counted}/${total}`;
   document.getElementById('countedItems').textContent = counted;
@@ -639,6 +661,7 @@ function updatePreviewList() {
   }
   
   const itemsHtml = filteredItems.map(item => {
+    if (!item) return ''; // Skip undefined items
     const statusIcon = item.status === 'counted' ? '✅' : 
                       item.status === 'skipped' ? '⏭️' : '⏳';
     const varianceClass = item.variance > 0 ? 'positive' : 
@@ -715,30 +738,75 @@ document.addEventListener('input', (e) => {
   }
 });
 
-// Barkod scanner
+// Barkod scanner with debouncing
+let barcodeTimeout;
 document.getElementById('countScanner').addEventListener('input', async (e) => {
-  const barcode = e.target.value.trim();
+  let barcode = e.target.value.trim();
   
-  if (barcode.length > 0) {
-    if (currentCount.type === 'manual') {
-      // Manuel sayım - yeni ürün ekleme
-      e.target.value = '';
-      await addManualCountItem(barcode);
-    } else {
-      // Diğer sayım türleri - mevcut listeden eşleşme
-      const matchedItem = currentCountItems.find(item => 
-        item.barcode === barcode || 
-        item.product_barcode === barcode ||
-        item.package_barcode === barcode
-      );
-      
-      if (matchedItem) {
-        e.target.value = '';
-        await processBarcodeScan(barcode);
+  // Eğer barkod HTML/JavaScript içeriyor ise temizle (corruption durumu)
+  if (barcode.includes('Global input event') || barcode.includes('inventory-count.html') || barcode.length > 50) {
+    console.log('Corrupted input detected, clearing field');
+    e.target.value = '';
+    return;
+  }
+  
+  console.log('Scanner input event, barcode:', JSON.stringify(barcode));
+  
+  // Clear previous timeout
+  clearTimeout(barcodeTimeout);
+  
+  if (barcode.length === 0) {
+    return; // Empty input, do nothing
+  }
+  
+  // For automatic barcode scanners (>= 6 characters), process immediately
+  if (barcode.length >= 6) {
+    // Clear timeout and process immediately for scanner input
+    clearTimeout(barcodeTimeout);
+    await processBarcodeInput(e.target, barcode);
+  } else {
+    // For manual input (< 6 characters), wait 1.5 seconds before processing
+    barcodeTimeout = setTimeout(async () => {
+      if (e.target.value.trim() === barcode) { // Only process if value hasn't changed
+        await processBarcodeInput(e.target, barcode);
       }
-    }
+    }, 1500);
   }
 });
+
+// Process barcode input
+async function processBarcodeInput(inputElement, barcode) {
+  if (currentCount.type === 'manual') {
+    // Manuel sayım - mevcut listeden eşleşme veya yeni ürün ekleme
+    const matchedItem = currentCountItems.find(item => 
+      item.barcode === barcode || 
+      item.package_barcode === barcode
+    );
+    
+    if (matchedItem) {
+      inputElement.value = '';
+      await processBarcodeScan(barcode);
+    } else {
+      inputElement.value = '';
+      await addManualCountItem(barcode);
+    }
+  } else {
+    // Diğer sayım türleri - mevcut listeden eşleşme (full, spot, shelf)
+    const matchedItem = currentCountItems.find(item => 
+      item.barcode === barcode || 
+      item.package_barcode === barcode
+    );
+    
+    if (matchedItem) {
+      inputElement.value = '';
+      await processBarcodeScan(barcode);
+    } else {
+      // Barkod listede bulunamadı - kullanıcıyı bilgilendir
+      alert(`Bu barkod (${barcode}) sayım listesinde bulunamadı!`);
+      inputElement.value = '';
+    }
+  }
+}
 
 // Barkod işleme
 async function processBarcodeScan(barcode) {
@@ -746,7 +814,6 @@ async function processBarcodeScan(barcode) {
     // Sayım kalemlerinde barkodu ara - sayılmamış olanları bul
     const items = currentCountItems.filter(item => 
       (item.barcode === barcode || 
-       item.product_barcode === barcode ||
        item.package_barcode === barcode) &&
       item.status === 'pending'
     );
@@ -755,7 +822,6 @@ async function processBarcodeScan(barcode) {
       // Hiç bulunmadı veya hepsi sayılmış
       const allMatches = currentCountItems.filter(item => 
         item.barcode === barcode || 
-        item.product_barcode === barcode ||
         item.package_barcode === barcode
       );
       
@@ -801,9 +867,13 @@ async function processBarcodeScan(barcode) {
 
 // Mevcut tarama gösterimi
 function showCurrentScan(item, skipLocationCheck = false) {
+  if (!item) {
+    console.error('showCurrentScan: item is undefined');
+    return;
+  }
   document.getElementById('currentScan').style.display = 'block';
-  document.getElementById('scanProduct').textContent = `${item.product_name} (${item.sku})`;
-  document.getElementById('scanLocation').textContent = `Lokasyon: ${item.location_code}`;
+  document.getElementById('scanProduct').textContent = `${item.product_name || item.name || 'Unknown'} (${item.sku || 'No SKU'})`;
+  document.getElementById('scanLocation').textContent = `Lokasyon: ${item.location_code || 'No Location'}`;
   
   // Package no bilgisini göster
   const packageElement = document.getElementById('scanPackage');
@@ -884,48 +954,68 @@ document.querySelectorAll('.qty-btn').forEach(btn => {
 });
 
 // Global input event listener - tüm input'ları dinle
-document.addEventListener('input', (e) => {
-  console.log('Global input event:', e.target.id, e.target.value); // Debug log
+// REMOVED: Global input event listener that was causing input corruption
+
+// itemScanner için özel event handler (tek tek okut modu - tüm sayım türleri)
+document.getElementById('itemScanner').addEventListener('input', (e) => {
+  const barcode = e.target.value.trim();
+  const currentItem = window.currentScanItem;
   
-  // itemScanner için özel işlem
-  if (e.target.id === 'itemScanner') {
-    console.log('itemScanner detected!'); // Debug log
-    const barcode = e.target.value.trim();
-    const currentItem = window.currentScanItem;
-    
-    console.log('Barcode:', barcode, 'Current item:', currentItem); // Debug log
-    
-    if (barcode.length > 0 && currentItem) {
-      console.log('Checking barcode match...'); // Debug log
+  if (barcode.length > 0 && currentItem) {
+    // Ürün barkodu kontrol et - eşleşmede otomatik enter işlemi
+    if (barcode === currentItem.barcode || 
+        barcode === currentItem.package_barcode) {
       
-      // Ürün barkodu kontrol et - eşleşmede otomatik enter işlemi
-      if (barcode === currentItem.barcode || 
-          barcode === currentItem.product_barcode || 
-          barcode === currentItem.package_barcode) {
-        
-        console.log('✅ Barcode match found!'); // Debug log
-        
-        // Sayacı artır
-        window.currentScanCount = (window.currentScanCount || 0) + 1;
-        document.getElementById('scanCount').textContent = window.currentScanCount;
-        
-        // countedQty'yi güncelle
-        document.getElementById('countedQty').value = window.currentScanCount;
-        
-        // Input'u temizle - otomatik enter işlemi
-        e.target.value = '';
-        
-        // Başarı efekti
-        const scanDisplay = document.querySelector('.scan-display');
-        if (scanDisplay) {
-          scanDisplay.style.background = '#d4edda';
-          setTimeout(() => {
-            scanDisplay.style.background = '';
-          }, 300);
-        }
+      // Sayacı artır
+      window.currentScanCount = (window.currentScanCount || 0) + 1;
+      document.getElementById('scanCount').textContent = window.currentScanCount;
+      
+      // countedQty'yi güncelle
+      document.getElementById('countedQty').value = window.currentScanCount;
+      
+      // Input'u temizle - otomatik enter işlemi
+      e.target.value = '';
+      
+      // Başarı efekti
+      const scanDisplay = document.querySelector('.scan-display');
+      if (scanDisplay) {
+        scanDisplay.style.background = '#d4edda';
+        setTimeout(() => {
+          scanDisplay.style.background = '';
+        }, 300);
       }
-      // Eşleşmezse hiçbir şey yapma - kullanıcı yazmaya devam edebilsin
+      
+      // Başarı sesi (opsiyonel)
+      try {
+        // Modern tarayıcılarda ses çalabilir - kısa beep sesi
+        const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        
+        oscillator.connect(gainNode);
+        gainNode.connect(audioContext.destination);
+        
+        oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
+        gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+        
+        oscillator.start(audioContext.currentTime);
+        oscillator.stop(audioContext.currentTime + 0.1);
+      } catch (e) {
+        // Ses çalınamazsa normal devam et
+      }
+    } else {
+      // Yanlış barkod - kırmızı efekt
+      const scanDisplay = document.querySelector('.scan-display');
+      if (scanDisplay) {
+        scanDisplay.style.background = '#f8d7da';
+        setTimeout(() => {
+          scanDisplay.style.background = '';
+        }, 300);
+      }
     }
+    // Eşleşmezse de input'u temizle
+    // e.target.value = '';
   }
 });
 
@@ -954,35 +1044,65 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// Lokasyon scanner - otomatik eşleşme ve manuel giriş desteği
+// Lokasyon scanner - otomatik eşleşme ve manuel giriş desteği dengan debouncing
+let locationTimeout;
 document.getElementById('locationScanner').addEventListener('input', async (e) => {
   const locationBarcode = e.target.value.trim();
   const item = window.currentScanItem;
   
-  if (locationBarcode.length > 0 && item) {
-    // Lokasyon eşleşmesi kontrol et
-    if (locationBarcode === item.location_code) {
-      // Doğru lokasyon - kalıcı başarı mesajı
-      document.getElementById('locationStatus').innerHTML = '<span style="color: var(--success);">✅ Lokasyon doğru - Miktar girişi yapabilirsiniz</span>';
-      window.locationVerified = true;
-      
-      // Sadece 6+ karakter ise (barkod okuyucu) otomatik temizle
-      if (locationBarcode.length >= 6) {
-        e.target.value = '';
-      }
-      
-      // Miktar girişine geç
-      setTimeout(() => {
-        document.getElementById('countedQty').focus();
-        document.getElementById('countedQty').select();
-      }, 300);
+  // Clear previous timeout
+  clearTimeout(locationTimeout);
+  
+  if (locationBarcode.length === 0) {
+    document.getElementById('locationStatus').innerHTML = '';
+    window.locationVerified = false;
+    return;
+  }
+  
+  if (item) {
+    // For automatic barcode scanners (>= 4 characters), process immediately
+    if (locationBarcode.length >= 4) {
+      processLocationInput(e.target, locationBarcode, item);
     } else {
-      // Yanlış lokasyon - hata mesajı göster ama değeri temizleme
-      document.getElementById('locationStatus').innerHTML = '<span style="color: var(--danger);">❌ Yanlış lokasyon! Beklenen: ' + item.location_code + '</span>';
-      window.locationVerified = false;
+      // For manual input (< 4 characters), wait 1 second before processing
+      locationTimeout = setTimeout(() => {
+        if (e.target.value.trim() === locationBarcode) { // Only process if value hasn't changed
+          processLocationInput(e.target, locationBarcode, item);
+        }
+      }, 1000);
     }
   }
 });
+
+// Process location input
+function processLocationInput(inputElement, locationBarcode, item) {
+  // Lokasyon eşleşmesi kontrol et
+  if (locationBarcode === item.location_code) {
+    // Doğru lokasyon - kalıcı başarı mesajı
+    document.getElementById('locationStatus').innerHTML = '<span style="color: var(--success);">✅ Lokasyon doğru - Miktar girişi yapabilirsiniz</span>';
+    window.locationVerified = true;
+    
+    // Sadece 4+ karakter ise (barkod okuyucu) otomatik temizle
+    if (locationBarcode.length >= 4) {
+      inputElement.value = '';
+    }
+    
+    // Miktar girişine geç
+    setTimeout(() => {
+      document.getElementById('countedQty').focus();
+      document.getElementById('countedQty').select();
+    }, 300);
+  } else {
+    // Yanlış lokasyon - manuel girişte hemen hata gösterme, biraz bekle
+    if (locationBarcode.length >= 4) {
+      document.getElementById('locationStatus').innerHTML = '<span style="color: var(--danger);">❌ Yanlış lokasyon! Beklenen: ' + item.location_code + '</span>';
+    } else {
+      // Kısa girişlerde hata gösterme, kullanıcı henüz yazmaya devam ediyor olabilir
+      document.getElementById('locationStatus').innerHTML = '<span style="color: var(--warning);">🔍 Beklenen: ' + item.location_code + '</span>';
+    }
+    window.locationVerified = false;
+  }
+}
 
 // Lokasyon scanner için Enter tuşu desteği  
 document.getElementById('locationScanner').addEventListener('keydown', (e) => {
@@ -1177,7 +1297,8 @@ document.getElementById('spotCountProduct').addEventListener('input', (e) => {
 // Aktif sayımları yükle
 async function loadActiveCounts() {
   try {
-    const counts = await API.counts.list();
+    const response = await API.counts.list();
+    const counts = response.success ? response.counts : [];
     const activeCounts = counts.filter(c => c.status === 'active');
     
     if (activeCounts.length === 0) {
@@ -1201,7 +1322,7 @@ async function loadActiveCounts() {
           </div>
         </div>
         <div class="count-actions">
-          <button class="action-btn small" onclick="continueCount(${count.id})">
+          <button class="action-btn small" data-count-id="${count.id}">
             <span class="btn-icon">▶️</span>
             <span class="btn-text">Devam Et</span>
           </button>
@@ -1211,6 +1332,14 @@ async function loadActiveCounts() {
     
     document.getElementById('activeCountsList').innerHTML = countsHtml;
     
+    // Event listener'ları ekle
+    document.querySelectorAll('[data-count-id]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const countId = e.target.closest('[data-count-id]').dataset.countId;
+        continueCount(parseInt(countId));
+      });
+    });
+    
   } catch (error) {
     console.error('Aktif sayımlar yüklenemedi:', error);
   }
@@ -1219,7 +1348,8 @@ async function loadActiveCounts() {
 // Sayım geçmişini yükle
 async function loadCountHistory() {
   try {
-    const counts = await API.counts.list();
+    const response = await API.counts.list();
+    const counts = response.success ? response.counts : [];
     const completedCounts = counts.filter(c => c.status === 'completed');
     
     if (completedCounts.length === 0) {
@@ -1245,7 +1375,7 @@ async function loadCountHistory() {
           </div>
         </div>
         <div class="history-actions">
-          <button class="action-btn small" onclick="downloadReport(${count.id})">
+          <button class="action-btn small" data-report-id="${count.id}">
             <span class="btn-icon">📄</span>
             <span class="btn-text">Rapor</span>
           </button>
@@ -1255,40 +1385,53 @@ async function loadCountHistory() {
     
     document.getElementById('countHistoryList').innerHTML = historyHtml;
     
+    // Event listener'ları ekle
+    document.querySelectorAll('[data-report-id]').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        const reportId = e.target.closest('[data-report-id]').dataset.reportId;
+        downloadReport(parseInt(reportId));
+      });
+    });
+    
   } catch (error) {
     console.error('Sayım geçmişi yüklenemedi:', error);
   }
 }
 
 // Sayıma devam etme
-window.continueCount = async (countId) => {
+async function continueCount(countId) {
   try {
     const count = await API.counts.get(countId);
     startCountProcess(count);
   } catch (error) {
     alert('Sayım yüklenemedi: ' + error.message);
   }
-};
+}
 
 // Rapor indirme
-window.downloadReport = (countId) => {
+function downloadReport(countId) {
   window.open(`/api/inventory-counts/${countId}/report`, '_blank');
-};
+}
 
-// Mobile navigation toggle
-document.getElementById('mobileNavToggle').addEventListener('click', () => {
-  const menu = document.getElementById('mobileNavMenu');
-  menu.classList.toggle('show');
-});
+// Mobile navigation toggle (if exists)
+const mobileNavToggle = document.getElementById('mobileNavToggle');
+if (mobileNavToggle) {
+  mobileNavToggle.addEventListener('click', () => {
+    const menu = document.getElementById('mobileNavMenu');
+    if (menu) menu.classList.toggle('show');
+  });
+}
 
-// Close mobile menu when clicking outside
-document.addEventListener('click', (e) => {
-  const nav = document.getElementById('mobileNav');
-  const menu = document.getElementById('mobileNavMenu');
-  if (!nav.contains(e.target)) {
-    menu.classList.remove('show');
-  }
-});
+// Close mobile menu when clicking outside (if exists)
+const mobileNav = document.getElementById('mobileNav');
+const mobileNavMenu = document.getElementById('mobileNavMenu');
+if (mobileNav && mobileNavMenu) {
+  document.addEventListener('click', (e) => {
+    if (!mobileNav.contains(e.target)) {
+      mobileNavMenu.classList.remove('show');
+    }
+  });
+}
 
 // Sayfa yüklendiğinde
 document.addEventListener('DOMContentLoaded', () => {
@@ -1315,36 +1458,65 @@ function showLocationSelectionModal(items, barcode) {
   document.getElementById('locationModalScanner').focus();
 }
 
-// Lokasyon modal scanner
+// Lokasyon modal scanner with debouncing
+let modalLocationTimeout;
 document.getElementById('locationModalScanner').addEventListener('input', (e) => {
   const shelfBarcode = e.target.value.trim();
   
-  if (shelfBarcode.length > 0) {
-    // Eşleşen lokasyonu bul
-    const matchedItem = pendingLocationItems.find(item => 
-      item.location_code === shelfBarcode
-    );
+  // Clear previous timeout
+  clearTimeout(modalLocationTimeout);
+  
+  if (shelfBarcode.length === 0) {
+    document.getElementById('locationScannerStatus').innerHTML = '';
+    return;
+  }
+  
+  // For automatic barcode scanners (>= 4 characters), process immediately
+  if (shelfBarcode.length >= 4) {
+    processModalLocationInput(e.target, shelfBarcode);
+  } else {
+    // For manual input (< 4 characters), wait 1 second before processing
+    modalLocationTimeout = setTimeout(() => {
+      if (e.target.value.trim() === shelfBarcode) { // Only process if value hasn't changed
+        processModalLocationInput(e.target, shelfBarcode);
+      }
+    }, 1000);
+  }
+});
+
+// Process modal location input
+function processModalLocationInput(inputElement, shelfBarcode) {
+  // Eşleşen lokasyonu bul
+  const matchedItem = pendingLocationItems.find(item => 
+    item.location_code === shelfBarcode
+  );
+  
+  if (matchedItem) {
+    // Doğru raf bulundu
+    document.getElementById('locationScannerStatus').innerHTML = 
+      '<span style="color: var(--success);">✅ Raf bulundu: ' + matchedItem.location_code + '</span>';
     
-    if (matchedItem) {
-      // Doğru raf bulundu
-      document.getElementById('locationScannerStatus').innerHTML = 
-        '<span style="color: var(--success);">✅ Raf bulundu: ' + matchedItem.location_code + '</span>';
-      
-      e.target.value = '';
-      
-      // Modal'ı kapat ve sayıma başla
-      setTimeout(() => {
-        document.getElementById('locationModal').style.display = 'none';
-        showCurrentScan(matchedItem, true); // true = modaldan geldi, lokasyon kontrolü atla
-      }, 500);
-    } else {
-      // Yanlış raf
+    inputElement.value = '';
+    
+    // Modal'ı kapat ve sayıma başla
+    setTimeout(() => {
+      document.getElementById('locationModal').style.display = 'none';
+      showCurrentScan(matchedItem, true); // true = modaldan geldi, lokasyon kontrolü atla
+    }, 500);
+  } else {
+    // Yanlış raf - manuel girişte daha nazik yaklaşım
+    if (shelfBarcode.length >= 4) {
       const validLocations = pendingLocationItems.map(item => item.location_code).join(', ');
       document.getElementById('locationScannerStatus').innerHTML = 
         '<span style="color: var(--danger);">❌ Geçersiz raf! Geçerli raflar: ' + validLocations + '</span>';
+    } else {
+      // Kısa girişlerde sadece yönlendirici mesaj göster
+      const validLocations = pendingLocationItems.map(item => item.location_code).join(', ');
+      document.getElementById('locationScannerStatus').innerHTML = 
+        '<span style="color: var(--warning);">🔍 Geçerli raflar: ' + validLocations + '</span>';
     }
   }
-});
+}
 
 // Lokasyon modal kapatma
 document.getElementById('cancelLocationModal').addEventListener('click', () => {
@@ -1355,29 +1527,33 @@ document.getElementById('cancelLocationModal').addEventListener('click', () => {
 
 // Manuel sayım için ürün ekleme
 async function addManualCountItem(barcode) {
+  console.log('addManualCountItem called with barcode:', barcode);
   try {
     const result = await API.counts.scan(currentCount.id, barcode);
     
-    if (result.success) {
-      // Yeni ürün eklendi - listeyi güncelle
-      currentCountItems.push(result.item);
+    if (result.success && result.items && result.items.length > 0) {
+      // Yeni ürün eklendi - listeye ekle
+      result.items.forEach(item => currentCountItems.push(item));
       updateProgress();
       
-      // Eklenen ürünü hemen sayıma göster
-      showCurrentScan(result.item, true); // Manuel sayımda lokasyon kontrolü yok
+      // İlk eklenen ürünü göster
+      const firstItem = result.items[0];
+      showCurrentScan(firstItem, true); // Manuel sayımda lokasyon kontrolü yok
       
       // Başarı mesajı
       const scannerHelp = document.querySelector('.scanner-help small');
       const originalText = scannerHelp.textContent;
-      scannerHelp.innerHTML = '<span style="color: var(--success);">✅ Ürün eklendi: ' + result.item.product_name + '</span>';
+      scannerHelp.innerHTML = '<span style="color: var(--success);">✅ Ürün eklendi: ' + firstItem.product_name + '</span>';
       
       setTimeout(() => {
         scannerHelp.textContent = originalText;
       }, 2000);
+    } else {
+      alert(result.error || 'Ürün eklenemedi');
     }
   } catch (error) {
-    const response = await error.response?.json();
-    alert(response?.error || 'Ürün eklenemedi');
+    console.error('Manuel sayım ekleme hatası:', error);
+    alert('Ürün eklenirken hata oluştu');
   }
 }
 

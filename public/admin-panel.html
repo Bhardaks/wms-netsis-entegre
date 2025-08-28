@@ -5,6 +5,92 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
   <title>Admin Panel</title>
   <link rel="stylesheet" href="/assets/css/styles.css" />
+  <style>
+    /* Netsis Connection Styles */
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+      padding: 12px;
+      border-radius: 6px;
+      background: #f8f9fa;
+    }
+    
+    .status-indicator {
+      font-size: 16px;
+      font-weight: bold;
+    }
+    
+    .status-indicator.online {
+      color: #28a745;
+    }
+    
+    .status-indicator.offline {
+      color: #dc3545;
+    }
+    
+    .test-result {
+      margin-top: 12px;
+      padding: 12px;
+      border-radius: 6px;
+      font-weight: 500;
+    }
+    
+    .test-result.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    
+    .test-result.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    
+    .test-result.hidden {
+      display: none;
+    }
+    
+    .form-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 16px;
+    }
+    
+    .btn-primary, .btn-success {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+    
+    .btn-primary {
+      background: #007bff;
+      color: white;
+    }
+    
+    .btn-primary:hover {
+      background: #0056b3;
+    }
+    
+    .btn-success {
+      background: #28a745;
+      color: white;
+    }
+    
+    .btn-success:hover {
+      opacity: 0.9;
+    }
+    
+    .btn-primary:disabled, .btn-success:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+    }
+  </style>
   <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
   <script src="/assets/js/auth-new.js"></script>
 </head>
@@ -58,6 +144,49 @@
       <div class="stat-number" id="recentLogins">-</div>
       <div class="stat-label">24 Saat</div>
     </div>
+  </section>
+
+  <!-- Netsis Bağlantı Ayarları -->
+  <section class="card">
+    <h2>🔗 Netsis API Bağlantı Ayarları</h2>
+    <div class="connection-status" id="netsisStatus">
+      <span class="status-indicator offline">●</span>
+      <span class="status-text">Bağlantı durumu kontrol ediliyor...</span>
+    </div>
+    
+    <div class="form-grid">
+      <div class="form-group">
+        <label for="netsisUrl">Netsis API URL</label>
+        <input type="text" id="netsisUrl" placeholder="http://IP:PORT" />
+        <small>Örnek: http://192.168.1.100:7070 veya https://netsis.domain.com:7070</small>
+      </div>
+      <div class="form-group">
+        <label for="netsisUsername">Netsis Kullanıcı</label>
+        <input type="text" id="netsisUsername" placeholder="NETSIS" />
+      </div>
+      <div class="form-group">
+        <label for="netsisPassword">Netsis Şifre</label>
+        <input type="password" id="netsisPassword" placeholder="***" />
+      </div>
+      <div class="form-group">
+        <label for="netsisDbName">Veritabanı Adı</label>
+        <input type="text" id="netsisDbName" placeholder="DBNAME" />
+      </div>
+    </div>
+    
+    <div class="form-actions">
+      <button type="button" id="testNetsisConnection" class="btn-primary">
+        🧪 Bağlantıyı Test Et
+      </button>
+      <button type="button" id="saveNetsisConfig" class="btn-success">
+        💾 Ayarları Kaydet
+      </button>
+      <button type="button" id="testNetsisOrders" class="btn-warning">
+        📋 Sipariş Verilerini Test Et
+      </button>
+    </div>
+    
+    <div id="netsisTestResult" class="test-result hidden"></div>
   </section>
 
   <!-- Kullanıcı Oluşturma -->
@@ -775,6 +904,160 @@ async function deleteUser(userId, username) {
 // Yenile butonu
 document.getElementById('refreshUsers').addEventListener('click', loadUsers);
 
+// Netsis Configuration Functions
+async function loadNetsisConfig() {
+  try {
+    const response = await fetch('/api/netsis/config');
+    if (response.ok) {
+      const config = await response.json();
+      document.getElementById('netsisUrl').value = config.url || '';
+      document.getElementById('netsisUsername').value = config.username || '';
+      document.getElementById('netsisDbName').value = config.dbName || '';
+      
+      // Test connection on load
+      testNetsisConnection();
+    }
+  } catch (error) {
+    console.error('Netsis config yüklenemedi:', error);
+  }
+}
+
+async function testNetsisConnection() {
+  const testBtn = document.getElementById('testNetsisConnection');
+  const resultDiv = document.getElementById('netsisTestResult');
+  const statusDiv = document.getElementById('netsisStatus');
+  
+  testBtn.disabled = true;
+  testBtn.textContent = '🔄 Test ediliyor...';
+  
+  try {
+    const response = await fetch('/api/netsis/test-connection', { method: 'POST' });
+    const result = await response.json();
+    
+    resultDiv.className = 'test-result ' + (result.success ? 'success' : 'error');
+    resultDiv.textContent = result.message || result.error;
+    resultDiv.classList.remove('hidden');
+    
+    // Update status indicator
+    const indicator = statusDiv.querySelector('.status-indicator');
+    const text = statusDiv.querySelector('.status-text');
+    
+    if (result.success) {
+      indicator.className = 'status-indicator online';
+      text.textContent = '✅ Netsis bağlantısı aktif';
+    } else {
+      indicator.className = 'status-indicator offline';  
+      text.textContent = '❌ Netsis bağlantısı kapalı';
+    }
+    
+  } catch (error) {
+    resultDiv.className = 'test-result error';
+    resultDiv.textContent = 'Bağlantı testi başarısız: ' + error.message;
+    resultDiv.classList.remove('hidden');
+  } finally {
+    testBtn.disabled = false;
+    testBtn.textContent = '🧪 Bağlantıyı Test Et';
+  }
+}
+
+async function saveNetsisConfig() {
+  const saveBtn = document.getElementById('saveNetsisConfig');
+  const resultDiv = document.getElementById('netsisTestResult');
+  
+  const config = {
+    url: document.getElementById('netsisUrl').value.trim(),
+    username: document.getElementById('netsisUsername').value.trim(),
+    password: document.getElementById('netsisPassword').value,
+    dbName: document.getElementById('netsisDbName').value.trim()
+  };
+  
+  if (!config.url || !config.username || !config.dbName) {
+    alert('URL, kullanıcı adı ve veritabanı adı gerekli!');
+    return;
+  }
+  
+  saveBtn.disabled = true;
+  saveBtn.textContent = '💾 Kaydediliyor...';
+  
+  try {
+    const response = await fetch('/api/netsis/config', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(config)
+    });
+    
+    const result = await response.json();
+    
+    if (response.ok) {
+      resultDiv.className = 'test-result success';
+      resultDiv.textContent = '✅ Ayarlar kaydedildi! Bağlantı test ediliyor...';
+      resultDiv.classList.remove('hidden');
+      
+      // Clear password field after save
+      document.getElementById('netsisPassword').value = '';
+      
+      // Auto test connection
+      setTimeout(testNetsisConnection, 1000);
+    } else {
+      resultDiv.className = 'test-result error';
+      resultDiv.textContent = '❌ ' + result.error;
+      resultDiv.classList.remove('hidden');
+    }
+    
+  } catch (error) {
+    resultDiv.className = 'test-result error';
+    resultDiv.textContent = 'Kaydetme başarısız: ' + error.message;
+    resultDiv.classList.remove('hidden');
+  } finally {
+    saveBtn.disabled = false;
+    saveBtn.textContent = '💾 Ayarları Kaydet';
+  }
+}
+
+// Test Netsis Orders
+async function testNetsisOrders() {
+  const testBtn = document.getElementById('testNetsisOrders');
+  const resultDiv = document.getElementById('netsisTestResult');
+  
+  testBtn.disabled = true;
+  testBtn.textContent = '🔄 Test ediliyor...';
+  
+  try {
+    const response = await fetch('/api/netsis/orders?limit=5');
+    const result = await response.json();
+    
+    if (response.ok && result) {
+      resultDiv.className = 'test-result success';
+      const orderCount = result.Data ? result.Data.length : (Array.isArray(result) ? result.length : 0);
+      resultDiv.innerHTML = `
+        <strong>✅ Netsis siparişleri başarıyla alındı!</strong><br>
+        Bulunan sipariş sayısı: ${orderCount}<br>
+        <details style="margin-top: 8px;">
+          <summary>Örnek Veri (JSON)</summary>
+          <pre style="background: #f5f5f5; padding: 8px; border-radius: 4px; max-height: 200px; overflow-y: auto; font-size: 11px;">${JSON.stringify(result, null, 2)}</pre>
+        </details>
+      `;
+      resultDiv.classList.remove('hidden');
+    } else {
+      resultDiv.className = 'test-result error';
+      resultDiv.textContent = '❌ ' + (result.error || result.details || 'Bilinmeyen hata');
+      resultDiv.classList.remove('hidden');
+    }
+  } catch (error) {
+    resultDiv.className = 'test-result error';
+    resultDiv.textContent = '❌ ' + error.message;
+    resultDiv.classList.remove('hidden');
+  } finally {
+    testBtn.disabled = false;
+    testBtn.textContent = '📋 Sipariş Verilerini Test Et';
+  }
+}
+
+// Netsis event listeners
+document.getElementById('testNetsisConnection').addEventListener('click', testNetsisConnection);
+document.getElementById('saveNetsisConfig').addEventListener('click', saveNetsisConfig);
+document.getElementById('testNetsisOrders').addEventListener('click', testNetsisOrders);
+
 // Utility functions
 function getRoleDisplayName(role) {
   const roleNames = {
@@ -803,6 +1086,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Sadece admin rolüne sahip kullanıcılar bu sayfayı görebilir
   await loadUsers();
   await loadSystemStatus();
+  await loadNetsisConfig();
 });
 </script>
 </body>

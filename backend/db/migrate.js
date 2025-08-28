@@ -83,8 +83,29 @@ await ensureColumn(db, 'product_packages', 'volume_m3', 'volume_m3 REAL');
 await ensureColumn(db, 'product_packages', 'package_number', 'package_number TEXT');
 await ensureColumn(db, 'product_packages', 'package_content', 'package_content TEXT');
 
+// add main product name fields to products table if missing
+await ensureColumn(db, 'products', 'main_product_name', 'main_product_name TEXT');
+await ensureColumn(db, 'products', 'main_product_name_en', 'main_product_name_en TEXT');
+
 // add inventory quantity column to products if missing
 await ensureColumn(db, 'products', 'inventory_quantity', 'inventory_quantity INTEGER');
+
+// add manual order fields to orders if missing
+await ensureColumn(db, 'orders', 'customer_phone', 'customer_phone TEXT');
+await ensureColumn(db, 'orders', 'customer_email', 'customer_email TEXT');
+await ensureColumn(db, 'orders', 'delivery_address', 'delivery_address TEXT');
+await ensureColumn(db, 'orders', 'order_date', 'order_date DATE');
+await ensureColumn(db, 'orders', 'notes', 'notes TEXT');
+await ensureColumn(db, 'orders', 'total_amount', 'total_amount REAL DEFAULT 0');
+
+// add Netsis delivery note fields to orders if missing
+await ensureColumn(db, 'orders', 'netsis_delivery_note_id', 'netsis_delivery_note_id TEXT');
+await ensureColumn(db, 'orders', 'netsis_delivery_status', 'netsis_delivery_status TEXT DEFAULT \'pending\'');
+await ensureColumn(db, 'orders', 'netsis_delivery_error', 'netsis_delivery_error TEXT');
+
+// add unit price and line total to order_items if missing
+await ensureColumn(db, 'order_items', 'unit_price', 'unit_price REAL DEFAULT 0');
+await ensureColumn(db, 'order_items', 'line_total', 'line_total REAL DEFAULT 0');
 
 // add required_quantity column to service_requests if missing
 await ensureColumn(db, 'service_requests', 'required_quantity', 'required_quantity INTEGER DEFAULT 1');
@@ -94,6 +115,21 @@ await ensureColumn(db, 'package_openings', 'source_location', 'source_location T
 
 // add opening_method column to package_openings if missing
 await ensureColumn(db, 'package_openings', 'opening_method', 'opening_method TEXT DEFAULT \'partial\'');
+
+// add new package fields for dimensions and SKU
+await ensureColumn(db, 'product_packages', 'sku', 'sku TEXT');
+await ensureColumn(db, 'product_packages', 'package_no', 'package_no TEXT');
+await ensureColumn(db, 'product_packages', 'length_cm', 'length_cm REAL');
+await ensureColumn(db, 'product_packages', 'width_cm', 'width_cm REAL');
+await ensureColumn(db, 'product_packages', 'height_cm', 'height_cm REAL');
+
+// add multilingual package fields
+await ensureColumn(db, 'product_packages', 'package_name_tr', 'package_name_tr TEXT');
+await ensureColumn(db, 'product_packages', 'package_name_en', 'package_name_en TEXT');
+await ensureColumn(db, 'product_packages', 'package_content_tr', 'package_content_tr TEXT');
+await ensureColumn(db, 'product_packages', 'package_content_en', 'package_content_en TEXT');
+await ensureColumn(db, 'product_packages', 'color_tr', 'color_tr TEXT');
+await ensureColumn(db, 'product_packages', 'color_en', 'color_en TEXT');
 
 
 // Add real shelf locations with actual codes

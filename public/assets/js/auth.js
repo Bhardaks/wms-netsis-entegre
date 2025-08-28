@@ -124,6 +124,13 @@ window.checkPageAuthentication = async function() {
     addUserInfoToHeader(authCheck.user);
     
     console.log('9. checkPageAuthentication completed successfully');
+    
+    // Sayfa özel callback fonksiyonu varsa çağır
+    if (typeof window.onAuthCompleted === 'function') {
+      console.log('10. Calling page-specific onAuthCompleted callback...');
+      window.onAuthCompleted();
+    }
+    
     return authCheck.user;
   } catch (error) {
     console.error('Auth check error:', error);

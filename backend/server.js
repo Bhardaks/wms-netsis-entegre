@@ -25,12 +25,19 @@ dbBackup.autoBackup().catch(err => {
   console.warn('⚠️ Could not create startup backup:', err.message);
 });
 
+// Debug middleware - Log all requests
+app.use((req, res, next) => {
+  console.log(`📝 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  next();
+});
+
 // Middleware
 app.use(cors({
   origin: true,
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // JSON body limit'i artırdık
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Session middleware
 app.use(session({
@@ -174,6 +181,47 @@ async function initDatabase() {
     }
 
     console.log('✅ Role permissions table initialized');
+
+    // Netsis Orders tablosu oluştur
+    await run(`
+      CREATE TABLE IF NOT EXISTS netsis_orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sube_kodu INTEGER NOT NULL,
+        ftirsip INTEGER NOT NULL,
+        siparis_no TEXT NOT NULL,
+        cari_kodu TEXT,
+        siparis_tarihi DATE,
+        toplam_tutar DECIMAL(18,2),
+        kdv_tutar DECIMAL(18,2),
+        kdv_dahil_mi BOOLEAN,
+        kayit_tarihi DATETIME,
+        sync_tarihi DATETIME DEFAULT CURRENT_TIMESTAMP,
+        sync_status TEXT DEFAULT 'synced',
+        wms_order_id INTEGER,
+        UNIQUE(sube_kodu, ftirsip, siparis_no)
+      )
+    `);
+
+    await run(`
+      CREATE TABLE IF NOT EXISTS netsis_order_lines (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        netsis_order_id INTEGER NOT NULL REFERENCES netsis_orders(id),
+        sube_kodu INTEGER NOT NULL,
+        ftirsip INTEGER NOT NULL,
+        siparis_no TEXT NOT NULL,
+        stok_kodu TEXT,
+        aciklama TEXT,
+        miktar DECIMAL(18,3),
+        birim TEXT,
+        birim_fiyat DECIMAL(18,4),
+        kdv_orani DECIMAL(5,2),
+        depo_kodu TEXT,
+        satir_sira INTEGER
+      )
+    `);
+
+    console.log('✅ Netsis tables initialized');
+
   } catch (error) {
     console.error('❌ Database initialization error:', error);
   }
@@ -621,96 +669,20 @@ app.get('/api/permission-types', requireRole(['admin']), (req, res) => {
   });
 });
 
-// ---- Wix Sync ----
+// ---- ERP Integration ----
 const wix = require('./services/wix');
+const netsis = require('./services/netsis');
+const { syncNetsisProducts } = require('./services/netsis-products');
+const { syncNetsisStockCards, syncNetsisStockCardsByWarehouse } = require('./services/netsis-stockcards');
 
-// Pull products from Wix into local DB (variants become rows by SKU)
-// Pull products from Wix into local DB (variants become rows by SKU) – robust V1/V3, proper names
-app.post('/api/sync/wix/products', async (req, res) => {
+// Pull products from Netsis ERP into local DB
+app.post('/api/sync/netsis/products', async (req, res) => {
   try {
-    let total = 0, versionUsed = null;
-    const seen = new Set();
-    for await (const { item: prod, version } of wix.iterateProducts()) {
-      versionUsed = version;
-      const productId = prod.id || prod._id || prod.productId || prod.product?.id;
-      const baseName = wix.s(prod.name || prod.product?.name || 'Ürün');
-      const mainSku = prod.sku || prod.product?.sku || null;
-      // Parse price properly
-      let price = 0;
-      if (prod.price?.amount) price = parseFloat(prod.price.amount);
-      else if (prod.priceData?.price?.amount) price = parseFloat(prod.priceData.price.amount);
-      else if (typeof prod.price === 'number') price = prod.price;
-      
-      // Parse inventory/stock data
-      let inventoryQuantity = null;
-      if (prod.stock?.quantity != null) {
-        inventoryQuantity = parseInt(prod.stock.quantity, 10);
-      } else if (prod.inventory?.quantity != null) {
-        inventoryQuantity = parseInt(prod.inventory.quantity, 10);
-      }
-      
-      const variants = prod.variants || prod.product?.variants || [];
-
-      if (variants && variants.length) {
-        for (const v of variants) {
-          // Use enhanced SKU extraction for variants
-          let vSku = wix.extractVariantSku(v, mainSku);
-          
-          // If still no SKU found, create a fallback UUID-based SKU
-          if (!vSku) {
-            vSku = `${productId}:${(v.id || v.variantId || 'var')}`;
-          }
-          
-          if (seen.has(vSku)) continue;
-          seen.add(vSku);
-          const fullName = (baseName || 'Ürün') + wix.variantSuffix(v);
-          // Parse variant price properly
-          let vPrice = 0;
-          if (v.price?.amount) vPrice = parseFloat(v.price.amount);
-          else if (typeof v.price === 'number') vPrice = v.price;
-          else vPrice = price;
-          
-          // Parse variant inventory
-          let vInventoryQuantity = null;
-          if (v.stock?.quantity != null) {
-            vInventoryQuantity = parseInt(v.stock.quantity, 10);
-          } else if (v.inventory?.quantity != null) {
-            vInventoryQuantity = parseInt(v.inventory.quantity, 10);
-          } else {
-            vInventoryQuantity = inventoryQuantity; // fallback to main product inventory
-          }
-          
-          await run(`INSERT INTO products (sku, name, description, main_barcode, price, wix_product_id, wix_variant_id, inventory_quantity)
-                     VALUES (?,?,?,?,?,?,?,?)
-                     ON CONFLICT(sku) DO UPDATE SET
-                       name=excluded.name,
-                       price=excluded.price,
-                       inventory_quantity=excluded.inventory_quantity,
-                       updated_at=CURRENT_TIMESTAMP`,
-                    [String(vSku), String(fullName), null, null, vPrice, String(productId||''), String(v.id || v.variantId || ''), vInventoryQuantity]);
-          total++;
-        }
-      } else {
-        const sku = mainSku || (productId ? `WIX-${productId}` : `WIX-${Date.now()}`);
-        if (!seen.has(sku)) {
-          seen.add(sku);
-          await run(`INSERT INTO products (sku, name, description, main_barcode, price, wix_product_id, wix_variant_id, inventory_quantity)
-                     VALUES (?,?,?,?,?,?,?,?)
-                     ON CONFLICT(sku) DO UPDATE SET
-                       name=excluded.name,
-                       price=excluded.price,
-                       inventory_quantity=excluded.inventory_quantity,
-                       updated_at=CURRENT_TIMESTAMP`,
-                    [String(sku), String(baseName || 'Ürün'), null, null, price, String(productId||''), null, inventoryQuantity]);
-          total++;
-        }
-      }
-    }
-    res.json({ ok: true, imported: total, versionUsed });
+    const result = await syncNetsisProducts();
+    res.json(result);
   } catch (e) {
-    console.error('Wix sync products error:', {
+    console.error('Netsis sync products error:', {
       message: e.message,
-      response: e.response?.data,
       stack: e.stack,
       config: e.config ? {
         url: e.config.url,
@@ -724,6 +696,118 @@ app.post('/api/sync/wix/products', async (req, res) => {
     });
   }
 });
+
+// Pull stock cards from Netsis ERP into local DB
+app.post('/api/sync/netsis/stockcards', async (req, res) => {
+  try {
+    const result = await syncNetsisStockCards();
+    res.json(result);
+  } catch (e) {
+    console.error('Netsis sync stock cards error:', {
+      message: e.message,
+      stack: e.stack
+    });
+    res.status(500).json({ 
+      error: e.response?.data || e.message,
+      details: process.env.NODE_ENV === 'development' ? e.stack : undefined
+    });
+  }
+});
+
+// Netsis connection test endpoint
+app.post('/api/netsis/test-connection', async (req, res) => {
+  try {
+    const result = await netsis.netsisAPI.testConnection();
+    res.json(result);
+  } catch (e) {
+    res.status(500).json({ 
+      success: false,
+      error: e.message,
+      details: process.env.NODE_ENV === 'development' ? e.stack : undefined
+    });
+  }
+});
+
+// Update Netsis configuration (admin only)
+app.post('/api/netsis/config', requireAuth, async (req, res) => {
+  try {
+    if (req.session.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    const { url, username, password, dbName, dbUser } = req.body;
+    
+    // Validate inputs
+    if (!url || !username || !dbName) {
+      return res.status(400).json({ error: 'URL, kullanıcı adı ve veritabanı adı gerekli' });
+    }
+
+    // Update environment variables (this is for runtime, not persistent)
+    process.env.NETSIS_API_URL = url;
+    process.env.NETSIS_USERNAME = username;
+    if (password) process.env.NETSIS_PASSWORD = password;
+    process.env.NETSIS_DB_NAME = dbName;
+    if (dbUser) process.env.NETSIS_DB_USER = dbUser;
+
+    // Reset connection to use new config
+    netsis.netsisAPI.accessToken = null;
+    netsis.netsisAPI.tokenExpiry = null;
+
+    // Update config in the API instance
+    netsis.netsisAPI.baseURL = url;
+    netsis.netsisAPI.username = username;
+    if (password) netsis.netsisAPI.password = password;
+    netsis.netsisAPI.dbName = dbName;
+    if (dbUser) netsis.netsisAPI.dbUser = dbUser;
+
+    res.json({ 
+      success: true, 
+      message: 'Netsis konfigürasyonu güncellendi',
+      config: { url, username, dbName }
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Get current Netsis configuration
+app.get('/api/netsis/config', requireAuth, async (req, res) => {
+  try {
+    if (req.session.user.role !== 'admin') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+
+    res.json({
+      url: process.env.NETSIS_API_URL || 'http://localhost:7070',
+      username: process.env.NETSIS_USERNAME || '',
+      dbName: process.env.NETSIS_DB_NAME || '',
+      dbUser: process.env.NETSIS_DB_USER || '',
+      // Don't send password for security
+      hasPassword: !!(process.env.NETSIS_PASSWORD)
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Pull stock cards from specific warehouse
+app.post('/api/sync/netsis/stockcards/:warehouse', async (req, res) => {
+  try {
+    const warehouseCode = req.params.warehouse;
+    const result = await syncNetsisStockCardsByWarehouse(warehouseCode);
+    res.json(result);
+  } catch (e) {
+    console.error('Netsis sync warehouse stock cards error:', {
+      message: e.message,
+      stack: e.stack
+    });
+    res.status(500).json({ 
+      error: e.response?.data || e.message,
+      details: process.env.NODE_ENV === 'development' ? e.stack : undefined
+    });
+  }
+});
+
 // Pull orders from Wix into local DB – SKU/ID matching fixed
 app.post('/api/sync/wix/orders', async (req, res) => {
   try {
@@ -945,14 +1029,15 @@ app.post('/api/sync/wix/all', async (req, res) => {
     try {
       let total = 0, versionUsed = null;
       const seen = new Set();
-      for await (const { item: prod, version } of wix.iterateProducts()) {
+      for await (const { item: prod, version } of netsisAPI.iterateProducts()) {
         versionUsed = version;
         const productId = prod.id || prod._id || prod.productId || prod.product?.id;
-        const baseName = wix.s(prod.name || prod.product?.name || 'Ürün');
+        const baseName = (prod.name || prod.product?.name || 'Ürün').toString().trim();
         const mainSku = prod.sku || prod.product?.sku || null;
         let price = 0;
         if (prod.price?.amount) price = parseFloat(prod.price.amount);
         else if (prod.priceData?.price?.amount) price = parseFloat(prod.priceData.price.amount);
+        else if (prod.priceData?.price) price = parseFloat(prod.priceData.price);
         else if (typeof prod.price === 'number') price = prod.price;
         
         let inventoryQuantity = null;
@@ -1358,7 +1443,16 @@ app.get('/api/debug/wix/order/:orderNumber', async (req, res) => {
 
 // ---- Products ----
 app.get('/api/products', async (req, res) => {
-  const rows = await all('SELECT * FROM products ORDER BY id DESC');
+  // Use DISTINCT and GROUP BY to avoid duplicate SKUs (case-insensitive)
+  const rows = await all(`
+    SELECT p.* FROM products p
+    WHERE p.id IN (
+      SELECT MIN(id) FROM products 
+      GROUP BY UPPER(sku)
+    )
+    ORDER BY p.id DESC
+  `);
+  
   for (const r of rows) {
     // Get all packages for this product
     const allPackages = await all('SELECT * FROM product_packages WHERE product_id=? ORDER BY id', [r.id]);
@@ -1445,10 +1539,10 @@ app.post('/api/products', async (req, res) => {
 
 app.put('/api/products/:id', async (req, res) => {
   const { id } = req.params;
-  const { sku, name, description, main_barcode, price, color } = req.body;
+  const { sku, name, description, main_barcode, price, color, main_product_name, main_product_name_en } = req.body;
   try {
-    await run(`UPDATE products SET sku=?, name=?, description=?, main_barcode=?, price=?, color=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
-      [sku, name, description || null, main_barcode || null, price || 0, color || null, id]);
+    await run(`UPDATE products SET sku=?, name=?, description=?, main_barcode=?, price=?, color=?, main_product_name=?, main_product_name_en=?, updated_at=CURRENT_TIMESTAMP WHERE id=?`,
+      [sku, name, description || null, main_barcode || null, price || 0, color || null, main_product_name || null, main_product_name_en || null, id]);
     const prod = await get('SELECT * FROM products WHERE id=?', [id]);
     res.json(prod);
   } catch (e) {
@@ -1473,24 +1567,37 @@ app.get('/api/products/:id/packages', async (req, res) => {
   res.json(rows);
 });
 
-app.post('/api/products/:id/packages', async (req, res) => {
-  const { id } = req.params;
-  const { package_number, package_content, package_name, barcode, quantity, weight_kg, volume_m3 } = req.body;
+// Create package via /api/product-packages (used by frontend)
+app.post('/api/product-packages', async (req, res) => {
+  console.log('Product-packages POST request:', req.body);
   
-  // Zorunlu alan kontrolü: package_number ve barcode
-  if (!package_number || !package_number.trim()) {
+  const { product_id, package_number, package_name, barcode, quantity, weight_kg, length, width, height, volume_m3, contents } = req.body;
+  
+  // Validation
+  if (!product_id) {
+    return res.status(400).json({ error: 'Product ID zorunludur' });
+  }
+  if (!package_number?.trim()) {
     return res.status(400).json({ error: 'Paket numarası zorunludur' });
   }
-  if (!barcode || !barcode.trim()) {
+  if (!package_name?.trim()) {
+    return res.status(400).json({ error: 'Paket adı zorunludur' });
+  }
+  if (!barcode?.trim()) {
     return res.status(400).json({ error: 'Barkod zorunludur' });
   }
   
   try {
-    await run(`INSERT INTO product_packages (product_id, package_number, package_content, package_name, barcode, quantity, weight_kg, volume_m3) VALUES (?,?,?,?,?,?,?,?)`,
-      [id, package_number.trim(), package_content || package_name || null, package_name || package_content || null, barcode.trim(), quantity || 1, weight_kg || null, volume_m3 || null]);
-    const row = await get('SELECT * FROM product_packages WHERE product_id=? AND barcode=?', [id, barcode.trim()]);
+    await run(`INSERT INTO product_packages 
+      (product_id, package_number, package_name, barcode, quantity, width, length, height, weight_kg, volume_m3, contents) 
+      VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+      [product_id, package_number.trim(), package_name.trim(), barcode.trim(), quantity || 1, 
+       width || null, length || null, height || null, weight_kg || null, volume_m3 || null, contents || null]);
+    
+    const row = await get('SELECT * FROM product_packages WHERE product_id=? AND barcode=?', [product_id, barcode.trim()]);
     res.status(201).json(row);
   } catch (e) {
+    console.error('Package insertion error:', e);
     if (e.message.includes('UNIQUE constraint failed')) {
       res.status(400).json({ error: 'Bu barkod zaten kullanılıyor' });
     } else {
@@ -1499,24 +1606,52 @@ app.post('/api/products/:id/packages', async (req, res) => {
   }
 });
 
+app.post('/api/products/:id/packages', async (req, res) => {
+  const { id } = req.params;
+  console.log('Package POST request - Product ID:', id);
+  console.log('Package POST request - Body:', req.body);
+  
+  const { package_number, package_no, package_content, product_name, product_name_en, package_name, package_name_tr, package_name_en, package_content_tr, package_content_en, color, color_en, barcode, quantity, weight_kg, volume_m3, sku, length_cm, width_cm, height_cm, contents, contents_en } = req.body;
+  
+  // Zorunlu alan kontrolü: sadece barcode
+  if (!barcode || !barcode.trim()) {
+    console.log('Missing barcode error');
+    return res.status(400).json({ error: 'Barkod zorunludur' });
+  }
+  
+  try {
+    await run(`INSERT INTO product_packages (product_id, package_number, product_name, product_name_en, package_name, package_name_en, color, color_en, barcode, quantity, width, length, height, weight_kg, volume_m3, contents, contents_en) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, package_number?.trim() || null, product_name?.trim() || null, product_name_en?.trim() || null, package_name?.trim() || null, package_name_en?.trim() || null, color?.trim() || null, color_en?.trim() || null, barcode.trim(), quantity || 1, width_cm || null, length_cm || null, height_cm || null, weight_kg || null, volume_m3 || null, contents?.trim() || null, contents_en?.trim() || null]);
+    const row = await get('SELECT * FROM product_packages WHERE product_id=? AND barcode=?', [id, barcode.trim()]);
+    res.status(201).json(row);
+  } catch (e) {
+    console.error('Package insertion error:', e);
+    if (e.message.includes('UNIQUE constraint failed')) {
+      res.status(400).json({ error: 'Bu barkod zaten kullanılıyor' });
+    } else if (e.message.includes('no such column')) {
+      res.status(400).json({ error: 'Database schema error: ' + e.message });
+    } else {
+      res.status(500).json({ error: e.message });
+    }
+  }
+});
+
 app.put('/api/packages/:pkgId', async (req, res) => {
   const { pkgId } = req.params;
-  const { package_number, package_content, barcode, quantity, weight_kg, volume_m3 } = req.body;
+  const { package_number, package_no, package_content, product_name, product_name_en, package_name, package_name_tr, package_name_en, package_content_tr, package_content_en, color, color_tr, color_en, barcode, quantity, weight_kg, volume_m3, sku, length_cm, width_cm, height_cm, contents, contents_en } = req.body;
   
-  // Zorunlu alan kontrolü: package_number ve barcode
-  if (!package_number || !package_number.trim()) {
-    return res.status(400).json({ error: 'Paket numarası zorunludur' });
-  }
+  // Zorunlu alan kontrolü: sadece barcode
   if (!barcode || !barcode.trim()) {
     return res.status(400).json({ error: 'Barkod zorunludur' });
   }
   
   try {
     await run(`UPDATE product_packages SET 
-                 package_number=?, package_content=?, barcode=?, quantity=?, weight_kg=?, volume_m3=?, updated_at=CURRENT_TIMESTAMP 
+                 package_number=?, product_name=?, product_name_en=?, package_name=?, package_name_en=?, color=?, color_en=?, barcode=?, length=?, width=?, height=?, weight_kg=?, volume_m3=?, contents=?, contents_en=?, updated_at=CURRENT_TIMESTAMP 
                WHERE id=?`,
-              [package_number.trim(), package_content || null, barcode.trim(), parseInt(quantity) || 1, 
-               weight_kg ? parseFloat(weight_kg) : null, volume_m3 ? parseFloat(volume_m3) : null, pkgId]);
+              [package_number?.trim() || null, product_name?.trim() || null, product_name_en?.trim() || null, (package_name || package_name_tr)?.trim() || null, package_name_en?.trim() || null, (color || color_tr)?.trim() || null, color_en?.trim() || null, barcode.trim(),
+               length_cm ? parseFloat(length_cm) : null, width_cm ? parseFloat(width_cm) : null, height_cm ? parseFloat(height_cm) : null,
+               weight_kg ? parseFloat(weight_kg) : null, volume_m3 ? parseFloat(volume_m3) : null, (contents || package_content_tr)?.trim() || null, (contents_en || package_content_en)?.trim() || null, pkgId]);
     res.json({ success: true });
   } catch (e) {
     if (e.message.includes('UNIQUE constraint failed')) {
@@ -1534,6 +1669,63 @@ app.delete('/api/packages/:pkgId', async (req, res) => {
     res.json({ success: true });
   } catch (e) {
     res.status(400).json({ error: e.message });
+  }
+});
+
+// Search available packages (PK products) to add - NO AUTH REQUIRED - MUST BE BEFORE :pkgId route
+app.get('/api/packages/search-pk-products', async (req, res) => {
+  console.log('🔍 PK Search endpoint hit!', req.query);
+  
+  try {
+    const { q, mainProductId } = req.query;
+    console.log('🔍 Search query:', q, 'Main product ID:', mainProductId);
+    
+    let query = `
+      SELECT id, sku, name, description
+      FROM products
+      WHERE sku LIKE 'PK-%'
+    `;
+    let params = [];
+    
+    if (q) {
+      query += ` AND (sku LIKE ? OR name LIKE ?)`;
+      params.push(`%${q}%`, `%${q}%`);
+    }
+    
+    // Exclude packages already assigned to this main product
+    if (mainProductId) {
+      query += ` AND sku NOT IN (
+        SELECT barcode FROM product_packages WHERE product_id = ?
+      )`;
+      params.push(mainProductId);
+    }
+    
+    query += ` ORDER BY sku ASC LIMIT 30`;
+    
+    console.log('🔍 Executing query:', query, 'Params:', params);
+    
+    const pkProducts = await all(query, params);
+    console.log('🔍 Found PK products:', pkProducts.length);
+    
+    res.json({ success: true, packages: pkProducts });
+  } catch (error) {
+    console.error('❌ Search PK products error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get single package by ID
+app.get('/api/packages/:pkgId', requireAuth, async (req, res) => {
+  const { pkgId } = req.params;
+  try {
+    const pkg = await get('SELECT * FROM product_packages WHERE id=?', [pkgId]);
+    if (!pkg) {
+      return res.status(404).json({ error: 'Paket bulunamadı' });
+    }
+    res.json(pkg);
+  } catch (e) {
+    console.error('❌ Get package error:', e);
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -1627,50 +1819,185 @@ app.get('/api/netsis/stock', async (req, res) => {
   }
 });
 
+// Get orders from Netsis (temporary no auth for testing) - DISABLED - using real endpoint instead
+/*app.get('/api/netsis/orders', async (req, res) => {
+  console.log('🚀 NETSIS ORDERS ENDPOINT HIT! Path:', req.path);
+  try {
+    console.log('🔄 Netsis orders API called with auth user:', req.session?.user?.username);
+    const { limit = 50, offset = 0 } = req.query;
+    console.log('📋 Requesting Netsis orders with limit:', limit, 'offset:', offset);
+    
+    const orders = await netsisAPI.getOrders(parseInt(limit), parseInt(offset));
+    console.log('✅ Netsis orders received:', orders ? 'Success' : 'Empty');
+    res.json(orders);
+  } catch (e) {
+    console.error('❌ Netsis orders error:', e.message);
+    res.status(500).json({ 
+      error: 'Netsis sipariş verisi alınamadı', 
+      details: e.message,
+      stack: process.env.NODE_ENV === 'development' ? e.stack : undefined
+    });
+  }
+});*/
+
+// Get individual order by ID from Netsis - C# örneğine göre
+app.get('/api/netsis/orders/:id', async (req, res) => {
+  console.log('🔍 NETSIS ORDER BY ID ENDPOINT HIT!');
+  try {
+    const orderId = parseInt(req.params.id);
+    console.log('📋 Requesting Netsis order ID:', orderId);
+    
+    const order = await netsisAPI.getOrderById(orderId);
+    console.log('✅ Netsis order by ID received:', order ? 'Success' : 'Empty');
+    res.json(order);
+  } catch (e) {
+    console.error('❌ Netsis order by ID error:', e.message);
+    res.status(404).json({ 
+      error: 'Netsis sipariş bulunamadı', 
+      orderId: req.params.id,
+      details: e.message
+    });
+  }
+});
+
 // Sync products from Netsis to local DB
 app.post('/api/netsis/sync/products', async (req, res) => {
   try {
     console.log('🔄 Netsis ürün senkronizasyonu başlatılıyor...');
     
-    const products = await netsisAPI.getProducts(1000, 0);
     let syncCount = 0;
+    const allProducts = [];
     
-    if (products && products.data && Array.isArray(products.data)) {
-      for (const product of products.data) {
+    // Netsis API'den ürünleri iterator ile al
+    for await (const { item: product, version, source } of netsisAPI.iterateProducts()) {
         try {
-          // Netsis'ten gelen ürün verilerini WMS formatına çevir
-          const sku = product.Code || product.ItemCode;
-          const name = product.Description || product.Name;
-          const barcode = product.Barcode;
+        // Netsis'ten gelen ürün verilerini WMS formatına çevir
+        // NetOpenX Items API formatı: StokTemelBilgi.Stok_Kodu, StokTemelBilgi.Stok_Adi, StokTemelBilgi.Satis_Fiat1
+        const sku = product.StokTemelBilgi?.Stok_Kodu || product.sku || product.id;
+        const name = product.StokTemelBilgi?.Stok_Adi || product.name;
+        const price = product.StokTemelBilgi?.Satis_Fiat1 || product.priceData?.price || 0;
           
           if (sku && name) {
+          // Check if a product with same SKU (case-insensitive) already exists
+          const existingProduct = await get('SELECT id, sku FROM products WHERE UPPER(sku) = UPPER(?)', [sku]);
+          
+          if (existingProduct) {
+            // Update existing product with original case
             await run(`
-              INSERT INTO products (sku, name, barcode, netsis_id, created_at) 
+              UPDATE products SET 
+                name = ?, 
+                price = ?, 
+                netsis_data = ?,
+                updated_at = CURRENT_TIMESTAMP
+              WHERE id = ?
+            `, [name, price, JSON.stringify(product.netsis || {}), existingProduct.id]);
+          } else {
+            // Insert new product
+            await run(`
+              INSERT INTO products (sku, name, price, netsis_data, created_at) 
               VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(sku) DO UPDATE SET
-                name=excluded.name,
-                barcode=excluded.barcode,
-                netsis_id=excluded.netsis_id,
-                updated_at=CURRENT_TIMESTAMP
-            `, [sku, name, barcode || null, product.Id]);
-            
-            syncCount++;
+            `, [sku, name, price, JSON.stringify(product.netsis || {})]);
           }
-        } catch (error) {
-          console.warn(`⚠️ Ürün senkronizasyon hatası (${product.Code}):`, error.message);
+            
+          syncCount++;
+          
+          // Ürünü liste listeye ekle (paket eşleştirme için)
+          allProducts.push({ sku, name, price, netsis: product.netsis });
+          
+          // İlk 10 ürün için log
+          if (syncCount <= 10) {
+            console.log(`📦 Ürün ${syncCount}: ${name} (${sku}) - ${price} TRY`);
+          }
         }
+      } catch (error) {
+        console.warn(`⚠️ Ürün senkronizasyon hatası (${product.StokTemelBilgi?.Stok_Kodu || product.sku || product.id}):`, error.message);
       }
     }
     
     console.log(`✅ ${syncCount} ürün Netsis'ten senkronize edildi`);
+    
+    // PK package matching işlemi başlat
+    console.log('🔗 PK paket eşleştirme işlemi başlatılıyor...');
+    let packageMatchCount = 0;
+    
+    try {
+      const packageMatches = await netsisAPI.matchAllPkProducts(allProducts);
+      
+      // Başarılı eşleştirmeleri product_packages tablosuna ekle
+      for (const match of packageMatches) {
+        if (match.matched) {
+          try {
+            // Ana ürünün database ID'sini al
+            const mainProduct = await get('SELECT id FROM products WHERE sku = ?', [match.mainProductSku]);
+            
+            if (mainProduct) {
+              // PK ürününü paket olarak ekle
+              await run(`
+                INSERT INTO product_packages (product_id, package_name, barcode, quantity, created_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(product_id, barcode) DO UPDATE SET
+                  package_name=excluded.package_name,
+                  quantity=excluded.quantity,
+                  updated_at=CURRENT_TIMESTAMP
+              `, [
+                mainProduct.id,
+                `PK Paketi: ${match.pkProduct.name}`,
+                match.packageSku,
+                1
+              ]);
+              
+              packageMatchCount++;
+              
+            } else {
+              console.warn(`⚠️ Ana ürün database'de bulunamadı: ${match.mainProductSku}`);
+            }
+          } catch (pkError) {
+            console.warn(`⚠️ Paket eşleştirme kaydetme hatası: ${match.packageSku}`, pkError.message);
+          }
+        }
+      }
+      
+      console.log(`✅ ${packageMatchCount} PK paketi ana ürünleri ile eşleştirildi`);
+      
+    } catch (matchError) {
+      console.warn('⚠️ Paket eşleştirme işlemi başarısız:', matchError.message);
+    }
+    
     res.json({ 
       success: true, 
-      message: `${syncCount} ürün başarıyla senkronize edildi`,
-      syncedCount: syncCount
+      message: `${syncCount} ürün başarıyla senkronize edildi, ${packageMatchCount} paket eşleştirme yapıldı`,
+      syncedCount: syncCount,
+      packageMatchCount: packageMatchCount
     });
     
   } catch (error) {
     console.error('❌ Netsis product sync error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Test PK package matching functionality
+app.get('/api/test/pk-matching', async (req, res) => {
+  try {
+    console.log('🧪 PK paket eşleştirme testi başlatılıyor...');
+    
+    // Test product listesi al
+    const products = await all('SELECT sku, name FROM products LIMIT 100');
+    console.log(`📦 Test için ${products.length} ürün alındı`);
+    
+    // PK matching test
+    const matches = await netsisAPI.matchAllPkProducts(products);
+    
+    res.json({
+      success: true,
+      totalProducts: products.length,
+      matchingResults: matches.length,
+      successfulMatches: matches.filter(m => m.matched).length,
+      matches: matches.slice(0, 10) // İlk 10 eşleştirmeyi göster
+    });
+    
+  } catch (error) {
+    console.error('❌ PK matching test error:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });
@@ -1735,6 +2062,49 @@ app.get('/api/debug/wix-orders-raw', async (req, res) => {
 });
 
 // ---- Orders ----
+// Generate unique order number for Netsis integration
+app.get('/api/orders/generate-number', async (req, res) => {
+  try {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+    
+    // Format: NETSIS-YYYYMMDD-XXX
+    const datePrefix = `NETSIS-${year}${month}${day}`;
+    
+    // Get today's order count
+    const todayStart = `${year}-${month}-${day} 00:00:00`;
+    const todayEnd = `${year}-${month}-${day} 23:59:59`;
+    
+    const todayOrderCount = await get(`
+      SELECT COUNT(*) as count 
+      FROM orders 
+      WHERE created_at BETWEEN ? AND ?
+    `, [todayStart, todayEnd]);
+    
+    const nextNumber = (todayOrderCount.count || 0) + 1;
+    const orderNumber = `${datePrefix}-${String(nextNumber).padStart(3, '0')}`;
+    
+    // Double check uniqueness
+    const existing = await get('SELECT id FROM orders WHERE order_number = ?', [orderNumber]);
+    
+    if (existing) {
+      // Fallback to timestamp-based
+      const timestamp = Date.now();
+      res.json({ orderNumber: `NETSIS-${timestamp}` });
+    } else {
+      res.json({ orderNumber });
+    }
+    
+  } catch (error) {
+    console.error('❌ Netsis order number generation error:', error);
+    // Fallback
+    const timestamp = Date.now();
+    res.json({ orderNumber: `NETSIS-${timestamp}` });
+  }
+});
+
 app.get('/api/orders', async (req, res) => {
   const rows = await all(`
     SELECT o.*,
@@ -1751,27 +2121,153 @@ app.get('/api/orders', async (req, res) => {
     ) as latest_pick ON latest_pick.order_id = o.id AND latest_pick.rn = 1
     ORDER BY o.id DESC
   `);
+  
+  // Add order items to each order
+  for (const order of rows) {
+    const orderItems = await all(`
+      SELECT oi.*, p.name as product_name, p.color as product_color, p.main_product_name
+      FROM order_items oi
+      LEFT JOIN products p ON oi.product_id = p.id
+      WHERE oi.order_id = ?
+      ORDER BY oi.line_number ASC
+    `, [order.id]);
+    
+    order.items = orderItems;
+  }
+  
+  // TEMP DEBUG: Count orders by source
+  const externalCount = rows.filter(r => r.source === 'external_sync').length;
+  const testCount = rows.filter(r => r.source !== 'external_sync').length;
+  if (testCount > 0) {
+    console.log(`📊 Orders: ${externalCount} external, ${testCount} test/manual`);
+  }
+  
   res.json(rows);
 });
 
 app.post('/api/orders', async (req, res) => {
-  const { order_number, customer_name, items } = req.body;
-  if (!order_number || !items || !items.length) {
-    return res.status(400).json({ error: 'order_number and items are required' });
+  const { 
+    order_number, 
+    customer_name, 
+    customer_phone,
+    customer_email,
+    delivery_address,
+    order_date,
+    notes,
+    items 
+  } = req.body;
+  
+  if (!order_number || !customer_name) {
+    return res.status(400).json({ 
+      error: 'Sipariş numarası ve müşteri adı zorunludur' 
+    });
   }
+  
+  if (!items || !items.length) {
+    return res.status(400).json({ 
+      error: 'Sipariş için en az bir ürün eklemelisiniz' 
+    });
+  }
+  
   try {
-    await run(`INSERT INTO orders (order_number, customer_name, status) VALUES (?,?, 'open')`,
-      [order_number, customer_name || null]);
-    const order = await get('SELECT * FROM orders WHERE order_number=?', [order_number]);
-    for (const it of items) {
-      const prod = await get('SELECT * FROM products WHERE id=?', [it.product_id]);
-      if (!prod) throw new Error('Invalid product_id ' + it.product_id);
-      await run(`INSERT INTO order_items (order_id, product_id, sku, product_name, quantity) VALUES (?,?,?,?,?)`,
-        [order.id, prod.id, prod.sku, prod.name, parseInt(it.quantity || 1,10)]);
+    // Check if order number already exists
+    const existingOrder = await get('SELECT id FROM orders WHERE order_number = ?', [order_number]);
+    if (existingOrder) {
+      return res.status(400).json({ 
+        error: `Sipariş numarası "${order_number}" zaten kullanılıyor` 
+      });
     }
-    res.status(201).json(order);
+    
+    // Create order with Netsis integration ready
+    const result = await run(`
+      INSERT INTO orders (
+        order_number, 
+        customer_name, 
+        customer_phone,
+        customer_email,
+        delivery_address,
+        order_date,
+        notes,
+        status, 
+        created_at
+      ) VALUES (?,?,?,?,?,?,?,'open', CURRENT_TIMESTAMP)
+    `, [
+      order_number, 
+      customer_name,
+      customer_phone || null,
+      customer_email || null,
+      delivery_address || null,
+      order_date || new Date().toISOString().split('T')[0],
+      notes || null
+    ]);
+    
+    const orderId = result.lastID;
+    
+    // Add order items
+    let totalAmount = 0;
+    for (const item of items) {
+      const prod = await get('SELECT * FROM products WHERE id=?', [item.product_id]);
+      if (!prod) {
+        throw new Error(`Geçersiz ürün ID: ${item.product_id}`);
+      }
+      
+      const quantity = parseInt(item.quantity || 1, 10);
+      const unitPrice = parseFloat(item.unit_price || prod.price || 0);
+      const lineTotal = quantity * unitPrice;
+      totalAmount += lineTotal;
+      
+      await run(`
+        INSERT INTO order_items (
+          order_id, 
+          product_id, 
+          sku, 
+          product_name, 
+          quantity,
+          unit_price,
+          line_total
+        ) VALUES (?,?,?,?,?,?,?)
+      `, [
+        orderId, 
+        prod.id, 
+        prod.sku, 
+        item.product_name || prod.name, 
+        quantity,
+        unitPrice,
+        lineTotal
+      ]);
+    }
+    
+    // Update order with total amount
+    await run('UPDATE orders SET total_amount = ? WHERE id = ?', [totalAmount, orderId]);
+    
+    // Get the complete order
+    const order = await get('SELECT * FROM orders WHERE id=?', [orderId]);
+    const orderItems = await all('SELECT * FROM order_items WHERE order_id=?', [orderId]);
+    
+    console.log(`✅ Netsis entegre manuel sipariş oluşturuldu: ${order_number} - ${customer_name} (₺${totalAmount.toFixed(2)})`);
+    
+    res.status(201).json({
+      success: true,
+      message: 'Sipariş başarıyla oluşturuldu (Netsis entegre)',
+      order: {
+        ...order,
+        items: orderItems
+      }
+    });
+    
   } catch (e) {
-    res.status(400).json({ error: e.message });
+    console.error('❌ Netsis entegre manuel sipariş oluşturma hatası:', e);
+    
+    // SQLite unique constraint error
+    if (e.message.includes('UNIQUE constraint failed')) {
+      return res.status(400).json({ 
+        error: 'Bu sipariş numarası zaten kullanılıyor' 
+      });
+    }
+    
+    res.status(500).json({ 
+      error: 'Sipariş oluşturulurken hata: ' + e.message 
+    });
   }
 });
 
@@ -1785,6 +2281,35 @@ app.get('/api/orders/:id', async (req, res) => {
     WHERE oi.order_id = ?
   `, [id]);
   res.json({ ...order, items });
+});
+
+app.delete('/api/orders/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check order info before deletion
+    const orderInfo = await get('SELECT order_number, source FROM orders WHERE id = ?', [id]);
+    console.log(`🗑️ Deleting order ID ${id}: ${orderInfo ? `${orderInfo.order_number} (${orderInfo.source})` : 'NOT FOUND'}`);
+    
+    // Delete order items first (foreign key constraint)
+    await run('DELETE FROM order_items WHERE order_id = ?', [id]);
+    
+    // Delete picks related to this order
+    await run('DELETE FROM picks WHERE order_id = ?', [id]);
+    
+    // Delete the order
+    const result = await run('DELETE FROM orders WHERE id = ?', [id]);
+    
+    if (result.changes > 0) {
+      console.log(`✅ Order ${id} deleted successfully`);
+      res.json({ success: true, message: 'Order deleted' });
+    } else {
+      res.status(404).json({ success: false, error: 'Order not found' });
+    }
+  } catch (error) {
+    console.error('❌ Delete order error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
 });
 
 
@@ -2057,12 +2582,91 @@ app.post('/api/picks/:id/scan', async (req, res) => {
   const pickedSets = Math.min(item.quantity, Math.floor(totalScans / scansPerSet));
   await run('UPDATE order_items SET picked_qty=? WHERE id=?', [pickedSets, item.id]);
 
-  // Check if order completed
+  // Check if order completed - debug version
+  const orderItemsDebug = await all(`SELECT id, sku, quantity, picked_qty FROM order_items WHERE order_id=?`, [pick.order_id]);
+  console.log(`🔍 Order ${pick.order_id} items status:`, orderItemsDebug);
+  
   const remainingRow = await get(`SELECT COUNT(*) as remaining FROM order_items WHERE order_id=? AND picked_qty < quantity`, [pick.order_id]);
   const allPicked = remainingRow.remaining === 0;
+  
+  console.log(`📊 Order completion check: remaining=${remainingRow.remaining}, allPicked=${allPicked}`);
+  
   if (allPicked) {
     await run('UPDATE orders SET status="fulfilled", fulfillment_status="FULFILLED" WHERE id=?', [pick.order_id]);
     await run('UPDATE picks SET status="completed" WHERE id=?', [id]);
+    
+    // Netsis NetOpenXRest ile irsaliye oluşturma
+    try {
+      const orderDetails = await get(`
+        SELECT o.*
+        FROM orders o 
+        WHERE o.id = ?
+      `, [pick.order_id]);
+      
+      // AUTOMATIC DISPATCH NOTE CREATION DISABLED - Use manual dispatch button instead
+      if (orderDetails) {
+        console.log(`ℹ️ Pick completed for order ${orderDetails.order_number} - Manual dispatch note creation required`);
+        
+        // Just update the delivery status to pending (manual dispatch needed)
+        await run(`
+          UPDATE orders 
+          SET netsis_delivery_status = 'pending_manual_dispatch'
+          WHERE id = ?
+        `, [pick.order_id]);
+      }
+      
+      /* DISABLED: Automatic dispatch note creation
+      if (orderDetails) {
+        const orderItems = await all(`
+          SELECT oi.*, p.sku as product_sku, p.name as product_name 
+          FROM order_items oi 
+          LEFT JOIN products p ON oi.product_id = p.id 
+          WHERE oi.order_id = ?
+        `, [pick.order_id]);
+        
+        console.log(`🔄 Netsis'e irsaliye oluşturma isteği gönderiliyor: ${orderDetails.order_number}`);
+        
+        const deliveryNoteResult = await netsisAPI.convertOrderToDeliveryNote({
+          order_number: orderDetails.order_number,
+          customer_code: orderDetails.customer_name || 'UNKNOWN',
+          total_amount: orderDetails.total_amount || 0,
+          items: orderItems.map(item => ({
+            product_sku: item.product_sku || item.sku,
+            sku: item.sku,
+            quantity: item.picked_qty || item.quantity,
+            unit_price: item.unit_price || 0,
+            product_name: item.product_name
+          }))
+        });
+        
+        if (deliveryNoteResult.success) {
+          console.log(`✅ Netsis irsaliyesi başarıyla oluşturuldu: ${orderDetails.order_number} -> ${deliveryNoteResult.delivery_note_id}`);
+          
+          // İrsaliye ID'sini orders tablosuna kaydet
+          await run(`
+            UPDATE orders 
+            SET netsis_delivery_note_id = ?, netsis_delivery_status = 'created' 
+            WHERE id = ?
+          `, [deliveryNoteResult.delivery_note_id, pick.order_id]);
+          
+        } else {
+          console.warn(`⚠️ Netsis irsaliye oluşturulamadı: ${orderDetails.order_number} - ${deliveryNoteResult.message}`);
+          await run(`
+            UPDATE orders 
+            SET netsis_delivery_status = 'failed', netsis_delivery_error = ? 
+            WHERE id = ?
+          `, [deliveryNoteResult.message, pick.order_id]);
+        }
+      }
+      */
+    } catch (error) {
+      console.error(`❌ Netsis irsaliye oluşturma hatası:`, error.message);
+      await run(`
+        UPDATE orders 
+        SET netsis_delivery_status = 'error', netsis_delivery_error = ? 
+        WHERE id = ?
+      `, [error.message, pick.order_id]);
+    }
     
     // Wix ile senkronizasyon
     try {
@@ -2416,14 +3020,9 @@ app.get('/api/shelves', async (req, res) => {
   try {
     const shelves = await all(`
       SELECT s.*, 
-             COUNT(sp.id) as package_count,
-             COALESCE(SUM(sp.quantity), 0) as total_quantity,
-             GROUP_CONCAT(DISTINCT p.name) as product_names
+             COALESCE(s.current_usage, 0) as current_usage
       FROM shelves s
-      LEFT JOIN shelf_packages sp ON s.id = sp.shelf_id AND sp.quantity > 0
-      LEFT JOIN products p ON sp.product_id = p.id
       WHERE s.shelf_code NOT LIKE 'SSH-%'
-      GROUP BY s.id
       ORDER BY s.zone, s.aisle, s.level
     `);
     res.json({ shelves });
@@ -2449,7 +3048,7 @@ app.get('/api/shelves/:shelfId', async (req, res) => {
              p.name as product_name, p.sku
       FROM shelf_packages sp
       JOIN product_packages pp ON sp.package_id = pp.id
-      JOIN products p ON sp.product_id = p.id
+      JOIN products p ON pp.product_id = p.id
       WHERE sp.shelf_id = ? AND sp.quantity > 0
       ORDER BY sp.assigned_date DESC
     `, [req.params.shelfId]);
@@ -2504,6 +3103,7 @@ app.get('/api/packages/barcode/:barcode', async (req, res) => {
 app.post('/api/shelves/assign', async (req, res) => {
   try {
     const { shelf_code, package_barcode, quantity = 1, assigned_by = 'System' } = req.body;
+    console.log(`🔄 Raf atama isteği: Raf=${shelf_code}, Barkod=${package_barcode}, Miktar=${quantity}`);
     
     if (!shelf_code || !package_barcode) {
       return res.status(400).json({ error: 'Raf kodu ve paket barkodu gerekli' });
@@ -2515,12 +3115,16 @@ app.post('/api/shelves/assign', async (req, res) => {
     }
     
     // Rafı bul
+    console.log(`🔍 Raf arıyor: ${shelf_code}`);
     const shelf = await get(`SELECT * FROM shelves WHERE shelf_code = ? AND shelf_code NOT LIKE 'SSH-%'`, [shelf_code]);
     if (!shelf) {
+      console.log(`❌ Raf bulunamadı: ${shelf_code}`);
       return res.status(404).json({ error: 'Raf bulunamadı', shelf_code });
     }
+    console.log(`✅ Raf bulundu: ${shelf.shelf_name} (ID: ${shelf.id})`);
     
     // Paketi bul
+    console.log(`🔍 Paket arıyor: ${package_barcode}`);
     const package = await get(`
       SELECT pp.*, p.name as product_name 
       FROM product_packages pp 
@@ -2529,51 +3133,46 @@ app.post('/api/shelves/assign', async (req, res) => {
     `, [package_barcode]);
     
     if (!package) {
+      console.log(`❌ Paket bulunamadı: ${package_barcode}`);
       return res.status(404).json({ error: 'Paket bulunamadı', package_barcode });
     }
+    console.log(`✅ Paket bulundu: ${package.product_name} - ${package.package_name} (ID: ${package.id})`);
     
-    // Mevcut raf ataması var mı kontrol et
-    const existing = await get(`
-      SELECT * FROM shelf_packages WHERE shelf_id = ? AND package_id = ?
+    // Mevcut atamayı kontrol et
+    const existingAssignment = await get(`
+      SELECT * FROM shelf_packages 
+      WHERE shelf_id = ? AND package_id = ?
     `, [shelf.id, package.id]);
     
-    let previousQty = 0;
-    let newQty = quantity;
-    
-    if (existing) {
-      // Mevcut atama varsa quantity güncelle
-      previousQty = existing.quantity;
-      newQty = previousQty + quantity;
-      
+    if (existingAssignment) {
+      // Mevcut atamayı güncelle
       await run(`
         UPDATE shelf_packages 
-        SET quantity = ?, last_updated = CURRENT_TIMESTAMP 
+        SET quantity = quantity + ?, 
+            last_updated = CURRENT_TIMESTAMP 
         WHERE id = ?
-      `, [newQty, existing.id]);
+      `, [quantity, existingAssignment.id]);
     } else {
       // Yeni atama oluştur
       await run(`
-        INSERT INTO shelf_packages (shelf_id, package_id, product_id, quantity, assigned_by)
-        VALUES (?, ?, ?, ?, ?)
-      `, [shelf.id, package.id, package.product_id, quantity, assigned_by]);
+        INSERT INTO shelf_packages 
+        (shelf_id, package_id, quantity, assigned_date, last_updated)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [shelf.id, package.id, quantity]);
     }
     
-    // Hareket kaydı oluştur
-    await run(`
-      INSERT INTO shelf_movements 
-      (shelf_id, package_id, product_id, movement_type, quantity_change, previous_quantity, new_quantity, barcode_scanned, created_by)
-      VALUES (?, ?, ?, 'IN', ?, ?, ?, ?, ?)
-    `, [shelf.id, package.id, package.product_id, quantity, previousQty, newQty, package_barcode, assigned_by]);
-    
+    // Hareket kaydı şimdilik devre dışı (shelf_movements tablosu yok)
+    console.log(`📝 Hareket kaydı: ${quantity} adet ${package.product_name} -> ${shelf.shelf_name}`);
+
+    console.log(`✅ Raf atama başarılı: ${package.product_name} -> ${shelf.shelf_name}`);
     res.json({ 
       success: true, 
-      message: `${package.product_name} (${package.package_name}) ${shelf.shelf_name} rafına eklendi`,
+      message: `${package.product_name} (${package.package_name}) ${shelf.shelf_name} rafına atandı`,
       shelf: shelf.shelf_name,
       package: package.package_name,
       product: package.product_name,
-      previous_quantity: previousQty,
-      new_quantity: newQty,
-      added_quantity: quantity
+      assigned_quantity: quantity,
+      total_quantity: existingAssignment ? existingAssignment.quantity + quantity : quantity
     });
     
   } catch (error) {
@@ -2593,7 +3192,7 @@ app.post('/api/shelves/remove', async (req, res) => {
       FROM shelf_packages sp
       JOIN shelves s ON sp.shelf_id = s.id
       JOIN product_packages pp ON sp.package_id = pp.id  
-      JOIN products p ON sp.product_id = p.id
+      JOIN products p ON pp.product_id = p.id
       WHERE s.shelf_code = ? AND pp.barcode = ?
     `, [shelf_code, package_barcode]);
     
@@ -2616,12 +3215,8 @@ app.post('/api/shelves/remove', async (req, res) => {
       `, [newQty, assignment.id]);
     }
     
-    // Hareket kaydı oluştur
-    await run(`
-      INSERT INTO shelf_movements 
-      (shelf_id, package_id, product_id, movement_type, quantity_change, previous_quantity, new_quantity, barcode_scanned, created_by)
-      VALUES (?, ?, ?, 'OUT', ?, ?, ?, ?, ?)
-    `, [assignment.shelf_id, assignment.package_id, assignment.product_id, -quantity, previousQty, newQty, package_barcode, removed_by]);
+    // Hareket kaydı (şimdilik devre dışı - shelf_movements tablosu yok)
+    console.log(`📝 Hareket kaydı: ${quantity} adet ${assignment.product_name} çıkarıldı - ${assignment.shelf_name}`);
     
     res.json({ 
       success: true, 
@@ -2690,20 +3285,49 @@ app.get('/api/products/:productId/movements', async (req, res) => {
 // Tüm raf atamaları (raf lokasyon sayfası için)
 app.get('/api/shelf-assignments', async (req, res) => {
   try {
-    const assignments = await all(`
-      SELECT sp.*, s.shelf_code, s.shelf_name, s.zone, s.aisle, s.level,
-             pp.package_name, pp.package_number, pp.package_content, pp.barcode, pp.quantity as package_size,
-             p.name as product_name, p.sku,
-             DATE(sp.assigned_date) as assigned_date_formatted
+    // shelf_packages tablosundan gerçek verileri al
+    const query = `
+      SELECT 
+        sp.id,
+        sp.package_id,
+        sp.shelf_id,
+        sp.quantity,
+        sp.assigned_date,
+        sp.last_updated,
+        s.shelf_code,
+        s.shelf_name,
+        s.zone,
+        s.aisle,
+        s.level,
+        s.capacity,
+        p.name as product_name,
+        p.sku,
+        pp.package_name,
+        pp.barcode,
+        pp.package_content,
+        pp.package_number,
+        pp.product_id,
+        DATE(sp.assigned_date) as assigned_date_formatted
       FROM shelf_packages sp
       JOIN shelves s ON sp.shelf_id = s.id
       JOIN product_packages pp ON sp.package_id = pp.id
-      JOIN products p ON sp.product_id = p.id
+      JOIN products p ON pp.product_id = p.id
       WHERE sp.quantity > 0
-      ORDER BY s.zone, s.aisle, s.level, sp.assigned_date DESC
-    `);
+      ORDER BY s.shelf_code, sp.assigned_date DESC
+    `;
     
-    res.json({ assignments });
+    console.log('🔍 Shelf assignments query çalıştırılıyor...');
+    const assignments = await all(query);
+    console.log(`📦 Shelf assignments sonuç: ${assignments ? assignments.length : 0} kayıt`);
+    
+    if (assignments && assignments.length > 0) {
+      console.log('📋 İlk assignment:', assignments[0]);
+    }
+    
+    res.json({ 
+      assignments: assignments || [],
+      count: assignments ? assignments.length : 0
+    });
   } catch (error) {
     console.error('Error fetching shelf assignments:', error);
     res.status(500).json({ error: error.message });
@@ -2843,6 +3467,301 @@ app.get('/api/shelves/stats', async (req, res) => {
   } catch (error) {
     console.error('Error fetching shelf stats:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// ---- PACKAGE MANAGEMENT API ENDPOINTS ----
+
+// Search main products (for package management)
+app.get('/api/packages/search-main-products', requireAuth, async (req, res) => {
+  try {
+    const { q } = req.query;
+    let query = `
+      SELECT id, sku, name, description, price, created_at,
+             (SELECT COUNT(*) FROM product_packages WHERE product_id = p.id) as package_count
+      FROM products p
+      WHERE 1=1
+    `;
+    let params = [];
+    
+    if (q) {
+      query += ` AND (sku LIKE ? OR name LIKE ?)`;
+      params.push(`%${q}%`, `%${q}%`);
+    }
+    
+    // Only show products that could be main products (not PK- prefixed)
+    query += ` AND sku NOT LIKE 'PK-%'`;
+    query += ` ORDER BY name ASC LIMIT 50`;
+    
+    const products = await all(query, params);
+    res.json({ success: true, products });
+  } catch (error) {
+    console.error('❌ Search main products error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Get packages for a main product
+app.get('/api/packages/main-product/:productId', requireAuth, async (req, res) => {
+  try {
+    const { productId } = req.params;
+    
+    // Get main product info
+    const mainProduct = await get('SELECT * FROM products WHERE id = ?', [productId]);
+    if (!mainProduct) {
+      return res.status(404).json({ success: false, error: 'Ana ürün bulunamadı' });
+    }
+    
+    // Get existing packages for this main product
+    const packages = await all(`
+      SELECT pp.*, p.sku as package_sku, p.name as package_name
+      FROM product_packages pp
+      LEFT JOIN products p ON pp.barcode = p.sku
+      WHERE pp.product_id = ?
+      ORDER BY pp.package_name
+    `, [productId]);
+    
+    res.json({ 
+      success: true, 
+      mainProduct,
+      packages 
+    });
+  } catch (error) {
+    console.error('❌ Get main product packages error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Search available packages (PK products) to add - NO AUTH REQUIRED
+app.get('/api/packages/search-pk-products', async (req, res) => {
+  console.log('🔍 PK Search endpoint hit!', req.query);
+  
+  try {
+    const { q, mainProductId } = req.query;
+    console.log('🔍 Search query:', q, 'Main product ID:', mainProductId);
+    
+    let query = `
+      SELECT id, sku, name, description
+      FROM products
+      WHERE sku LIKE 'PK-%'
+    `;
+    let params = [];
+    
+    if (q) {
+      query += ` AND (sku LIKE ? OR name LIKE ?)`;
+      params.push(`%${q}%`, `%${q}%`);
+    }
+    
+    // Exclude packages already assigned to this main product
+    if (mainProductId) {
+      query += ` AND sku NOT IN (
+        SELECT barcode FROM product_packages WHERE product_id = ?
+      )`;
+      params.push(mainProductId);
+    }
+    
+    query += ` ORDER BY sku ASC LIMIT 30`;
+    
+    console.log('🔍 Executing query:', query, 'Params:', params);
+    
+    const pkProducts = await all(query, params);
+    console.log('🔍 Found PK products:', pkProducts.length);
+    
+    res.json({ success: true, packages: pkProducts });
+  } catch (error) {
+    console.error('❌ Search PK products error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Add package to main product
+app.post('/api/packages/add', requireAuth, async (req, res) => {
+  try {
+    const { mainProductId, packageSku, packageName, quantity } = req.body;
+    
+    if (!mainProductId || !packageSku) {
+      return res.status(400).json({ success: false, error: 'Ana ürün ID ve paket SKU gerekli' });
+    }
+    
+    // Check if main product exists
+    const mainProduct = await get('SELECT * FROM products WHERE id = ?', [mainProductId]);
+    if (!mainProduct) {
+      return res.status(404).json({ success: false, error: 'Ana ürün bulunamadı' });
+    }
+    
+    // Check if package already exists
+    const existingPackage = await get(
+      'SELECT id FROM product_packages WHERE product_id = ? AND barcode = ?', 
+      [mainProductId, packageSku]
+    );
+    
+    if (existingPackage) {
+      return res.status(409).json({ success: false, error: 'Bu paket zaten eklenmiş' });
+    }
+    
+    // Add the package
+    const result = await run(`
+      INSERT INTO product_packages (product_id, package_name, barcode, quantity, created_at)
+      VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `, [
+      mainProductId,
+      packageName || `Paket: ${packageSku}`,
+      packageSku,
+      quantity || 1
+    ]);
+    
+    console.log(`✅ Paket eklendi: ${packageSku} -> ${mainProduct.sku} (${mainProduct.name})`);
+    
+    res.json({ 
+      success: true, 
+      message: 'Paket başarıyla eklendi',
+      packageId: result.lastID 
+    });
+  } catch (error) {
+    console.error('❌ Add package error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Remove package from main product
+app.delete('/api/packages/:packageId', requireAuth, async (req, res) => {
+  try {
+    const { packageId } = req.params;
+    
+    // Get package info before deleting
+    const packageInfo = await get('SELECT * FROM product_packages WHERE id = ?', [packageId]);
+    if (!packageInfo) {
+      return res.status(404).json({ success: false, error: 'Paket bulunamadı' });
+    }
+    
+    // Delete the package
+    const result = await run('DELETE FROM product_packages WHERE id = ?', [packageId]);
+    
+    if (result.changes > 0) {
+      console.log(`✅ Paket silindi: ${packageInfo.barcode} (${packageInfo.package_name})`);
+      res.json({ success: true, message: 'Paket başarıyla silindi' });
+    } else {
+      res.status(404).json({ success: false, error: 'Paket bulunamadı' });
+    }
+  } catch (error) {
+    console.error('❌ Remove package error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Update package details
+app.put('/api/packages/:packageId', requireAuth, async (req, res) => {
+  try {
+    const { packageId } = req.params;
+    const { packageName, quantity } = req.body;
+    
+    const result = await run(`
+      UPDATE product_packages 
+      SET package_name = ?, quantity = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [packageName, quantity, packageId]);
+    
+    if (result.changes > 0) {
+      res.json({ success: true, message: 'Paket başarıyla güncellendi' });
+    } else {
+      res.status(404).json({ success: false, error: 'Paket bulunamadı' });
+    }
+  } catch (error) {
+    console.error('❌ Update package error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Auto-match PK products with main products (manual trigger)
+app.post('/api/packages/auto-match', requireAuth, async (req, res) => {
+  try {
+    const { mainProductId } = req.body;
+    
+    if (req.session.user.role !== 'admin') {
+      return res.status(403).json({ success: false, error: 'Admin yetkisi gerekli' });
+    }
+    
+    console.log('🔄 Manuel PK eşleştirme başlatılıyor...');
+    
+    let matchCount = 0;
+    let products = [];
+    
+    if (mainProductId) {
+      // Match for specific main product
+      const mainProduct = await get('SELECT * FROM products WHERE id = ?', [mainProductId]);
+      if (!mainProduct) {
+        return res.status(404).json({ success: false, error: 'Ana ürün bulunamadı' });
+      }
+      
+      // Get all products for matching
+      products = await all('SELECT sku, name FROM products LIMIT 2000');
+      const matches = await netsisAPI.matchAllPkProducts(products);
+      
+      // Filter matches for this specific main product
+      const relevantMatches = matches.filter(m => 
+        m.matched && m.mainProductSku === mainProduct.sku
+      );
+      
+      for (const match of relevantMatches) {
+        try {
+          await run(`
+            INSERT INTO product_packages (product_id, package_name, barcode, quantity, created_at)
+            VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(product_id, barcode) DO UPDATE SET
+              package_name=excluded.package_name,
+              updated_at=CURRENT_TIMESTAMP
+          `, [
+            mainProduct.id,
+            `PK Paketi: ${match.pkProduct.name}`,
+            match.packageSku,
+            1
+          ]);
+          matchCount++;
+        } catch (err) {
+          console.warn(`⚠️ Paket ekleme hatası: ${match.packageSku}`, err.message);
+        }
+      }
+    } else {
+      // Match all products
+      products = await all('SELECT sku, name FROM products LIMIT 5000');
+      const matches = await netsisAPI.matchAllPkProducts(products);
+      
+      for (const match of matches) {
+        if (match.matched) {
+          try {
+            const mainProduct = await get('SELECT id FROM products WHERE sku = ?', [match.mainProductSku]);
+            if (mainProduct) {
+              await run(`
+                INSERT INTO product_packages (product_id, package_name, barcode, quantity, created_at)
+                VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                ON CONFLICT(product_id, barcode) DO UPDATE SET
+                  package_name=excluded.package_name,
+                  updated_at=CURRENT_TIMESTAMP
+              `, [
+                mainProduct.id,
+                `PK Paketi: ${match.pkProduct.name}`,
+                match.packageSku,
+                1
+              ]);
+              matchCount++;
+            }
+          } catch (err) {
+            console.warn(`⚠️ Paket ekleme hatası: ${match.packageSku}`, err.message);
+          }
+        }
+      }
+    }
+    
+    console.log(`✅ ${matchCount} otomatik PK eşleştirmesi tamamlandı`);
+    
+    res.json({
+      success: true,
+      message: `${matchCount} paket otomatik olarak eşleştirildi`,
+      matchCount
+    });
+  } catch (error) {
+    console.error('❌ Auto-match error:', error);
+    res.status(500).json({ success: false, error: error.message });
   }
 });
 
@@ -3594,6 +4513,602 @@ app.put('/api/ssh-inventory/:id/notes', async (req, res) => {
   }
 });
 
+// ---- NETSIS Integration API Endpoints ----
+
+// Netsis siparişlerini al ve veritabanına kaydet
+app.post('/api/netsis/orders', async (req, res) => {
+  try {
+    console.log('Netsis orders received:', JSON.stringify(req.body, null, 2));
+    
+    const { exportedAt, count, orders } = req.body;
+    
+    if (!orders || !Array.isArray(orders)) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid orders data' 
+      });
+    }
+
+    let processedCount = 0;
+    let errorCount = 0;
+    const errors = [];
+
+    for (const order of orders) {
+      try {
+        // Sipariş kaydını kontrol et
+        const existingOrder = await get(`
+          SELECT id FROM netsis_orders 
+          WHERE sube_kodu = ? AND ftirsip = ? AND siparis_no = ?
+        `, [order.subeKodu, order.ftirsip, order.siparisNo]);
+
+        let orderDbId;
+
+        if (existingOrder) {
+          // Güncelle
+          await run(`
+            UPDATE netsis_orders SET
+              cari_kodu = ?, siparis_tarihi = ?, toplam_tutar = ?,
+              kdv_tutar = ?, kdv_dahil_mi = ?, kayit_tarihi = ?,
+              sync_tarihi = CURRENT_TIMESTAMP, sync_status = 'updated'
+            WHERE id = ?
+          `, [
+            order.cariKodu, order.siparisTarihi, order.toplamTutar,
+            order.kdvTutar, order.kdvDahilMi ? 1 : 0, order.kayitTarihi || exportedAt,
+            existingOrder.id
+          ]);
+          orderDbId = existingOrder.id;
+
+          // Mevcut satırları sil
+          await run('DELETE FROM netsis_order_lines WHERE netsis_order_id = ?', [orderDbId]);
+        } else {
+          // Yeni kayıt
+          const result = await run(`
+            INSERT INTO netsis_orders (
+              sube_kodu, ftirsip, siparis_no, cari_kodu, siparis_tarihi,
+              toplam_tutar, kdv_tutar, kdv_dahil_mi, kayit_tarihi, sync_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new')
+          `, [
+            order.subeKodu, order.ftirsip, order.siparisNo, order.cariKodu, 
+            order.siparisTarihi, order.toplamTutar, order.kdvTutar, 
+            order.kdvDahilMi ? 1 : 0, order.kayitTarihi || exportedAt
+          ]);
+          orderDbId = result.lastID;
+        }
+
+        // Satırları ekle
+        if (order.satirlar && Array.isArray(order.satirlar)) {
+          for (const line of order.satirlar) {
+            await run(`
+              INSERT INTO netsis_order_lines (
+                netsis_order_id, sube_kodu, ftirsip, siparis_no,
+                stok_kodu, aciklama, miktar, birim, birim_fiyat,
+                kdv_orani, depo_kodu, satir_sira
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              orderDbId, order.subeKodu, order.ftirsip, order.siparisNo,
+              line.stokKodu, line.aciklama, line.miktar, line.birim,
+              line.birimFiyat, line.kdvOrani, line.depoKodu, line.sira
+            ]);
+          }
+        }
+
+        processedCount++;
+      } catch (orderError) {
+        console.error('Error processing order:', order.siparisNo, orderError);
+        errors.push({
+          orderNo: order.siparisNo,
+          error: orderError.message
+        });
+        errorCount++;
+      }
+    }
+
+    res.json({
+      success: true,
+      message: `${processedCount} sipariş işlendi, ${errorCount} hata`,
+      stats: {
+        processed: processedCount,
+        errors: errorCount,
+        total: orders.length
+      },
+      errors: errors
+    });
+
+  } catch (error) {
+    console.error('Netsis orders import error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Netsis siparişlerini listele
+app.get('/api/netsis/orders', async (req, res) => {
+  try {
+    const { page = 1, limit = 50, status = 'all' } = req.query;
+    const offset = (page - 1) * limit;
+
+    let whereClause = '';
+    let params = [];
+
+    if (status !== 'all') {
+      whereClause = 'WHERE sync_status = ?';
+      params = [status];
+    }
+
+    const orders = await all(`
+      SELECT no.*, COUNT(nol.id) as line_count
+      FROM netsis_orders no
+      LEFT JOIN netsis_order_lines nol ON no.id = nol.netsis_order_id
+      ${whereClause}
+      GROUP BY no.id
+      ORDER BY no.sync_tarihi DESC
+      LIMIT ? OFFSET ?
+    `, [...params, parseInt(limit), parseInt(offset)]);
+
+    const totalCount = await get(`
+      SELECT COUNT(*) as total FROM netsis_orders ${whereClause}
+    `, params);
+
+    res.json({
+      success: true,
+      orders: orders,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total: totalCount.total,
+        pages: Math.ceil(totalCount.total / limit)
+      }
+    });
+
+  } catch (error) {
+    console.error('Error fetching netsis orders:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Netsis siparişi detayları
+app.get('/api/netsis/orders/:id', requireAuth, async (req, res) => {
+  try {
+    const orderId = req.params.id;
+
+    const order = await get(`
+      SELECT * FROM netsis_orders WHERE id = ?
+    `, [orderId]);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Sipariş bulunamadı'
+      });
+    }
+
+    const lines = await all(`
+      SELECT * FROM netsis_order_lines 
+      WHERE netsis_order_id = ?
+      ORDER BY satir_sira
+    `, [orderId]);
+
+    order.lines = lines;
+
+    res.json({
+      success: true,
+      order: order
+    });
+
+  } catch (error) {
+    console.error('Error fetching netsis order details:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Helper function - sipariş numarası oluştur
+async function generateOrderNumber() {
+  const today = new Date();
+  const dateStr = today.toISOString().slice(0, 10).replace(/-/g, '');
+  
+  const lastOrder = await get(`
+    SELECT order_number FROM orders 
+    WHERE order_number LIKE ? 
+    ORDER BY order_number DESC LIMIT 1
+  `, [`${dateStr}%`]);
+  
+  let sequence = 1;
+  if (lastOrder) {
+    const lastSequence = parseInt(lastOrder.order_number.slice(-4));
+    sequence = lastSequence + 1;
+  }
+  
+  return `${dateStr}${sequence.toString().padStart(4, '0')}`;
+}
+
+// External orders integration endpoint
+app.post('/api/external-orders/integrate', requireAuth, async (req, res) => {
+  try {
+    const { external_order, source } = req.body;
+    
+    if (!external_order || !external_order.id) {
+      return res.status(400).json({
+        success: false,
+        error: 'Geçersiz harici sipariş verisi'
+      });
+    }
+
+    console.log('🔄 External order integration started:', external_order.id);
+
+    // Create order in WMS system
+    const orderNumber = await generateOrderNumber();
+    
+    const orderId = await run(`
+      INSERT INTO orders (
+        order_number, customer_name, status, fulfillment_status,
+        total_amount, external_id, external_source
+      ) VALUES (?, ?, ?, ?, ?, ?, ?)
+    `, [
+      orderNumber,
+      external_order.customer_code || external_order.customer_name,
+      'open',
+      'UNFULFILLED', 
+      external_order.total_amount || 0,
+      external_order.id,
+      source || 'external_api'
+    ]);
+
+    // Create order items and product packages for WMS picking system
+    if (external_order.items && external_order.items.length > 0) {
+      for (const item of external_order.items) {
+        // Check if product exists, if not create it
+        let product = await get(`SELECT id FROM products WHERE sku = ?`, [item.product_sku]);
+        
+        if (!product) {
+          // Create product
+          const productId = await run(`
+            INSERT INTO products (sku, name, description)
+            VALUES (?, ?, ?)
+          `, [
+            item.product_sku,
+            item.product_name || item.product_sku,
+            item.description || ''
+          ]);
+          product = { id: productId };
+        }
+
+        // Create order item
+        await run(`
+          INSERT INTO order_items (
+            order_id, product_id, sku, product_name, quantity
+          ) VALUES (?, ?, ?, ?, ?)
+        `, [
+          orderId,
+          product.id,
+          item.product_sku,
+          item.product_name || item.product_sku,
+          item.quantity || 1
+        ]);
+
+        // Create product package for picking if it doesn't exist
+        const packageBarcode = `PK-${item.product_sku}-01`;
+        let productPackage = await get(`
+          SELECT id FROM product_packages 
+          WHERE product_id = ? AND barcode = ?
+        `, [product.id, packageBarcode]);
+
+        if (!productPackage) {
+          // Create product package
+          await run(`
+            INSERT INTO product_packages (
+              product_id, package_number, product_name, package_name, 
+              barcode, quantity, contents
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+          `, [
+            product.id,
+            `PK-${item.product_sku}`,
+            item.product_name || item.product_sku,
+            `${item.product_name || item.product_sku} Paketi`,
+            packageBarcode,
+            1, // Her paket 1 adet ürün içeriyor
+            `1 adet ${item.product_name || item.product_sku}`
+          ]);
+          
+          console.log(`✅ Created package for SKU: ${item.product_sku} with barcode: ${packageBarcode}`);
+        }
+
+        // Create shelf assignment if package needs location
+        const shelfAssignment = await get(`
+          SELECT * FROM shelf_packages WHERE product_id = ? AND package_barcode = ?
+        `, [product.id, packageBarcode]);
+
+        if (!shelfAssignment) {
+          // Assign to a default shelf location
+          const defaultShelf = await get(`SELECT id FROM shelves WHERE name = 'A1-01-001' LIMIT 1`);
+          if (defaultShelf) {
+            await run(`
+              INSERT INTO shelf_packages (
+                shelf_id, product_id, package_barcode, 
+                package_name, quantity_available
+              ) VALUES (?, ?, ?, ?, ?)
+            `, [
+              defaultShelf.id,
+              product.id,
+              packageBarcode,
+              `${item.product_name || item.product_sku} Paketi`,
+              100 // Default stok miktarı
+            ]);
+            
+            console.log(`✅ Assigned package ${packageBarcode} to shelf A1-01-001`);
+          }
+        }
+      }
+    }
+
+    // Create pick for the order
+    const pickId = await run(`
+      INSERT INTO picks (order_id, status)
+      VALUES (?, ?)
+    `, [orderId, 'active']);
+
+    console.log('✅ External order integrated successfully:', {
+      external_id: external_order.id,
+      wms_order_id: orderId,
+      pick_id: pickId,
+      order_number: orderNumber
+    });
+
+    res.json({
+      success: true,
+      wms_order_id: orderId,
+      pick_id: pickId,
+      order_number: orderNumber,
+      message: 'Harici sipariş WMS sistemine entegre edildi'
+    });
+
+  } catch (error) {
+    console.error('❌ External order integration error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Complete external order with NetOpenXRest integration
+app.post('/api/external-orders/:id/complete', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { picked_items } = req.body;
+
+    console.log('🔄 Completing external order:', id);
+
+    // Find the WMS order
+    const order = await get(`
+      SELECT * FROM orders 
+      WHERE external_id = ? AND external_source LIKE '%external%'
+    `, [id]);
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Harici sipariş bulunamadı'
+      });
+    }
+
+    // Update order status
+    await run(`
+      UPDATE orders 
+      SET status = 'fulfilled', fulfillment_status = 'FULFILLED', updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [order.id]);
+
+    // Update pick status
+    await run(`
+      UPDATE picks 
+      SET status = 'completed', completed_at = CURRENT_TIMESTAMP
+      WHERE order_id = ?
+    `, [order.id]);
+
+    console.log('✅ Order status updated, starting NetOpenXRest integration...');
+
+    // NetOpenXRest integration
+    try {
+      const netsisResult = await netsisAPI.convertOrderToDeliveryNote({
+        order_number: id,
+        customer_code: order.customer_name,
+        items: picked_items || [],
+        total_amount: order.total_amount
+      });
+
+      if (netsisResult.success) {
+        console.log('✅ NetOpenXRest integration successful:', netsisResult);
+        
+        // Store delivery note info
+        await run(`
+          UPDATE orders 
+          SET netsis_delivery_note = ?, netsis_integration_status = 'completed'
+          WHERE id = ?
+        `, [JSON.stringify(netsisResult.delivery_note), order.id]);
+
+        res.json({
+          success: true,
+          message: 'Sipariş tamamlandı ve Netsis\'te irsaliyeye çevrildi',
+          wms_order_id: order.id,
+          netsis_delivery_note: netsisResult.delivery_note
+        });
+      } else {
+        console.warn('⚠️ NetOpenXRest integration failed:', netsisResult.message);
+        
+        await run(`
+          UPDATE orders 
+          SET netsis_integration_status = 'failed', netsis_error = ?
+          WHERE id = ?
+        `, [netsisResult.message, order.id]);
+
+        res.json({
+          success: true,
+          message: 'Sipariş WMS\'de tamamlandı, ancak Netsis entegrasyonu başarısız',
+          wms_order_id: order.id,
+          netsis_error: netsisResult.message
+        });
+      }
+    } catch (netsisError) {
+      console.error('❌ NetOpenXRest integration error:', netsisError);
+      
+      await run(`
+        UPDATE orders 
+        SET netsis_integration_status = 'failed', netsis_error = ?
+        WHERE id = ?
+      `, [netsisError.message, order.id]);
+
+      res.json({
+        success: true,
+        message: 'Sipariş WMS\'de tamamlandı, ancak Netsis entegrasyonu başarısız',
+        wms_order_id: order.id,
+        netsis_error: netsisError.message
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ External order completion error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// ---- ORDERS RESET ENDPOINT ----
+// Reset completed orders and dispatch records for testing
+app.post('/api/admin/reset-orders', requireRole(['admin']), async (req, res) => {
+  try {
+    console.log('🔄 Resetting orders and dispatch records...');
+    
+    // 1. Clear dispatch note fields
+    await run(`
+      UPDATE orders SET 
+        netsis_delivery_note_id = NULL,
+        netsis_delivery_status = NULL,
+        netsis_delivery_data = NULL,
+        netsis_delivery_error = NULL,
+        updated_at = CURRENT_TIMESTAMP
+    `);
+    
+    // 2. Reset fulfilled orders to open status
+    const resetResult = await run(`
+      UPDATE orders SET 
+        status = 'open',
+        fulfillment_status = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE status = 'fulfilled' OR fulfillment_status = 'FULFILLED'
+    `);
+    
+    // 3. Clear completed picks
+    let picksClearedCount = 0;
+    try {
+      const picksResult = await run('DELETE FROM picks WHERE status = "completed"');
+      picksClearedCount = picksResult.changes || 0;
+    } catch (error) {
+      console.log('ℹ️ Pick tablosu bulunamadı, atlandı');
+    }
+    
+    // 4. Clear pick scans
+    let scansClearedCount = 0;
+    try {
+      const scansResult = await run('DELETE FROM pick_scans');
+      scansClearedCount = scansResult.changes || 0;
+    } catch (error) {
+      console.log('ℹ️ Pick scans tablosu bulunamadı, atlandı');
+    }
+    
+    // Get final stats
+    const stats = await get(`
+      SELECT 
+        COUNT(*) as total_orders,
+        SUM(CASE WHEN status = 'open' THEN 1 ELSE 0 END) as open_orders,
+        SUM(CASE WHEN status = 'fulfilled' THEN 1 ELSE 0 END) as fulfilled_orders,
+        SUM(CASE WHEN netsis_delivery_note_id IS NOT NULL THEN 1 ELSE 0 END) as with_dispatch
+      FROM orders
+    `);
+    
+    console.log('✅ Orders reset completed successfully');
+    
+    res.json({
+      success: true,
+      message: 'Orders and dispatch records reset successfully',
+      stats: {
+        total_orders: stats.total_orders,
+        open_orders: stats.open_orders,
+        fulfilled_orders: stats.fulfilled_orders,
+        with_dispatch: stats.with_dispatch,
+        orders_reset: resetResult.changes || 0,
+        picks_cleared: picksClearedCount,
+        scans_cleared: scansClearedCount
+      }
+    });
+    
+  } catch (error) {
+    console.error('❌ Orders reset error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to reset orders',
+      details: error.message
+    });
+  }
+});
+
+// ---- SIMULATE ORDER COMPLETION FOR TESTING ----
+app.post('/api/admin/simulate-order-completion', requireRole(['admin']), async (req, res) => {
+  try {
+    const { order_id } = req.body;
+    
+    if (!order_id) {
+      return res.status(400).json({ success: false, error: 'order_id required' });
+    }
+    
+    console.log(`🔧 Simulating completion for order ID: ${order_id}`);
+    
+    // Update order status
+    await run(`
+      UPDATE orders 
+      SET status = 'fulfilled', fulfillment_status = 'FULFILLED' 
+      WHERE id = ?
+    `, [order_id]);
+    
+    // Update all order items to picked
+    const orderItems = await all(`
+      SELECT id, quantity FROM order_items WHERE order_id = ?
+    `, [order_id]);
+    
+    for (const item of orderItems) {
+      await run(`
+        UPDATE order_items 
+        SET picked_qty = quantity 
+        WHERE id = ?
+      `, [item.id]);
+    }
+    
+    console.log(`✅ Order ${order_id} marked as completed with all items picked`);
+    
+    res.json({
+      success: true,
+      message: `Order ${order_id} simulated as completed`,
+      items_updated: orderItems.length
+    });
+    
+  } catch (error) {
+    console.error('❌ Simulate completion error:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to simulate completion',
+      details: error.message
+    });
+  }
+});
 
 // Network erişimi için tüm interface'lerde dinle
 app.listen(PORT, '0.0.0.0', async () => {
@@ -3619,6 +5134,63 @@ app.listen(PORT, '0.0.0.0', async () => {
     // Column might already exist
     if (!e.message.includes('duplicate column name')) {
       console.log('ℹ️ Color column already exists in products table');
+    }
+  }
+
+  // Add netsis_data column to products table if not exists  
+  try {
+    await run(`ALTER TABLE products ADD COLUMN netsis_data TEXT DEFAULT NULL`);
+    console.log('✅ Netsis_data column added to products table');
+  } catch (e) {
+    // Column might already exist
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis_data column already exists in products table');
+    }
+  }
+
+  // Add external order tracking columns to orders table
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN external_id TEXT DEFAULT NULL`);
+    console.log('✅ External_id column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ External_id column already exists in orders table');
+    }
+  }
+
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN external_source TEXT DEFAULT NULL`);
+    console.log('✅ External_source column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ External_source column already exists in orders table');
+    }
+  }
+
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN netsis_delivery_note TEXT DEFAULT NULL`);
+    console.log('✅ Netsis_delivery_note column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis_delivery_note column already exists in orders table');
+    }
+  }
+
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN netsis_integration_status TEXT DEFAULT NULL`);
+    console.log('✅ Netsis_integration_status column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis_integration_status column already exists in orders table');
+    }
+  }
+
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN netsis_error TEXT DEFAULT NULL`);
+    console.log('✅ Netsis_error column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis_error column already exists in orders table');
     }
   }
   
@@ -3720,7 +5292,7 @@ app.post('/api/inventory-counts', async (req, res) => {
     let items = [];
     
     if (type === 'full') {
-      // Full count - all products (including zero stock)
+      // Full count - DEMO VERSION: Only test products for performance
       items = await all(`
         SELECT 
           p.id as product_id,
@@ -3737,6 +5309,7 @@ app.post('/api/inventory-counts', async (req, res) => {
         LEFT JOIN shelf_packages sp ON pp.id = sp.package_id
         LEFT JOIN shelves s ON sp.shelf_id = s.id
         WHERE (s.shelf_code IS NULL OR s.shelf_code != 'SSH-01-01')
+        AND p.sku IN ('ERZ-YT-K-BE-01-A1', 'CC-YT-S-BE-01')
         ORDER BY p.sku, COALESCE(s.shelf_code, 'ZZZ'), COALESCE(pp.barcode, 'ZZZ')
       `);
     } else if (type === 'spot') {
@@ -3827,7 +5400,7 @@ app.get('/api/inventory-counts', async (req, res) => {
       ORDER BY ic.created_date DESC
     `);
     
-    res.json(counts);
+    res.json({ success: true, counts });
   } catch (error) {
     console.error('❌ Inventory counts fetch error:', error);
     res.status(500).json({ error: error.message });
@@ -3864,7 +5437,7 @@ app.get('/api/inventory-counts/:id/items', async (req, res) => {
       ORDER BY ici.location_code, ici.sku
     `, [id]);
     
-    res.json(items);
+    res.json({ success: true, items });
   } catch (error) {
     console.error('❌ Count items fetch error:', error);
     res.status(500).json({ error: error.message });
@@ -4133,13 +5706,18 @@ app.post('/api/inventory-counts/:id/scan', async (req, res) => {
     const { id } = req.params;
     const { barcode } = req.body;
     
+    console.log(`🔍 SCAN DEBUG: Count ID=${id}, Barcode=${barcode}`);
+    
     if (!barcode) {
+      console.log('❌ SCAN DEBUG: No barcode provided');
       return res.status(400).json({ error: 'Barcode required' });
     }
     
     // Check if count exists and is manual type
     const count = await get('SELECT * FROM inventory_counts WHERE id = ? AND type = "manual"', [id]);
+    console.log(`🔍 SCAN DEBUG: Count found:`, count);
     if (!count) {
+      console.log('❌ SCAN DEBUG: Manual count not found or wrong type');
       return res.status(404).json({ error: 'Manual count not found' });
     }
     
@@ -4164,7 +5742,13 @@ app.post('/api/inventory-counts/:id/scan', async (req, res) => {
       ORDER BY s.shelf_code
     `, [barcode, barcode]);
     
+    console.log(`🔍 SCAN DEBUG: Found ${productLocations.length} locations for barcode ${barcode}`);
+    if (productLocations.length > 0) {
+      console.log('🔍 SCAN DEBUG: First location:', productLocations[0]);
+    }
+    
     if (!productLocations || productLocations.length === 0) {
+      console.log('❌ SCAN DEBUG: No locations found, returning 404');
       return res.status(404).json({ error: 'Ürün bulunamadı veya SSH-01-01 rafında' });
     }
     
@@ -4228,27 +5812,101 @@ app.delete('/api/inventory-counts/cleanup', async (req, res) => {
 // Get stock summary
 app.get('/api/stock/summary', async (req, res) => {
   try {
-    // Toplam ürün sayısı
-    const totalProducts = await get(`
-      SELECT COUNT(DISTINCT p.id) as count 
-      FROM products p
-      JOIN shelf_packages sp ON p.id = sp.product_id
-    `);
+    // Önce shelf_packages tablosunun var olup olmadığını kontrol edelim
+    let hasShelfPackages = false;
+    try {
+      await get("SELECT name FROM sqlite_master WHERE type='table' AND name='shelf_packages'");
+      hasShelfPackages = true;
+    } catch (error) {
+      hasShelfPackages = false;
+    }
     
-    // Düşük stok (<=5)
-    const lowStock = await get(`
-      SELECT COUNT(DISTINCT sp.product_id) as count 
-      FROM shelf_packages sp
-      WHERE sp.quantity > 0 AND sp.quantity <= 5
-    `);
+    let totalProducts, lowStock, outOfStock;
     
-    // Stokta yok (=0)
-    const outOfStock = await get(`
-      SELECT COUNT(DISTINCT p.id) as count 
-      FROM products p
-      LEFT JOIN shelf_packages sp ON p.id = sp.product_id
-      WHERE sp.quantity IS NULL OR sp.quantity = 0
-    `);
+    if (hasShelfPackages) {
+      // Shelf_packages tablosu varsa gerçek stok hesapla
+      
+      // Toplam ürün sayısı (en az bir paketi olan)
+      totalProducts = await get(`
+        SELECT COUNT(DISTINCT p.id) as count 
+        FROM products p
+        JOIN product_packages pp ON p.id = pp.product_id
+      `);
+      
+      // Düşük stok hesaplama: Ana ürün stok miktarı (minimum paket stoğu) <= 5
+      const lowStockProducts = await all(`
+        SELECT p.id, p.sku,
+          COALESCE((
+            SELECT MIN(pkg_stock.total_quantity)
+            FROM (
+              SELECT 
+                pp2.id as package_id,
+                SUM(COALESCE(sp2.quantity, 0)) as total_quantity
+              FROM product_packages pp2
+              LEFT JOIN shelf_packages sp2 ON pp2.id = sp2.package_id
+              LEFT JOIN shelves s2 ON sp2.shelf_id = s2.id
+              WHERE pp2.product_id = p.id 
+                AND (s2.shelf_code != 'SSH-01-01' OR s2.shelf_code IS NULL)
+              GROUP BY pp2.id
+              HAVING total_quantity > 0
+            ) pkg_stock
+          ), 0) as main_stock
+        FROM products p
+        JOIN product_packages pp ON p.id = pp.product_id
+        GROUP BY p.id, p.sku
+        HAVING main_stock > 0 AND main_stock <= 5
+      `);
+      lowStock = { count: lowStockProducts.length };
+      
+      // Stokta yok hesaplama: Ana ürün stok miktarı = 0
+      const outOfStockProducts = await all(`
+        SELECT p.id, p.sku,
+          COALESCE((
+            SELECT MIN(pkg_stock.total_quantity)
+            FROM (
+              SELECT 
+                pp2.id as package_id,
+                SUM(COALESCE(sp2.quantity, 0)) as total_quantity
+              FROM product_packages pp2
+              LEFT JOIN shelf_packages sp2 ON pp2.id = sp2.package_id
+              LEFT JOIN shelves s2 ON sp2.shelf_id = s2.id
+              WHERE pp2.product_id = p.id 
+                AND (s2.shelf_code != 'SSH-01-01' OR s2.shelf_code IS NULL)
+              GROUP BY pp2.id
+            ) pkg_stock
+          ), 0) as main_stock
+        FROM products p
+        JOIN product_packages pp ON p.id = pp.product_id
+        GROUP BY p.id, p.sku
+        HAVING main_stock = 0
+      `);
+      outOfStock = { count: outOfStockProducts.length };
+      
+    } else {
+      // Shelf_packages tablosu yoksa basit hesaplama
+      totalProducts = await get(`
+        SELECT COUNT(DISTINCT p.id) as count 
+        FROM products p
+        JOIN product_packages pp ON p.id = pp.product_id
+      `);
+      
+      // Basit düşük stok hesaplama (paket sayısına göre)
+      lowStock = await get(`
+        SELECT COUNT(DISTINCT p.id) as count 
+        FROM products p
+        JOIN product_packages pp ON p.id = pp.product_id
+        GROUP BY p.id
+        HAVING COUNT(pp.id) > 0 AND COUNT(pp.id) <= 5
+      `);
+      
+      // Basit stok yok hesaplama
+      outOfStock = await get(`
+        SELECT COUNT(DISTINCT p.id) as count 
+        FROM products p
+        LEFT JOIN product_packages pp ON p.id = pp.product_id
+        WHERE pp.id IS NULL
+      `);
+    }
     
     // Bugünkü hareketler
     const todayMovements = await get(`
@@ -4283,10 +5941,10 @@ app.get('/api/stock', async (req, res) => {
           orderBy = 'p.name ASC';
           break;
         case 'stock_desc':
-          orderBy = 'main_product_quantity DESC';
+          orderBy = 'package_count DESC';
           break;
         case 'stock_asc':
-          orderBy = 'main_product_quantity ASC';
+          orderBy = 'package_count ASC';
           break;
         case 'location':
           orderBy = 'p.sku ASC'; // Default to SKU for location sort
@@ -4294,32 +5952,61 @@ app.get('/api/stock', async (req, res) => {
       }
     }
     
-    // Ana sorgu - SSH-01-01 hariç paket bazında minimum hesapla
-    let query = `
-      SELECT 
-        p.id as product_id,
-        p.sku,
-        p.name as product_name,
-        (
-          SELECT MIN(package_total)
-          FROM (
-            SELECT SUM(COALESCE(sp2.quantity, 0)) as package_total
-            FROM product_packages pp2
-            LEFT JOIN shelf_packages sp2 ON pp2.id = sp2.package_id
-            LEFT JOIN shelves s2 ON sp2.shelf_id = s2.id
-            WHERE pp2.product_id = p.id AND (s2.shelf_code != 'SSH-01-01' OR s2.shelf_code IS NULL)
-            GROUP BY pp2.id
-          )
-        ) as main_product_quantity,
-        COUNT(DISTINCT pp.id) as package_count,
-        COUNT(DISTINCT CASE WHEN sp.quantity > 0 AND s.shelf_code != 'SSH-01-01' THEN s.id END) as location_count
-      FROM products p
-      LEFT JOIN shelf_packages sp ON p.id = sp.product_id
-      LEFT JOIN product_packages pp ON sp.package_id = pp.id
-      LEFT JOIN shelves s ON sp.shelf_id = s.id
-      GROUP BY p.id, p.sku, p.name
-      ORDER BY ${orderBy}
-    `;
+    // Önce shelf_packages tablosunun var olup olmadığını kontrol edelim
+    let hasShelfPackages = false;
+    try {
+      await get("SELECT name FROM sqlite_master WHERE type='table' AND name='shelf_packages'");
+      hasShelfPackages = true;
+    } catch (error) {
+      hasShelfPackages = false;
+    }
+    
+    let query;
+    if (hasShelfPackages) {
+      // Shelf_packages tablosu varsa gerçek stok hesapla
+      query = `
+        SELECT 
+          p.id as product_id,
+          p.sku,
+          p.name as product_name,
+          COALESCE((
+            SELECT MIN(pkg_stock.total_quantity)
+            FROM (
+              SELECT 
+                pp2.id as package_id,
+                SUM(COALESCE(sp2.quantity, 0)) as total_quantity
+              FROM product_packages pp2
+              LEFT JOIN shelf_packages sp2 ON pp2.id = sp2.package_id
+              LEFT JOIN shelves s2 ON sp2.shelf_id = s2.id
+              WHERE pp2.product_id = p.id 
+                AND (s2.shelf_code != 'SSH-01-01' OR s2.shelf_code IS NULL)
+              GROUP BY pp2.id
+              HAVING total_quantity > 0
+            ) pkg_stock
+          ), 0) as main_product_quantity,
+          COUNT(DISTINCT pp.id) as package_count,
+          1 as location_count
+        FROM products p
+        LEFT JOIN product_packages pp ON p.id = pp.product_id
+        GROUP BY p.id, p.sku, p.name
+        ORDER BY ${orderBy}
+      `;
+    } else {
+      // Shelf_packages tablosu yoksa basit hesaplama
+      query = `
+        SELECT 
+          p.id as product_id,
+          p.sku,
+          p.name as product_name,
+          COUNT(DISTINCT pp.id) as main_product_quantity,
+          COUNT(DISTINCT pp.id) as package_count,
+          1 as location_count
+        FROM products p
+        LEFT JOIN product_packages pp ON p.id = pp.product_id
+        GROUP BY p.id, p.sku, p.name
+        ORDER BY ${orderBy}
+      `;
+    }
     
     let stocks = await all(query);
     
@@ -4824,50 +6511,70 @@ app.get('/api/stock/report', async (req, res) => {
 // 1. Optimizasyon önerileri
 app.get('/api/analytics/optimization', async (req, res) => {
   try {
+    // Mevcut raf verilerinden analitik oluştur
+    const shelves = await all('SELECT * FROM shelves ORDER BY zone, aisle, level');
+    const assignments = await all(`
+      SELECT s.*, sp.quantity, sp.package_id, p.name as product_name, s.id as shelf_id
+      FROM shelves s
+      LEFT JOIN shelf_packages sp ON s.id = sp.shelf_id
+      LEFT JOIN product_packages pp ON sp.package_id = pp.id
+      LEFT JOIN products p ON pp.product_id = p.id
+    `);
+    
     // Boş raflar
-    const emptyShelfSuggestions = await all(`
-      SELECT s.*, 'empty_shelf' as suggestion_type, 'Boş raf - kullanıma hazır' as suggestion
-      FROM shelves s
-      LEFT JOIN shelf_packages sp ON s.id = sp.shelf_id AND sp.quantity > 0
-      WHERE sp.id IS NULL AND s.shelf_code NOT LIKE 'SSH-%'
-      ORDER BY s.zone, s.aisle, s.level
-      LIMIT 10
-    `);
+    const occupiedShelfIds = new Set(assignments.filter(a => a.package_id).map(a => a.shelf_id));
+    const emptyShelves = shelves.filter(shelf => !occupiedShelfIds.has(shelf.id)).slice(0, 5);
     
-    // Aşırı dolu raflar
-    const overcrowdedShelves = await all(`
-      SELECT s.*, COALESCE(SUM(sp.quantity), 0) as total_quantity,
-             'overcrowded' as suggestion_type,
-             'Çok dolu - yeni rafa dağıtılmalı' as suggestion
-      FROM shelves s
-      JOIN shelf_packages sp ON s.id = sp.shelf_id AND sp.quantity > 0
-      WHERE s.shelf_code NOT LIKE 'SSH-%'
-      GROUP BY s.id
-      HAVING total_quantity > s.capacity * 0.8
-      ORDER BY total_quantity DESC
-      LIMIT 10
-    `);
+    // Aşırı dolu raflar (kapasitesinin %90'ından fazla)
+    const shelfUsage = {};
+    assignments.forEach(assignment => {
+      if (assignment.quantity) {
+        if (!shelfUsage[assignment.shelf_id]) {
+          shelfUsage[assignment.shelf_id] = {
+            ...assignment,
+            total_quantity: 0
+          };
+        }
+        shelfUsage[assignment.shelf_id].total_quantity += assignment.quantity;
+      }
+    });
     
-    // Karışık ürün rafları
-    const mixedProductShelves = await all(`
-      SELECT s.*, COUNT(DISTINCT sp.product_id) as product_count,
-             'mixed_products' as suggestion_type,
-             'Çoklu ürün - tek ürün politikası uygulanabilir' as suggestion
-      FROM shelves s
-      JOIN shelf_packages sp ON s.id = sp.shelf_id AND sp.quantity > 0
-      WHERE s.shelf_code NOT LIKE 'SSH-%'
-      GROUP BY s.id
-      HAVING product_count > 1
-      ORDER BY product_count DESC
-      LIMIT 10
-    `);
+    const overcrowdedShelves = Object.values(shelfUsage)
+      .filter(shelf => (shelf.total_quantity / (shelf.capacity || 100)) > 0.9)
+      .slice(0, 5)
+      .map(shelf => ({
+        shelf_code: shelf.shelf_code,
+        total_quantity: shelf.total_quantity,
+        capacity: shelf.capacity,
+        suggestion: 'Kapasite %90+ dolu - transfer düşünün'
+      }));
     
+    // Karışık ürün rafları (birden fazla ürün tipi)
+    const shelfProducts = {};
+    assignments.forEach(assignment => {
+      if (assignment.product_name) {
+        if (!shelfProducts[assignment.shelf_code]) {
+          shelfProducts[assignment.shelf_code] = new Set();
+        }
+        shelfProducts[assignment.shelf_code].add(assignment.product_name);
+      }
+    });
+    
+    const mixedProductShelves = Object.entries(shelfProducts)
+      .filter(([code, products]) => products.size > 1)
+      .slice(0, 5)
+      .map(([shelf_code, products]) => ({
+        shelf_code,
+        product_count: products.size,
+        suggestion: 'Tek ürün politikası için konsolidasyon önerilir'
+      }));
+
     res.json({
-      empty_shelves: emptyShelfSuggestions,
+      success: true,
+      empty_shelves: emptyShelves,
       overcrowded_shelves: overcrowdedShelves,
       mixed_product_shelves: mixedProductShelves
     });
-    
   } catch (error) {
     console.error('Analytics optimization error:', error);
     res.status(500).json({ error: error.message });
@@ -5034,40 +6741,53 @@ app.get('/api/analytics/capacity', async (req, res) => {
 // 5. Transfer önerileri
 app.get('/api/analytics/transfer-suggestions', async (req, res) => {
   try {
-    // Dengesiz dağılım - aynı ürün farklı zonelarda
-    const unbalancedProducts = await all(`
-      SELECT p.name, p.sku,
-             s.zone as zone_distribution,
-             COUNT(DISTINCT s.zone) as zone_count,
-             'unbalanced_distribution' as suggestion_type,
-             'Aynı ürün farklı zonelarda - konsolidasyon önerilir' as recommendation
-      FROM products p
-      JOIN shelf_packages sp ON p.id = sp.product_id AND sp.quantity > 0
-      JOIN shelves s ON sp.shelf_id = s.id
-      WHERE s.shelf_code NOT LIKE 'SSH-%'
-      GROUP BY p.id
-      HAVING zone_count > 1
-      ORDER BY zone_count DESC
-      LIMIT 10
-    `);
-    
-    // Kritik seviye stoklar
-    const criticalStock = await all(`
-      SELECT p.name, p.sku, s.shelf_code, sp.quantity,
-             'critical_stock' as alert_type,
-             'Kritik seviye - yenileme gerekebilir' as recommendation
+    // Mevcut raf verilerinden transfer önerileri oluştur
+    const assignments = await all(`
+      SELECT s.zone, s.shelf_code, p.name, p.sku, sp.quantity,
+             COUNT(*) OVER (PARTITION BY p.id) as zone_count,
+             SUM(sp.quantity) OVER (PARTITION BY p.id) as total_quantity
       FROM shelf_packages sp
+      JOIN shelves s ON sp.shelf_id = s.id
       JOIN product_packages pp ON sp.package_id = pp.id
       JOIN products p ON pp.product_id = p.id
-      JOIN shelves s ON sp.shelf_id = s.id
-      WHERE sp.quantity > 0 AND sp.quantity <= 3 AND s.shelf_code NOT LIKE 'SSH-%'
-      ORDER BY sp.quantity ASC
-      LIMIT 15
+      ORDER BY p.name
     `);
     
+    // Çoklu zone'da bulunan ürünler (dağınık)
+    const unbalancedProducts = assignments
+      .filter(item => item.zone_count > 1)
+      .reduce((acc, current) => {
+        const existing = acc.find(item => item.sku === current.sku);
+        if (!existing) {
+          acc.push({
+            name: current.name,
+            sku: current.sku,
+            zone_count: current.zone_count,
+            total_quantity: current.total_quantity,
+            recommendation: `${current.zone_count} farklı zone'da dağılmış - konsolidasyon önerilir`
+          });
+        }
+        return acc;
+      }, [])
+      .slice(0, 5);
+      
+    // Kritik stok seviyeleri (az miktarlı)
+    const criticalStock = assignments
+      .filter(item => item.quantity <= 2)
+      .slice(0, 5)
+      .map(item => ({
+        name: item.name,
+        sku: item.sku,
+        shelf_code: item.shelf_code,
+        quantity: item.quantity,
+        recommendation: 'Düşük stok - yeniden stok veya konsolidasyon gerekebilir'
+      }));
+
     res.json({
+      success: true,
       unbalanced_products: unbalancedProducts,
-      critical_stock: criticalStock
+      critical_stock: criticalStock,
+      suggestions: [...unbalancedProducts, ...criticalStock]
     });
     
   } catch (error) {
@@ -5145,11 +6865,580 @@ function calculateShelfDistance(shelf1, shelf2) {
   return zoneDiff + aisleDiff + levelDiff;
 }
 
+// ---- Shelves API Endpoints ----
+// Get all shelves
+app.get('/api/shelves', async (req, res) => {
+  try {
+    const shelves = await all(`
+      SELECT s.*, 
+             COALESCE(usage.total_packages, 0) as current_usage
+      FROM shelves s
+      LEFT JOIN (
+        SELECT shelf_id, SUM(quantity) as total_packages
+        FROM shelf_packages 
+        WHERE quantity > 0
+        GROUP BY shelf_id
+      ) usage ON s.id = usage.shelf_id
+      ORDER BY s.shelf_code ASC
+    `);
+    
+    console.log(`📦 Retrieved ${shelves.length} shelves`);
+    res.json(shelves);
+  } catch (error) {
+    console.error('❌ Error fetching shelves:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Raflar yüklenirken hata oluştu',
+      error: error.message 
+    });
+  }
+});
+
+// Get single shelf
+app.get('/api/shelves/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const shelf = await get(`
+      SELECT s.*, 
+             COALESCE(usage.total_packages, 0) as current_usage
+      FROM shelves s
+      LEFT JOIN (
+        SELECT shelf_id, SUM(quantity) as total_packages
+        FROM shelf_packages 
+        WHERE quantity > 0
+        GROUP BY shelf_id
+      ) usage ON s.id = usage.shelf_id
+      WHERE s.id = ?
+    `, [id]);
+    
+    if (!shelf) {
+      return res.status(404).json({
+        success: false,
+        message: 'Raf bulunamadı'
+      });
+    }
+    
+    res.json(shelf);
+  } catch (error) {
+    console.error('❌ Error fetching shelf:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Raf yüklenirken hata oluştu',
+      error: error.message 
+    });
+  }
+});
+
+// Create new shelf
+app.post('/api/shelves', async (req, res) => {
+  try {
+    const { 
+      shelf_code, shelf_name, zone, aisle, level, 
+      capacity = 100, status = 'active' 
+    } = req.body;
+    
+    if (!shelf_code || !shelf_name || !zone || !aisle || !level) {
+      return res.status(400).json({
+        success: false,
+        message: 'Raf kodu, adı, bölge, koridor ve seviye gereklidir'
+      });
+    }
+    
+    // Check if shelf code already exists
+    const existingShelf = await get('SELECT id FROM shelves WHERE shelf_code = ?', [shelf_code]);
+    if (existingShelf) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bu raf kodu zaten kullanılıyor'
+      });
+    }
+    
+    const result = await run(`
+      INSERT INTO shelves (
+        shelf_code, shelf_name, zone, aisle, level, 
+        capacity, current_usage, status
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `, [shelf_code, shelf_name, zone, aisle, level, capacity, 0, status]);
+    
+    console.log(`✅ Created shelf: ${shelf_code} (ID: ${result.lastID})`);
+    
+    res.json({
+      success: true,
+      message: 'Raf başarıyla oluşturuldu',
+      shelf_id: result.lastID
+    });
+    
+  } catch (error) {
+    console.error('❌ Error creating shelf:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Raf oluşturulurken hata oluştu',
+      error: error.message 
+    });
+  }
+});
+
+// Update shelf
+app.put('/api/shelves/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { 
+      shelf_code, shelf_name, zone, aisle, level, 
+      capacity, status 
+    } = req.body;
+    
+    // Check if shelf exists
+    const existingShelf = await get('SELECT id FROM shelves WHERE id = ?', [id]);
+    if (!existingShelf) {
+      return res.status(404).json({
+        success: false,
+        message: 'Raf bulunamadı'
+      });
+    }
+    
+    // Check if shelf code is unique (exclude current shelf)
+    const duplicateShelf = await get(
+      'SELECT id FROM shelves WHERE shelf_code = ? AND id != ?', 
+      [shelf_code, id]
+    );
+    if (duplicateShelf) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bu raf kodu başka bir raf tarafından kullanılıyor'
+      });
+    }
+    
+    await run(`
+      UPDATE shelves SET 
+        shelf_code = ?, shelf_name = ?, zone = ?, 
+        aisle = ?, level = ?, capacity = ?, status = ?
+      WHERE id = ?
+    `, [shelf_code, shelf_name, zone, aisle, level, capacity, status, id]);
+    
+    console.log(`✅ Updated shelf: ${shelf_code} (ID: ${id})`);
+    
+    res.json({
+      success: true,
+      message: 'Raf başarıyla güncellendi'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error updating shelf:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Raf güncellenirken hata oluştu',
+      error: error.message 
+    });
+  }
+});
+
+// Delete shelf
+app.delete('/api/shelves/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    // Check if shelf exists
+    const shelf = await get('SELECT shelf_code FROM shelves WHERE id = ?', [id]);
+    if (!shelf) {
+      return res.status(404).json({
+        success: false,
+        message: 'Raf bulunamadı'
+      });
+    }
+    
+    // Check if shelf has packages
+    const hasPackages = await get(
+      'SELECT COUNT(*) as count FROM shelf_packages WHERE shelf_id = ? AND quantity > 0',
+      [id]
+    );
+    
+    if (hasPackages.count > 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Bu rafta paketler bulunuyor. Önce paketleri taşıyın.'
+      });
+    }
+    
+    // Delete shelf
+    await run('DELETE FROM shelves WHERE id = ?', [id]);
+    
+    console.log(`✅ Deleted shelf: ${shelf.shelf_code} (ID: ${id})`);
+    
+    res.json({
+      success: true,
+      message: 'Raf başarıyla silindi'
+    });
+    
+  } catch (error) {
+    console.error('❌ Error deleting shelf:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Raf silinirken hata oluştu',
+      error: error.message 
+    });
+  }
+});
+
+// ---- Manual Dispatch Note Creation ----
+// Convert picked order to dispatch note in Netsis
+app.post('/api/orders/:orderId/convert-to-dispatch', requireAuth, async (req, res) => {
+  const { orderId } = req.params;
+  
+  try {
+    console.log(`🔄 Manual dispatch note conversion requested for order: ${orderId}`);
+    
+    // Get order details
+    const order = await get(`
+      SELECT * FROM orders 
+      WHERE id = ? AND fulfillment_status = 'FULFILLED'
+    `, [orderId]);
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found or not completed'
+      });
+    }
+    
+    // Check if already converted
+    if (order.netsis_delivery_note_id) {
+      return res.status(409).json({
+        success: false,
+        error: 'Order already converted to dispatch note',
+        existing_delivery_note_id: order.netsis_delivery_note_id
+      });
+    }
+    
+    // Get order items (packages not needed for Netsis dispatch - quantity is what matters)
+    const orderItems = await all(`
+      SELECT oi.*, p.sku as product_sku, p.name as product_name 
+      FROM order_items oi 
+      LEFT JOIN products p ON oi.product_id = p.id 
+      WHERE oi.order_id = ?
+    `, [orderId]);
+    
+    console.log('🔍 DEBUG: Raw orderItems query result:', JSON.stringify(orderItems, null, 2));
+    
+    if (!orderItems.length) {
+      return res.status(400).json({
+        success: false,
+        error: 'No items found for this order'
+      });
+    }
+    
+    console.log(`📦 Converting order ${order.order_number} with ${orderItems.length} items`);
+    
+    // Debug: Log each item details
+    orderItems.forEach((item, index) => {
+      console.log(`   Item ${index + 1}: SKU=${item.sku || item.product_sku}, Qty=${item.quantity}, PickedQty=${item.picked_qty}, FinalQty=${item.picked_qty || item.quantity}`);
+    });
+    
+    // Call Netsis API to create dispatch note
+    const deliveryNoteResult = await netsisAPI.convertOrderToDeliveryNote({
+      order_number: order.order_number,
+      customer_code: order.customer_name || 'UNKNOWN',
+      customer_name: order.customer_name || 'Unknown Customer',
+      order_date: order.created_at,
+      total_amount: order.total_amount || 0,
+      items: orderItems.map(item => ({
+        product_sku: item.product_sku || item.sku,
+        sku: item.sku,
+        quantity: item.picked_qty || item.quantity,
+        unit_price: item.unit_price || 0,
+        product_name: item.product_name,
+        line_total: (item.picked_qty || item.quantity) * (item.unit_price || 0)
+      }))
+    });
+    
+    if (deliveryNoteResult.success) {
+      console.log(`✅ Netsis dispatch note created: ${order.order_number} -> ${deliveryNoteResult.delivery_note_id}`);
+      
+      // Update order with dispatch note info
+      await run(`
+        UPDATE orders 
+        SET 
+          netsis_delivery_note_id = ?, 
+          netsis_delivery_status = 'created',
+          netsis_delivery_data = ?
+        WHERE id = ?
+      `, [
+        deliveryNoteResult.delivery_note_id,
+        JSON.stringify(deliveryNoteResult.netsis_response),
+        orderId
+      ]);
+      
+      res.json({
+        success: true,
+        message: 'Sipariş başarıyla Netsis\'te irsaliyeye çevrildi',
+        order_number: order.order_number,
+        delivery_note_id: deliveryNoteResult.delivery_note_id,
+        netsis_response: deliveryNoteResult.netsis_response
+      });
+      
+    } else {
+      console.warn(`⚠️ Netsis dispatch note creation failed: ${order.order_number} - ${deliveryNoteResult.message}`);
+      
+      // Update order with error info
+      await run(`
+        UPDATE orders 
+        SET 
+          netsis_delivery_status = 'failed', 
+          netsis_delivery_error = ? 
+        WHERE id = ?
+      `, [deliveryNoteResult.message, orderId]);
+      
+      res.status(500).json({
+        success: false,
+        error: 'Netsis irsaliye oluşturulamadı',
+        message: deliveryNoteResult.message,
+        order_number: order.order_number
+      });
+    }
+    
+  } catch (error) {
+    console.error(`❌ Manual dispatch note conversion error:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'Dispatch note conversion failed',
+      message: error.message
+    });
+  }
+});
+
+// Clear delivery note for re-testing
+app.put('/api/orders/:orderId/clear-delivery', requireAuth, async (req, res) => {
+  const { orderId } = req.params;
+  
+  try {
+    console.log(`🧹 Clearing delivery note for order: ${orderId}`);
+    
+    // Get order details first
+    const order = await get(`SELECT * FROM orders WHERE id = ?`, [orderId]);
+    
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        error: 'Order not found'
+      });
+    }
+    
+    // Clear delivery note fields
+    const result = await run(`
+      UPDATE orders 
+      SET 
+        netsis_delivery_note_id = NULL,
+        netsis_delivery_status = NULL, 
+        netsis_delivery_error = NULL,
+        netsis_delivery_data = NULL,
+        updated_at = CURRENT_TIMESTAMP
+      WHERE id = ?
+    `, [orderId]);
+    
+    console.log(`✅ Cleared delivery note for order ${order.order_number} (${result.changes} rows affected)`);
+    
+    res.json({
+      success: true,
+      message: `İrsaliye kayıtları temizlendi: ${order.order_number}`,
+      order_number: order.order_number,
+      rows_affected: result.changes
+    });
+    
+  } catch (error) {
+    console.error(`❌ Clear delivery note error:`, error);
+    res.status(500).json({
+      success: false,
+      error: 'İrsaliye kayıtları temizlenirken hata oluştu',
+      details: error.message
+    });
+  }
+});
+
+// ---- External Order Integration ----
+// Integrate external order into WMS system (no auth required - external endpoint)
+app.post('/external-orders/integrate', async (req, res) => {
+  try {
+    const { external_order, source } = req.body;
+    
+    if (!external_order || !external_order.id || !external_order.items) {
+      return res.status(400).json({ 
+        success: false, 
+        error: 'Invalid external order data' 
+      });
+    }
+
+    console.log(`🔄 Integrating external order ${external_order.order_number}...`);
+
+    // 1. Check if order already exists
+    const existingOrder = await get(`
+      SELECT id FROM orders WHERE order_number = ?
+    `, [external_order.order_number]);
+    
+    let orderId;
+    if (existingOrder) {
+      console.log(`✅ Order ${external_order.order_number} already exists, using existing ID:`, existingOrder.id);
+      orderId = existingOrder.id;
+      
+      // Check if there's already a pick for this order first
+      const existingPick = await get(`
+        SELECT id FROM picks WHERE order_id = ? AND status IN ('active', 'partial', 'completed')
+      `, [orderId]);
+      
+      if (existingPick) {
+        console.log(`🎯 Pick already exists for order ${external_order.order_number}:`, existingPick.id);
+        return res.json({
+          success: true,
+          order_id: orderId,
+          pick_id: existingPick.id,
+          message: 'Order and pick already exist'
+        });
+      } else {
+        // Create new pick for existing order
+        const pickResult = await run(`
+          INSERT INTO picks (order_id, status) 
+          VALUES (?, 'active')
+        `, [orderId]);
+        
+        console.log(`📋 New pick created for existing order:`, pickResult.lastID);
+        return res.json({
+          success: true,
+          order_id: orderId,
+          pick_id: pickResult.lastID,
+          message: 'New pick created for existing order'
+        });
+      }
+    } else {
+      // Create new order in WMS system
+      const orderResult = await run(`
+        INSERT INTO orders (
+          order_number, customer_name, status, fulfillment_status,
+          created_at, external_source, external_id
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+      `, [
+        external_order.order_number,
+        external_order.customer_code || external_order.customer_name,
+        'open',
+        'UNFULFILLED',
+        external_order.created_at || new Date().toISOString(),
+        source || 'external_api',
+        external_order.id
+      ]);
+      orderId = orderResult.lastID;
+      console.log(`✅ New order created with ID:`, orderId);
+    }
+
+    // 2. Process order items - match stokKodu with product SKUs
+    const matchedItems = [];
+    const unmatchedItems = [];
+    
+    for (const item of external_order.items) {
+      const stokKodu = item.product_sku || item.stokKodu;
+      
+      // Try to find matching product by SKU
+      const product = await get(`
+        SELECT p.id, p.sku, p.name,
+               pp.id as package_id, pp.package_name, pp.barcode as package_barcode
+        FROM products p
+        LEFT JOIN product_packages pp ON p.id = pp.product_id
+        WHERE p.sku = ? OR p.netsis_code = ?
+        ORDER BY pp.id ASC
+        LIMIT 1
+      `, [stokKodu, stokKodu]);
+
+      if (product) {
+        // Add to order_items
+        const itemResult = await run(`
+          INSERT INTO order_items (
+            order_id, product_id, sku, product_name, quantity, picked_qty
+          ) VALUES (?, ?, ?, ?, ?, ?)
+        `, [
+          orderId, 
+          product.id, 
+          stokKodu, 
+          item.description || product.name,
+          Math.floor(item.quantity || item.miktar || 1),
+          0
+        ]);
+
+        matchedItems.push({
+          stokKodu,
+          product_id: product.id,
+          product_name: product.name,
+          package_id: product.package_id,
+          package_name: product.package_name,
+          package_barcode: product.package_barcode,
+          quantity: Math.floor(item.quantity || item.miktar || 1),
+          order_item_id: itemResult.lastID
+        });
+
+        console.log(`✅ Matched ${stokKodu} -> Product ${product.sku} (Package: ${product.package_barcode || 'N/A'})`);
+      } else {
+        unmatchedItems.push({
+          stokKodu,
+          description: item.description || item.aciklama,
+          quantity: item.quantity || item.miktar
+        });
+        console.log(`❌ No match found for ${stokKodu}`);
+      }
+    }
+
+    // 3. Create pick if we have matched items
+    let pickId = null;
+    if (matchedItems.length > 0) {
+      const pickResult = await run(`
+        INSERT INTO picks (order_id, status) 
+        VALUES (?, 'active')
+      `, [orderId]);
+      
+      pickId = pickResult.lastID;
+      console.log(`📋 Pick created with ID: ${pickId}`);
+    }
+
+    // 4. Update order fulfillment status based on matching
+    let fulfillmentStatus = 'UNFULFILLED';
+    if (matchedItems.length > 0 && unmatchedItems.length === 0) {
+      fulfillmentStatus = 'UNFULFILLED'; // All items matched, ready for picking
+    } else if (matchedItems.length > 0 && unmatchedItems.length > 0) {
+      fulfillmentStatus = 'PARTIALLY_FULFILLED'; // Some items matched
+    } else {
+      fulfillmentStatus = 'UNFULFILLED'; // No matches, but order created
+    }
+
+    await run(`
+      UPDATE orders 
+      SET fulfillment_status = ? 
+      WHERE id = ?
+    `, [fulfillmentStatus, orderId]);
+
+    console.log(`✅ External order ${external_order.order_number} integrated successfully`);
+
+    res.json({
+      success: true,
+      order_id: orderId,
+      pick_id: pickId,
+      matched_items: matchedItems,
+      unmatched_items: unmatchedItems,
+      fulfillment_status: fulfillmentStatus,
+      message: `${matchedItems.length}/${external_order.items.length} items matched`
+    });
+
+  } catch (error) {
+    console.error('❌ External order integration error:', error);
+    res.status(500).json({ 
+      success: false, 
+      error: error.message 
+    });
+  }
+});
+
 // Static files middleware - API route'lardan sonra
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Fallback: serve index.html
+// Fallback: serve index.html (exclude API routes)
 app.get('*', (req, res) => {
+  console.log('🌐 Fallback route hit for:', req.path);
+  if (req.path.startsWith('/api/')) {
+    return res.status(404).json({ error: 'API endpoint not found', path: req.path });
+  }
   res.sendFile(path.join(__dirname, '..', 'public', 'index.html'));
 });
 
@@ -5174,6 +7463,432 @@ app.get('*', (req, res) => {
       console.log('ℹ️ Package number column already exists in inventory_count_items table');
     }
   }
+  
+  // Add Netsis delivery note fields to orders table
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN netsis_delivery_note_id TEXT DEFAULT NULL`);
+    console.log('✅ Netsis delivery note ID column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis delivery note ID column already exists in orders table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN netsis_delivery_status TEXT DEFAULT NULL`);
+    console.log('✅ Netsis delivery status column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis delivery status column already exists in orders table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN netsis_delivery_data TEXT DEFAULT NULL`);
+    console.log('✅ Netsis delivery data column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis delivery data column already exists in orders table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN netsis_delivery_error TEXT DEFAULT NULL`);
+    console.log('✅ Netsis delivery error column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Netsis delivery error column already exists in orders table');
+    }
+  }
+  
+  // Add customer_code column to orders table for external orders sync
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN customer_code TEXT DEFAULT NULL`);
+    console.log('✅ Customer code column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Customer code column already exists in orders table');
+    }
+  }
+  
+  // Add external_data column to orders table for external orders sync
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN external_data TEXT DEFAULT NULL`);
+    console.log('✅ External data column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ External data column already exists in orders table');
+    }
+  }
+  
+  // Add order_date and total_amount columns for external orders sync
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN order_date TEXT DEFAULT NULL`);
+    console.log('✅ Order date column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Order date column already exists in orders table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN total_amount REAL DEFAULT NULL`);
+    console.log('✅ Total amount column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Total amount column already exists in orders table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN source TEXT DEFAULT 'wms'`);
+    console.log('✅ Source column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Source column already exists in orders table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE orders ADD COLUMN fulfillment_status TEXT DEFAULT 'UNFULFILLED'`);
+    console.log('✅ Fulfillment status column added to orders table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Fulfillment status column already exists in orders table');
+    }
+  }
+  
+  // Add missing columns to order_items table for external orders sync
+  try {
+    await run(`ALTER TABLE order_items ADD COLUMN line_number INTEGER DEFAULT NULL`);
+    console.log('✅ Line number column added to order_items table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Line number column already exists in order_items table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE order_items ADD COLUMN warehouse_code TEXT DEFAULT NULL`);
+    console.log('✅ Warehouse code column added to order_items table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Warehouse code column already exists in order_items table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE order_items ADD COLUMN description TEXT DEFAULT NULL`);
+    console.log('✅ Description column added to order_items table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Description column already exists in order_items table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE order_items ADD COLUMN unit_type TEXT DEFAULT NULL`);
+    console.log('✅ Unit type column added to order_items table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ Unit type column already exists in order_items table');
+    }
+  }
+  
+  try {
+    await run(`ALTER TABLE order_items ADD COLUMN vat_rate REAL DEFAULT NULL`);
+    console.log('✅ VAT rate column added to order_items table');
+  } catch (e) {
+    if (!e.message.includes('duplicate column name')) {
+      console.log('ℹ️ VAT rate column already exists in order_items table');
+    }
+  }
+
+// DEBUG: List all orders to identify test orders
+app.get('/api/debug/orders', requireAuth, async (req, res) => {
+  try {
+    const orders = await all('SELECT order_number, customer_name, source, created_at FROM orders ORDER BY order_number');
+    res.json(orders);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DEBUG: Test dispatch button by updating order status
+app.get('/api/debug/test-dispatch/:orderId', requireAuth, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    
+    // Update order to be fulfilled but without delivery note
+    await run(`
+      UPDATE orders 
+      SET fulfillment_status = 'FULFILLED', 
+          netsis_delivery_note_id = NULL 
+      WHERE id = ?
+    `, [orderId]);
+    
+    const order = await get('SELECT * FROM orders WHERE id = ?', [orderId]);
+    res.json({ 
+      success: true, 
+      message: 'Order updated for dispatch testing',
+      order: order
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// DEBUG: Clear all delivery note IDs from completed orders - NO AUTH for quick access
+app.get('/api/debug/clear-delivery-notes', async (req, res) => {
+  try {
+    console.log('🗑️ Clearing all delivery note IDs from completed orders...');
+    
+    // Clear delivery note IDs from all FULFILLED orders
+    const result = await run(`
+      UPDATE orders 
+      SET 
+        netsis_delivery_note_id = NULL, 
+        netsis_delivery_status = 'pending_manual_dispatch',
+        netsis_delivery_error = NULL,
+        netsis_delivery_data = NULL
+      WHERE fulfillment_status = 'FULFILLED'
+    `);
+    
+    console.log(`✅ Cleared delivery note IDs from ${result.changes} completed orders`);
+    
+    // Get updated orders count
+    const completedOrders = await all(`
+      SELECT id, order_number, customer_name, netsis_delivery_note_id 
+      FROM orders 
+      WHERE fulfillment_status = 'FULFILLED' 
+      ORDER BY order_number
+    `);
+    
+    res.json({ 
+      success: true, 
+      message: `Cleared delivery note IDs from ${result.changes} completed orders`,
+      cleared_count: result.changes,
+      completed_orders: completedOrders
+    });
+  } catch (error) {
+    console.error('❌ Clear delivery notes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// SIMPLE: Clear delivery notes
+app.get('/api/clear-notes', async (req, res) => {
+  try {
+    const { run, all } = require('./db/database');
+    const result = await run(`UPDATE orders SET netsis_delivery_note_id = NULL WHERE fulfillment_status = 'FULFILLED'`);
+    const orders = await all(`SELECT id, order_number, netsis_delivery_note_id FROM orders WHERE fulfillment_status = 'FULFILLED'`);
+    res.json({ success: true, cleared: result.changes, orders });
+  } catch (error) {
+    res.json({ error: error.message });
+  }
+});
+
+
+// CLEANUP: Clear delivery notes - GET version for easy browser access  
+app.get('/api/cleanup/clear-delivery-notes', async (req, res) => {
+  try {
+    console.log('🗑️ Clearing delivery note IDs from completed orders...');
+    
+    // Clear delivery note IDs from FULFILLED orders
+    const result = await run(`
+      UPDATE orders 
+      SET netsis_delivery_note_id = NULL, netsis_delivery_status = 'pending_manual_dispatch'
+      WHERE fulfillment_status = 'FULFILLED'
+    `);
+    
+    console.log(`✅ Cleared ${result.changes} delivery note IDs`);
+    
+    // Get updated orders
+    const orders = await all(`
+      SELECT id, order_number, customer_name, netsis_delivery_note_id 
+      FROM orders 
+      WHERE fulfillment_status = 'FULFILLED' 
+      ORDER BY order_number
+    `);
+    
+    res.json({
+      success: true,
+      message: `Cleared delivery note IDs from ${result.changes} completed orders`,
+      cleared_count: result.changes,
+      orders: orders
+    });
+  } catch (error) {
+    console.error('❌ Clear delivery notes error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// CLEANUP: Delete test orders - GET version for easy browser access
+app.get('/api/cleanup/test-orders', requireAuth, async (req, res) => {
+  try {
+    console.log('🗑️🗑️🗑️ CLEANUP GET ENDPOINT HIT - Starting test orders cleanup...');
+    
+    // Delete test orders (keep only external_sync source orders)
+    const deleteResult = await run(`
+      DELETE FROM orders 
+      WHERE source != 'external_sync' 
+      OR source IS NULL
+    `);
+    
+    console.log(`✅ Deleted ${deleteResult.changes} test orders`);
+    
+    // Get remaining orders count
+    const remainingCount = await get('SELECT COUNT(*) as count FROM orders');
+    console.log(`📊 Remaining orders: ${remainingCount.count}`);
+    
+    res.json({
+      success: true,
+      deleted: deleteResult.changes,
+      remaining: remainingCount.count,
+      message: 'Test orders deleted, only external orders remain'
+    });
+    
+  } catch (error) {
+    console.error('❌ Test orders cleanup error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// External orders sync endpoint - Import from http://93.89.67.130:8080/orders.json to WMS database
+app.post('/api/sync/external-orders', requireAuth, async (req, res) => {
+  try {
+    console.log('🔄 Starting external orders sync from http://93.89.67.130:8080/orders.json...');
+    
+    // Fetch external orders
+    const axios = require('axios');
+    const response = await axios.get('http://93.89.67.130:8080/orders.json');
+    const externalData = response.data;
+    
+    if (!externalData.orders || !Array.isArray(externalData.orders)) {
+      throw new Error('Invalid external orders data format');
+    }
+    
+    let imported = 0;
+    let skipped = 0;
+    let errors = 0;
+    
+    for (const externalOrder of externalData.orders) {
+      try {
+        const orderNumber = externalOrder.siparisNo;
+        
+        // Check if order already exists
+        const existingOrder = await get(`SELECT id FROM orders WHERE order_number = ?`, [orderNumber]);
+        if (existingOrder) {
+          console.log(`⏭️ Order ${orderNumber} already exists, skipping...`);
+          skipped++;
+          continue;
+        }
+        
+        // Transform external order to WMS format
+        const orderData = {
+          order_number: orderNumber,
+          customer_name: externalOrder.cariKodu,
+          customer_code: externalOrder.cariKodu,
+          order_date: externalOrder.siparisTarihi,
+          total_amount: externalOrder.toplamTutar,
+          status: 'open',
+          fulfillment_status: 'UNFULFILLED',
+          created_at: new Date().toISOString(),
+          source: 'external_sync',
+          
+          // Additional external order data
+          kdv_amount: externalOrder.kdvTutar,
+          kdv_included: externalOrder.kdvDahilMi ? 1 : 0,
+          external_data: JSON.stringify(externalOrder)
+        };
+        
+        // Insert order
+        const orderResult = await run(`
+          INSERT INTO orders (
+            order_number, customer_name, customer_code, order_date, 
+            total_amount, status, fulfillment_status, created_at, source,
+            external_data
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+          orderData.order_number,
+          orderData.customer_name,
+          orderData.customer_code, 
+          orderData.order_date,
+          orderData.total_amount,
+          orderData.status,
+          orderData.fulfillment_status,
+          orderData.created_at,
+          orderData.source,
+          orderData.external_data
+        ]);
+        
+        const orderId = orderResult.lastID;
+        
+        // Insert order items
+        if (externalOrder.satirlar && Array.isArray(externalOrder.satirlar)) {
+          for (const item of externalOrder.satirlar) {
+            // Find or create product (case-insensitive search)
+            let product = await get(`SELECT id, sku, name FROM products WHERE UPPER(sku) = UPPER(?)`, [item.stokKodu]);
+            if (!product) {
+              // Create basic product entry
+              const productResult = await run(`
+                INSERT INTO products (sku, name, created_at)
+                VALUES (?, ?, ?)
+              `, [item.stokKodu.toUpperCase(), item.stokKodu, new Date().toISOString()]);
+              product = { id: productResult.lastID, sku: item.stokKodu.toUpperCase(), name: item.stokKodu };
+            }
+            
+            // Insert order item
+            await run(`
+              INSERT INTO order_items (
+                order_id, product_id, sku, product_name, quantity,
+                unit_price, line_number, warehouse_code, description,
+                unit_type, vat_rate, picked_qty
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            `, [
+              orderId,
+              product.id,
+              product.sku, // Use the actual product SKU from database
+              product.name, // Use the actual product name from database
+              item.miktar,
+              item.birimFiyat,
+              item.sira,
+              item.depoKodu || null,
+              item.aciklama || null,
+              item.birim || null,
+              item.kdvOrani || null,
+              0 // picked_qty starts at 0
+            ]);
+          }
+        }
+        
+        console.log(`✅ Imported order ${orderNumber} with ${externalOrder.satirlar?.length || 0} items`);
+        imported++;
+        
+      } catch (itemError) {
+        console.error(`❌ Error importing order ${externalOrder.siparisNo}:`, itemError);
+        errors++;
+      }
+    }
+    
+    console.log(`📊 External orders sync completed: ${imported} imported, ${skipped} skipped, ${errors} errors`);
+    
+    res.json({
+      success: true,
+      imported,
+      skipped,
+      errors,
+      total: externalData.orders.length
+    });
+    
+  } catch (error) {
+    console.error('External orders sync error:', error);
+    res.status(500).json({
+      error: error.message,
+      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+});
   
   // Bilgisayarın IP adresini bul
   const os = require('os');

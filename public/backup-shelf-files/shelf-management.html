@@ -1,0 +1,813 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Raf Yönetimi - WMS</title>
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/zebra-terminal.css">
+    
+    <!-- Core Scripts -->
+    <script src="/assets/js/auth.js"></script>
+    
+    <style>
+        /* Mobile optimizations */
+        @media (max-width: 768px) {
+            /* Header mobile adjustments */
+            .header {
+                flex-direction: column;
+                gap: 12px;
+                align-items: stretch;
+            }
+            
+            .header-left {
+                justify-content: space-between;
+            }
+            
+            .header-right {
+                justify-content: center;
+            }
+            
+            /* Form mobile optimizations */
+            .shelf-form-container {
+                padding: 12px;
+            }
+            
+            .form-row {
+                flex-direction: column;
+                gap: 12px;
+            }
+            
+            .form-group {
+                margin-bottom: 16px;
+            }
+            
+            /* Table mobile view */
+            .table-container {
+                overflow-x: auto;
+            }
+            
+            .data-table {
+                min-width: 600px;
+            }
+            
+            /* Mobile cards for shelf display */
+            .shelf-cards {
+                display: block !important;
+            }
+            
+            .shelf-card {
+                background: var(--card);
+                border: 1px solid var(--border);
+                border-radius: 12px;
+                padding: 16px;
+                margin-bottom: 16px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+            
+            .shelf-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 12px;
+            }
+            
+            .shelf-code {
+                font-size: 16px;
+                font-weight: bold;
+                color: var(--accent);
+            }
+            
+            .shelf-status {
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 11px;
+                font-weight: 500;
+            }
+            
+            .status-active { background: var(--success); color: white; }
+            .status-inactive { background: var(--danger); color: white; }
+            .status-maintenance { background: #ffc107; color: #000; }
+            
+            .shelf-info {
+                margin-bottom: 12px;
+            }
+            
+            .info-row {
+                display: flex;
+                margin-bottom: 6px;
+            }
+            
+            .info-label {
+                font-weight: 600;
+                color: var(--muted);
+                min-width: 60px;
+                font-size: 12px;
+            }
+            
+            .info-value {
+                flex: 1;
+                font-size: 13px;
+            }
+            
+            .shelf-actions {
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+            }
+            
+            .mobile-action-btn {
+                flex: 1;
+                min-width: 80px;
+                padding: 8px 12px;
+                font-size: 12px;
+                border: none;
+                border-radius: 6px;
+                cursor: pointer;
+                font-weight: 500;
+            }
+            
+            .btn-edit-mobile { background: var(--accent); color: white; }
+            .btn-delete-mobile { background: var(--danger); color: white; }
+            .btn-view-mobile { background: var(--info); color: white; }
+        }
+        
+        /* Desktop - hide mobile cards */
+        @media (min-width: 769px) {
+            .shelf-cards {
+                display: none !important;
+            }
+            
+            .data-table {
+                display: table !important;
+            }
+        }
+        
+        /* Shelf form styles */
+        .shelf-form-container {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 24px;
+        }
+        
+        .form-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        
+        .form-icon {
+            font-size: 24px;
+        }
+        
+        .form-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--fg);
+            margin: 0;
+        }
+        
+        .form-row {
+            display: flex;
+            gap: 16px;
+            margin-bottom: 16px;
+        }
+        
+        .form-group {
+            flex: 1;
+        }
+        
+        .form-group.full-width {
+            flex: 100%;
+        }
+        
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+            color: var(--fg);
+            font-size: 14px;
+        }
+        
+        .modern-input, .modern-select {
+            width: 100%;
+            padding: 10px 12px;
+            border: 2px solid var(--border);
+            border-radius: 8px;
+            background: var(--bg);
+            color: var(--fg);
+            font-size: 14px;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+        }
+        
+        .modern-input:focus, .modern-select:focus {
+            border-color: var(--accent);
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.1);
+        }
+        
+        /* Stats cards */
+        .stats-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        
+        .stat-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+        }
+        
+        .stat-icon {
+            font-size: 24px;
+            margin-bottom: 8px;
+        }
+        
+        .stat-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: var(--accent);
+            margin-bottom: 4px;
+        }
+        
+        .stat-label {
+            font-size: 14px;
+            color: var(--muted);
+            font-weight: 500;
+        }
+        
+        /* Action buttons */
+        .action-buttons {
+            display: flex;
+            gap: 8px;
+            justify-content: center;
+        }
+        
+        .action-btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+        }
+        
+        .btn-edit { background: var(--accent); color: white; }
+        .btn-delete { background: var(--danger); color: white; }
+        .btn-view { background: var(--info); color: white; }
+        
+        .action-btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+    </style>
+</head>
+<body>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Yükleniyor...</div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <button onclick="location.href='/index.html'" class="btn btn-secondary">
+                ← Ana Sayfa
+            </button>
+            <h1>Raf Yönetimi</h1>
+        </div>
+        <div class="header-right">
+            <button id="addShelfBtn" class="btn btn-success">
+                <span class="btn-icon">➕</span>
+                <span class="btn-text">Yeni Raf</span>
+            </button>
+            <button onclick="loadShelves()" class="btn btn-outline">
+                <span class="btn-icon">↻</span>
+                <span class="btn-text">Yenile</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="search-section">
+        <div class="search-bar">
+            <div class="search-input-wrapper">
+                <span class="search-icon">🔍</span>
+                <input type="text" id="searchInput" placeholder="Raf kodu, adı veya konumu ile ara..." class="search-input">
+            </div>
+        </div>
+        <div class="filter-controls">
+            <div class="filter-group">
+                <label class="filter-label">Bölge:</label>
+                <select id="zoneFilter" class="modern-select">
+                    <option value="">Tüm Bölgeler</option>
+                    <option value="A">A Bölgesi</option>
+                    <option value="B">B Bölgesi</option>
+                    <option value="C">C Bölgesi</option>
+                    <option value="D">D Bölgesi</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label class="filter-label">Durum:</label>
+                <select id="statusFilter" class="modern-select">
+                    <option value="">Tüm Durumlar</option>
+                    <option value="active">Aktif</option>
+                    <option value="inactive">Pasif</option>
+                    <option value="maintenance">Bakımda</option>
+                </select>
+            </div>
+            <button onclick="filterShelves()" class="btn btn-filter">
+                <span class="btn-icon">⚡</span>
+                <span class="btn-text">Filtrele</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="stats-container">
+        <div class="stat-card">
+            <div class="stat-icon">📦</div>
+            <div class="stat-value" id="totalShelves">-</div>
+            <div class="stat-label">Toplam Raf</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">✅</div>
+            <div class="stat-value" id="activeShelves">-</div>
+            <div class="stat-label">Aktif Raf</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">📊</div>
+            <div class="stat-value" id="utilizationRate">-%</div>
+            <div class="stat-label">Doluluk Oranı</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-icon">🔧</div>
+            <div class="stat-value" id="maintenanceShelves">-</div>
+            <div class="stat-label">Bakımda</div>
+        </div>
+    </div>
+
+    <!-- Add/Edit Shelf Form -->
+    <div id="shelfFormContainer" class="shelf-form-container" style="display: none;">
+        <div class="form-header">
+            <span class="form-icon">🏗️</span>
+            <h3 class="form-title" id="formTitle">Yeni Raf Oluştur</h3>
+        </div>
+        
+        <form id="shelfForm">
+            <input type="hidden" id="shelfId" value="">
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="shelfCode">Raf Kodu *</label>
+                    <input type="text" id="shelfCode" class="modern-input" required 
+                           placeholder="Örn: A1-01-001" maxlength="20">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="shelfName">Raf Adı *</label>
+                    <input type="text" id="shelfName" class="modern-input" required 
+                           placeholder="Örn: Ana Depo A Bölgesi" maxlength="100">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="zone">Bölge *</label>
+                    <select id="zone" class="modern-select" required>
+                        <option value="">Bölge Seçin</option>
+                        <option value="A">A Bölgesi</option>
+                        <option value="B">B Bölgesi</option>
+                        <option value="C">C Bölgesi</option>
+                        <option value="D">D Bölgesi</option>
+                        <option value="RETURN">İade Alanı</option>
+                        <option value="QUARANTINE">Karantina</option>
+                        <option value="SSH">SSH Alanı</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="aisle">Koridor *</label>
+                    <input type="text" id="aisle" class="modern-input" required 
+                           placeholder="Örn: 01" maxlength="10">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="level">Seviye *</label>
+                    <input type="text" id="level" class="modern-input" required 
+                           placeholder="Örn: 001" maxlength="10">
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label" for="capacity">Kapasite</label>
+                    <input type="number" id="capacity" class="modern-input" min="1" 
+                           placeholder="100" value="100">
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="status">Durum</label>
+                    <select id="status" class="modern-select">
+                        <option value="active">Aktif</option>
+                        <option value="inactive">Pasif</option>
+                        <option value="maintenance">Bakımda</option>
+                    </select>
+                </div>
+            </div>
+            
+            <div class="form-actions" style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 24px;">
+                <button type="button" id="cancelFormBtn" class="btn btn-secondary">İptal</button>
+                <button type="submit" id="saveShelfBtn" class="btn btn-success">Kaydet</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Shelves Table - Desktop -->
+    <div class="table-container">
+        <table id="shelvesTable" class="data-table">
+            <thead>
+                <tr>
+                    <th>Raf Kodu</th>
+                    <th>Raf Adı</th>
+                    <th>Konum</th>
+                    <th>Kapasite</th>
+                    <th>Doluluk</th>
+                    <th>Durum</th>
+                    <th>İşlemler</th>
+                </tr>
+            </thead>
+            <tbody id="shelvesTableBody">
+                <tr>
+                    <td colspan="7" class="text-center">
+                        <div class="loading-message">Raflar yükleniyor...</div>
+                    </td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <!-- Shelf Cards - Mobile -->
+    <div class="shelf-cards" id="shelfCards" style="display: none;">
+        <div class="loading-message">Raflar yükleniyor...</div>
+    </div>
+
+    <!-- JavaScript -->
+    <script>
+        // Global variables
+        let allShelves = [];
+        let filteredShelves = [];
+        
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', async function() {
+            console.log('🚀 Shelf Management page loaded');
+            
+            // Check authentication
+            if (!await checkAuth()) {
+                window.location.href = '/login.html';
+                return;
+            }
+            
+            // Initialize event listeners
+            initializeEventListeners();
+            
+            // Load shelves
+            await loadShelves();
+            
+            // Hide loading overlay
+            document.getElementById('loadingOverlay').style.display = 'none';
+        });
+        
+        // Initialize event listeners
+        function initializeEventListeners() {
+            // Add shelf button
+            document.getElementById('addShelfBtn').addEventListener('click', showAddForm);
+            
+            // Form actions
+            document.getElementById('cancelFormBtn').addEventListener('click', hideForm);
+            document.getElementById('shelfForm').addEventListener('submit', handleFormSubmit);
+            
+            // Search and filter
+            document.getElementById('searchInput').addEventListener('input', debounce(filterShelves, 300));
+            document.getElementById('zoneFilter').addEventListener('change', filterShelves);
+            document.getElementById('statusFilter').addEventListener('change', filterShelves);
+        }
+        
+        // Load shelves from API
+        async function loadShelves() {
+            try {
+                console.log('📦 Loading shelves...');
+                showLoading(true);
+                
+                const response = await fetch('/api/shelves');
+                if (!response.ok) {
+                    throw new Error('Failed to load shelves');
+                }
+                
+                allShelves = await response.json();
+                console.log('✅ Loaded shelves:', allShelves.length);
+                
+                updateStats();
+                filterShelves();
+                
+            } catch (error) {
+                console.error('❌ Error loading shelves:', error);
+                showError('Raflar yüklenirken hata oluştu: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Update statistics
+        function updateStats() {
+            const totalShelves = allShelves.length;
+            const activeShelves = allShelves.filter(s => s.status === 'active').length;
+            const maintenanceShelves = allShelves.filter(s => s.status === 'maintenance').length;
+            const utilizationRate = totalShelves > 0 ? Math.round((allShelves.reduce((sum, s) => sum + (s.current_usage || 0), 0) / allShelves.reduce((sum, s) => sum + (s.capacity || 1), 0)) * 100) : 0;
+            
+            document.getElementById('totalShelves').textContent = totalShelves;
+            document.getElementById('activeShelves').textContent = activeShelves;
+            document.getElementById('maintenanceShelves').textContent = maintenanceShelves;
+            document.getElementById('utilizationRate').textContent = utilizationRate + '%';
+        }
+        
+        // Filter shelves
+        function filterShelves() {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase().trim();
+            const zoneFilter = document.getElementById('zoneFilter').value;
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            filteredShelves = allShelves.filter(shelf => {
+                const matchesSearch = !searchTerm || 
+                    shelf.shelf_code.toLowerCase().includes(searchTerm) ||
+                    shelf.shelf_name.toLowerCase().includes(searchTerm) ||
+                    shelf.zone.toLowerCase().includes(searchTerm);
+                    
+                const matchesZone = !zoneFilter || shelf.zone === zoneFilter;
+                const matchesStatus = !statusFilter || shelf.status === statusFilter;
+                
+                return matchesSearch && matchesZone && matchesStatus;
+            });
+            
+            console.log('🔍 Filtered shelves:', filteredShelves.length);
+            displayShelves();
+        }
+        
+        // Display shelves in table and cards
+        function displayShelves() {
+            displayShelvesTable();
+            displayShelvesCards();
+        }
+        
+        // Display shelves table (desktop)
+        function displayShelvesTable() {
+            const tbody = document.getElementById('shelvesTableBody');
+            
+            if (filteredShelves.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center">Raf bulunamadı</td></tr>';
+                return;
+            }
+            
+            tbody.innerHTML = filteredShelves.map(shelf => {
+                const utilizationPercent = shelf.capacity > 0 ? Math.round((shelf.current_usage / shelf.capacity) * 100) : 0;
+                const statusClass = `status-${shelf.status}`;
+                const statusText = {
+                    'active': 'Aktif',
+                    'inactive': 'Pasif',
+                    'maintenance': 'Bakımda'
+                }[shelf.status] || shelf.status;
+                
+                return `
+                    <tr>
+                        <td><strong>${shelf.shelf_code}</strong></td>
+                        <td>${shelf.shelf_name}</td>
+                        <td>${shelf.zone}-${shelf.aisle}-${shelf.level}</td>
+                        <td>${shelf.capacity || 0}</td>
+                        <td>
+                            <div class="progress-bar" style="width: 100px; height: 6px; background: var(--border); border-radius: 3px; position: relative;">
+                                <div style="width: ${utilizationPercent}%; height: 100%; background: ${utilizationPercent > 80 ? 'var(--danger)' : utilizationPercent > 60 ? '#ffc107' : 'var(--success)'}; border-radius: 3px;"></div>
+                            </div>
+                            <small>${shelf.current_usage || 0}/${shelf.capacity || 0} (${utilizationPercent}%)</small>
+                        </td>
+                        <td><span class="shelf-status ${statusClass}">${statusText}</span></td>
+                        <td class="action-buttons">
+                            <button class="action-btn btn-view" onclick="viewShelf(${shelf.id})" title="Görüntüle">👁️</button>
+                            <button class="action-btn btn-edit" onclick="editShelf(${shelf.id})" title="Düzenle">✏️</button>
+                            <button class="action-btn btn-delete" onclick="deleteShelf(${shelf.id})" title="Sil">🗑️</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+        
+        // Display shelves cards (mobile)
+        function displayShelvesCards() {
+            const container = document.getElementById('shelfCards');
+            
+            if (filteredShelves.length === 0) {
+                container.innerHTML = '<div class="text-center">Raf bulunamadı</div>';
+                return;
+            }
+            
+            container.innerHTML = filteredShelves.map(shelf => {
+                const utilizationPercent = shelf.capacity > 0 ? Math.round((shelf.current_usage / shelf.capacity) * 100) : 0;
+                const statusClass = `status-${shelf.status}`;
+                const statusText = {
+                    'active': 'Aktif',
+                    'inactive': 'Pasif', 
+                    'maintenance': 'Bakımda'
+                }[shelf.status] || shelf.status;
+                
+                return `
+                    <div class="shelf-card">
+                        <div class="shelf-header">
+                            <div class="shelf-code">${shelf.shelf_code}</div>
+                            <div class="shelf-status ${statusClass}">${statusText}</div>
+                        </div>
+                        
+                        <div class="shelf-info">
+                            <div class="info-row">
+                                <div class="info-label">Ad:</div>
+                                <div class="info-value">${shelf.shelf_name}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Konum:</div>
+                                <div class="info-value">${shelf.zone}-${shelf.aisle}-${shelf.level}</div>
+                            </div>
+                            <div class="info-row">
+                                <div class="info-label">Doluluk:</div>
+                                <div class="info-value">${shelf.current_usage || 0}/${shelf.capacity || 0} (${utilizationPercent}%)</div>
+                            </div>
+                        </div>
+                        
+                        <div class="shelf-actions">
+                            <button class="mobile-action-btn btn-view-mobile" onclick="viewShelf(${shelf.id})">👁️ Görüntüle</button>
+                            <button class="mobile-action-btn btn-edit-mobile" onclick="editShelf(${shelf.id})">✏️ Düzenle</button>
+                            <button class="mobile-action-btn btn-delete-mobile" onclick="deleteShelf(${shelf.id})">🗑️ Sil</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // Show add form
+        function showAddForm() {
+            document.getElementById('formTitle').textContent = 'Yeni Raf Oluştur';
+            document.getElementById('shelfForm').reset();
+            document.getElementById('shelfId').value = '';
+            document.getElementById('shelfFormContainer').style.display = 'block';
+            document.getElementById('shelfCode').focus();
+        }
+        
+        // Hide form
+        function hideForm() {
+            document.getElementById('shelfFormContainer').style.display = 'none';
+        }
+        
+        // Handle form submit
+        async function handleFormSubmit(e) {
+            e.preventDefault();
+            
+            const formData = {
+                shelf_code: document.getElementById('shelfCode').value,
+                shelf_name: document.getElementById('shelfName').value,
+                zone: document.getElementById('zone').value,
+                aisle: document.getElementById('aisle').value,
+                level: document.getElementById('level').value,
+                capacity: parseInt(document.getElementById('capacity').value) || 100,
+                status: document.getElementById('status').value
+            };
+            
+            const shelfId = document.getElementById('shelfId').value;
+            const isEdit = shelfId !== '';
+            
+            try {
+                showLoading(true);
+                
+                const url = isEdit ? `/api/shelves/${shelfId}` : '/api/shelves';
+                const method = isEdit ? 'PUT' : 'POST';
+                
+                const response = await fetch(url, {
+                    method: method,
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'İşlem başarısız');
+                }
+                
+                const result = await response.json();
+                console.log('✅ Shelf saved:', result);
+                
+                hideForm();
+                await loadShelves();
+                showSuccess(isEdit ? 'Raf güncellendi' : 'Raf oluşturuldu');
+                
+            } catch (error) {
+                console.error('❌ Error saving shelf:', error);
+                showError('Kayıt hatası: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Edit shelf
+        async function editShelf(id) {
+            const shelf = allShelves.find(s => s.id === id);
+            if (!shelf) return;
+            
+            document.getElementById('formTitle').textContent = 'Raf Düzenle';
+            document.getElementById('shelfId').value = shelf.id;
+            document.getElementById('shelfCode').value = shelf.shelf_code;
+            document.getElementById('shelfName').value = shelf.shelf_name;
+            document.getElementById('zone').value = shelf.zone;
+            document.getElementById('aisle').value = shelf.aisle;
+            document.getElementById('level').value = shelf.level;
+            document.getElementById('capacity').value = shelf.capacity;
+            document.getElementById('status').value = shelf.status;
+            document.getElementById('shelfFormContainer').style.display = 'block';
+        }
+        
+        // View shelf details
+        function viewShelf(id) {
+            const shelf = allShelves.find(s => s.id === id);
+            if (!shelf) return;
+            
+            alert(`Raf Detayları:\\n\\nKod: ${shelf.shelf_code}\\nAd: ${shelf.shelf_name}\\nKonum: ${shelf.zone}-${shelf.aisle}-${shelf.level}\\nKapasite: ${shelf.capacity}\\nMevcut Doluluk: ${shelf.current_usage || 0}\\nDurum: ${shelf.status}\\nOluşturma: ${new Date(shelf.created_at).toLocaleString('tr-TR')}`);
+        }
+        
+        // Delete shelf
+        async function deleteShelf(id) {
+            const shelf = allShelves.find(s => s.id === id);
+            if (!shelf) return;
+            
+            if (!confirm(`"${shelf.shelf_code}" rafını silmek istediğinizden emin misiniz?`)) {
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                
+                const response = await fetch(`/api/shelves/${id}`, {
+                    method: 'DELETE'
+                });
+                
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.message || 'Silme işlemi başarısız');
+                }
+                
+                console.log('✅ Shelf deleted:', id);
+                await loadShelves();
+                showSuccess('Raf silindi');
+                
+            } catch (error) {
+                console.error('❌ Error deleting shelf:', error);
+                showError('Silme hatası: ' + error.message);
+            } finally {
+                showLoading(false);
+            }
+        }
+        
+        // Utility functions
+        function showLoading(show) {
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.style.display = show ? 'flex' : 'none';
+        }
+        
+        function showError(message) {
+            alert('❌ ' + message);
+        }
+        
+        function showSuccess(message) {
+            alert('✅ ' + message);
+        }
+        
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func(...args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+    </script>
+</body>
+</html>

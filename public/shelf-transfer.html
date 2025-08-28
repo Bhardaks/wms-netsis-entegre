@@ -1,25 +1,39 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0" />
-  <title>Raf Transferi</title>
-  <link rel="stylesheet" href="/assets/css/styles.css" />
-  <link rel="stylesheet" href="/assets/css/zebra-terminal.css" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <title>Raf Transferi - WMS</title>
+    
+    <!-- CSS Files -->
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <link rel="stylesheet" href="/assets/css/zebra-terminal.css">
+    
+    <!-- Core Scripts -->
+    <script src="/assets/js/auth.js"></script>
 </head>
 <body>
-<header>
-  <div class="header-brand">
-    <h1>WMS Yönetim Sistemi</h1>
-    <span class="header-subtitle">Raf Transferi</span>
-  </div>
-  <div class="header-actions">
-    <a href="/index.html" class="home-btn">
-      <span class="home-icon">🏠</span>
-      <span class="home-text">Ana Sayfa</span>
-    </a>
-  </div>
-</header>
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Yükleniyor...</div>
+    </div>
+
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <button onclick="location.href='/index.html'" class="btn btn-secondary">
+                ← Ana Sayfa
+            </button>
+            <h1>Raf Transferi</h1>
+        </div>
+        <div class="header-right">
+            <button onclick="resetTransfer()" class="btn btn-outline">
+                <span class="btn-icon">🔄</span>
+                <span class="btn-text">Sıfırla</span>
+            </button>
+        </div>
+    </div>
 
 <main class="grid" style="max-width:1000px;margin:auto;padding:16px">
 
@@ -331,22 +345,104 @@ function setupEventListeners() {
     document.getElementById('scanTargetMode').addEventListener('click', () => switchTargetMode('scan'));
     document.getElementById('selectTargetMode').addEventListener('click', () => switchTargetMode('select'));
     
-    // Source shelf barcode scanning
+    // Source shelf barcode scanning - Otomatik onay
+    let sourceAutoSubmitTimer = null;
+    let sourceIsManualTyping = false;
+    let sourceLastKeystrokeTime = Date.now();
+
+    sourceShelfBarcode.addEventListener('input', (e) => {
+        const value = e.target.value.trim();
+        const currentTime = Date.now();
+        
+        // Manuel yazma vs barkod tarayıcı algılama
+        const timeSinceLastKeystroke = currentTime - sourceLastKeystrokeTime;
+        if (timeSinceLastKeystroke > 50) {
+            sourceIsManualTyping = true;
+        } else if (timeSinceLastKeystroke < 20) {
+            sourceIsManualTyping = false;
+        }
+        
+        sourceLastKeystrokeTime = currentTime;
+        
+        // Mevcut timer'ı temizle
+        if (sourceAutoSubmitTimer) {
+            clearTimeout(sourceAutoSubmitTimer);
+        }
+        
+        // Otomatik gönderim mantığı
+        if (value.length >= 6) {
+            let delay = sourceIsManualTyping ? 2000 : 300;
+            
+            sourceAutoSubmitTimer = setTimeout(async () => {
+                if (e.target.value.trim() === value) {
+                    await processSourceShelfBarcode(value);
+                    e.target.value = '';
+                }
+            }, delay);
+        }
+    });
+
+    // Enter tuşu desteği
     sourceShelfBarcode.addEventListener('keypress', async (e) => {
         if (e.key === 'Enter') {
+            e.preventDefault();
             const barcode = e.target.value.trim();
-            if (barcode) {
+            if (barcode.length >= 6) {
+                if (sourceAutoSubmitTimer) {
+                    clearTimeout(sourceAutoSubmitTimer);
+                }
                 await processSourceShelfBarcode(barcode);
                 e.target.value = '';
             }
         }
     });
     
-    // Target shelf barcode scanning
+    // Target shelf barcode scanning - Otomatik onay
+    let targetAutoSubmitTimer = null;
+    let targetIsManualTyping = false;
+    let targetLastKeystrokeTime = Date.now();
+
+    targetShelfBarcode.addEventListener('input', (e) => {
+        const value = e.target.value.trim();
+        const currentTime = Date.now();
+        
+        // Manuel yazma vs barkod tarayıcı algılama
+        const timeSinceLastKeystroke = currentTime - targetLastKeystrokeTime;
+        if (timeSinceLastKeystroke > 50) {
+            targetIsManualTyping = true;
+        } else if (timeSinceLastKeystroke < 20) {
+            targetIsManualTyping = false;
+        }
+        
+        targetLastKeystrokeTime = currentTime;
+        
+        // Mevcut timer'ı temizle
+        if (targetAutoSubmitTimer) {
+            clearTimeout(targetAutoSubmitTimer);
+        }
+        
+        // Otomatik gönderim mantığı
+        if (value.length >= 6) {
+            let delay = targetIsManualTyping ? 2000 : 300;
+            
+            targetAutoSubmitTimer = setTimeout(async () => {
+                if (e.target.value.trim() === value) {
+                    await processTargetShelfBarcode(value);
+                    e.target.value = '';
+                }
+            }, delay);
+        }
+    });
+
+    // Enter tuşu desteği
     targetShelfBarcode.addEventListener('keypress', async (e) => {
         if (e.key === 'Enter') {
+            e.preventDefault();
             const barcode = e.target.value.trim();
-            if (barcode) {
+            if (barcode.length >= 6) {
+                if (targetAutoSubmitTimer) {
+                    clearTimeout(targetAutoSubmitTimer);
+                }
                 await processTargetShelfBarcode(barcode);
                 e.target.value = '';
             }
@@ -474,8 +570,9 @@ async function processSourceShelfBarcode(barcode) {
                 const productBarcodeInput = document.getElementById('productBarcodeInput');
                 productBarcodeInput.focus();
                 
-                // Event listener ekle
+                // Event listener'ları ekle
                 productBarcodeInput.addEventListener('keypress', handleProductBarcodeInput);
+                setupProductBarcodeAutoSubmit(productBarcodeInput);
                 console.log('✅ selectSourceShelf tamamlandı');
             } catch (selectError) {
                 console.error('❌ selectSourceShelf hatası:', selectError);
@@ -714,15 +811,57 @@ function closeTransferPreviewModal() {
 }
 
 
-// Product Barcode Scanning
+// Product Barcode Scanning - Otomatik onay
+let productAutoSubmitTimer = null;
+let productIsManualTyping = false;
+let productLastKeystrokeTime = Date.now();
+
 async function handleProductBarcodeInput(e) {
     if (e.key === 'Enter') {
+        e.preventDefault();
         const barcode = e.target.value.trim();
-        if (barcode) {
+        if (barcode.length >= 6) {
+            if (productAutoSubmitTimer) {
+                clearTimeout(productAutoSubmitTimer);
+            }
             await processProductBarcode(barcode);
             e.target.value = '';
         }
     }
+}
+
+function setupProductBarcodeAutoSubmit(inputElement) {
+    inputElement.addEventListener('input', (e) => {
+        const value = e.target.value.trim();
+        const currentTime = Date.now();
+        
+        // Manuel yazma vs barkod tarayıcı algılama
+        const timeSinceLastKeystroke = currentTime - productLastKeystrokeTime;
+        if (timeSinceLastKeystroke > 50) {
+            productIsManualTyping = true;
+        } else if (timeSinceLastKeystroke < 20) {
+            productIsManualTyping = false;
+        }
+        
+        productLastKeystrokeTime = currentTime;
+        
+        // Mevcut timer'ı temizle
+        if (productAutoSubmitTimer) {
+            clearTimeout(productAutoSubmitTimer);
+        }
+        
+        // Otomatik gönderim mantığı
+        if (value.length >= 6) {
+            let delay = productIsManualTyping ? 2000 : 300;
+            
+            productAutoSubmitTimer = setTimeout(async () => {
+                if (e.target.value.trim() === value) {
+                    await processProductBarcode(value);
+                    e.target.value = '';
+                }
+            }, delay);
+        }
+    });
 }
 
 async function processProductBarcode(barcode) {
@@ -821,7 +960,21 @@ function setupQuantityModalEvents(product) {
 
 function closeQuantityModal() {
     document.getElementById('quantityModal').style.display = 'none';
-    document.getElementById('productBarcodeInput').focus();
+    
+    // Eğer hedef raf bölümü görünürse hedef raf input'una focus yap
+    if (targetShelfSection.style.display !== 'none') {
+        setTimeout(() => {
+            targetShelfBarcode.focus();
+        }, 100);
+    } else {
+        // Yoksa ürün barkod input'una geri dön
+        const productInput = document.getElementById('productBarcodeInput');
+        if (productInput) {
+            setTimeout(() => {
+                productInput.focus();
+            }, 100);
+        }
+    }
 }
 
 let selectedProductsForTransfer = [];
@@ -917,16 +1070,26 @@ async function executeTransfer() {
         transferStatus.querySelector('.status-text').innerHTML = '<strong>✅ Transfer Tamamlandı!</strong>';
         updateProgress(100);
         
-        // Transfer geçmişine ekle
+        // Transfer geçmişine ekle - Düzeltilmiş veriler
         addToTransferHistory({
+            id: Date.now(), // Unique ID
             from: sourceShelf.shelf_code,
+            fromName: sourceShelf.shelf_name,
             to: targetShelf.shelf_code,
-            products: sourceShelfProducts.length,
-            quantity: sourceShelfProducts.reduce((sum, p) => sum + p.quantity, 0),
-            timestamp: new Date().toLocaleString('tr-TR')
+            toName: targetShelf.shelf_name,
+            products: selectedProducts.length, // Seçili ürün sayısı
+            productDetails: selectedProducts.map(p => ({
+                name: p.name,
+                packageName: p.packageName,
+                barcode: p.barcode,
+                transferQuantity: p.transferQuantity
+            })),
+            totalQuantity: selectedProducts.reduce((sum, p) => sum + p.transferQuantity, 0), // Transfer edilen toplam miktar
+            timestamp: new Date().toLocaleString('tr-TR'),
+            success: true
         });
         
-        showSuccess(`${sourceShelfProducts.length} ürün başarıyla ${sourceShelf.shelf_code} rafından ${targetShelf.shelf_code} rafına transfer edildi!`);
+        showSuccess(`${selectedProducts.length} ürün başarıyla ${sourceShelf.shelf_code} rafından ${targetShelf.shelf_code} rafına transfer edildi!`);
         
         // 3 saniye sonra sıfırla
         setTimeout(() => {
@@ -1095,16 +1258,137 @@ function displayTransferHistory(history) {
         return;
     }
     
-    transferHistory.innerHTML = history.map(transfer => `
-        <div class="transfer-history-item">
-            <div class="transfer-icon">🔄</div>
+    transferHistory.innerHTML = history.map((transfer, index) => {
+        const displayQuantity = transfer.totalQuantity || transfer.quantity || 0;
+        const statusIcon = transfer.success !== false ? '✅' : '❌';
+        const statusClass = transfer.success !== false ? 'success' : 'error';
+        
+        return `
+        <div class="transfer-history-item ${statusClass}">
+            <div class="transfer-icon">${statusIcon}</div>
             <div class="transfer-details">
-                <strong>${transfer.from} ➡️ ${transfer.to}</strong><br>
-                <small>${transfer.products} ürün • ${transfer.quantity} adet • ${transfer.timestamp}</small>
+                <div class="transfer-summary">
+                    <strong>${transfer.from} ➡️ ${transfer.to}</strong>
+                    <span class="transfer-badge">${transfer.products} ürün</span>
+                </div>
+                <div class="transfer-info">
+                    <span class="quantity-badge">${displayQuantity} adet</span>
+                    <span class="timestamp">${transfer.timestamp}</span>
+                </div>
+                ${transfer.fromName ? `<small class="shelf-names">${transfer.fromName} → ${transfer.toName}</small>` : ''}
+            </div>
+            <div class="transfer-actions">
+                <button class="detail-btn" onclick="showTransferDetails(${index})" title="Detayları Göster">
+                    📋 Detay
+                </button>
             </div>
         </div>
-    `).join('');
+        `;
+    }).join('');
 }
+
+// Transfer Detay Modal'ı
+function showTransferDetails(transferIndex) {
+    const history = JSON.parse(localStorage.getItem('transferHistory') || '[]');
+    const transfer = history[transferIndex];
+    
+    if (!transfer) {
+        alert('Transfer detayı bulunamadı');
+        return;
+    }
+    
+    // Modal oluştur
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+        <div class="modal-content large">
+            <h2>📋 Transfer Detayları</h2>
+            <div class="transfer-detail-header">
+                <div class="detail-flow">
+                    <div class="detail-shelf source">
+                        <div class="shelf-header">📤 Kaynak</div>
+                        <div class="shelf-code">${transfer.from}</div>
+                        ${transfer.fromName ? `<div class="shelf-name">${transfer.fromName}</div>` : ''}
+                    </div>
+                    <div class="detail-arrow">➡️</div>
+                    <div class="detail-shelf target">
+                        <div class="shelf-header">📥 Hedef</div>
+                        <div class="shelf-code">${transfer.to}</div>
+                        ${transfer.toName ? `<div class="shelf-name">${transfer.toName}</div>` : ''}
+                    </div>
+                </div>
+                <div class="transfer-summary-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Ürün Sayısı:</span>
+                        <span class="stat-value">${transfer.products}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Toplam Miktar:</span>
+                        <span class="stat-value">${transfer.totalQuantity || transfer.quantity || 0} adet</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Tarih:</span>
+                        <span class="stat-value">${transfer.timestamp}</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Durum:</span>
+                        <span class="stat-value ${transfer.success !== false ? 'success' : 'error'}">
+                            ${transfer.success !== false ? '✅ Başarılı' : '❌ Hatalı'}
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            ${transfer.productDetails && transfer.productDetails.length > 0 ? `
+                <div class="products-detail-section">
+                    <h3>📦 Transfer Edilen Ürünler</h3>
+                    <div class="product-details-list">
+                        ${transfer.productDetails.map(product => `
+                            <div class="product-detail-item">
+                                <div class="product-detail-info">
+                                    <div class="product-name">${product.name}</div>
+                                    <div class="product-package">${product.packageName || 'Paket Bilgisi Yok'}</div>
+                                    <div class="product-barcode">Barkod: ${product.barcode}</div>
+                                </div>
+                                <div class="product-detail-quantity">
+                                    <span class="quantity-transferred">${product.transferQuantity} adet</span>
+                                </div>
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            ` : '<div class="no-product-details">Ürün detayları mevcut değil</div>'}
+            
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="closeTransferDetailModal()">
+                    ❌ Kapat
+                </button>
+            </div>
+        </div>
+    `;
+    
+    // Modal'ı sayfaya ekle
+    document.body.appendChild(modal);
+    
+    // Modal dışına tıklanırsa kapat
+    modal.addEventListener('click', (e) => {
+        if (e.target === modal) {
+            closeTransferDetailModal();
+        }
+    });
+}
+
+function closeTransferDetailModal() {
+    const modal = document.querySelector('.modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Global fonksiyonlar
+window.showTransferDetails = showTransferDetails;
+window.closeTransferDetailModal = closeTransferDetailModal;
 
 // Utility Functions
 function debounce(func, wait) {
@@ -1666,13 +1950,28 @@ function showSuccess(message) {
 .transfer-history-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 10px;
+    gap: 15px;
+    padding: 16px;
     border-bottom: 1px solid var(--border);
     background: rgba(31,42,68,0.1);
-    margin-bottom: 4px;
-    border-radius: 6px;
+    margin-bottom: 8px;
+    border-radius: 8px;
     color: var(--fg);
+    transition: all 0.2s ease;
+    border: 1px solid transparent;
+}
+
+.transfer-history-item:hover {
+    background: rgba(31,42,68,0.2);
+    border-color: var(--accent);
+}
+
+.transfer-history-item.success {
+    border-left: 4px solid var(--success);
+}
+
+.transfer-history-item.error {
+    border-left: 4px solid var(--danger);
 }
 
 .transfer-history-item:last-child {
@@ -1681,7 +1980,7 @@ function showSuccess(message) {
 }
 
 .transfer-icon {
-    font-size: 20px;
+    font-size: 24px;
     color: var(--accent);
     flex-shrink: 0;
 }
@@ -1691,12 +1990,226 @@ function showSuccess(message) {
     font-size: 14px;
 }
 
-.transfer-details strong {
-    color: var(--fg);
+.transfer-summary {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 6px;
 }
 
-.transfer-details small {
+.transfer-summary strong {
+    color: var(--fg);
+    font-size: 16px;
+}
+
+.transfer-badge {
+    background: var(--accent);
+    color: white;
+    padding: 3px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+}
+
+.transfer-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     color: var(--muted);
+    font-size: 12px;
+}
+
+.quantity-badge {
+    background: rgba(34, 197, 94, 0.1);
+    color: var(--success);
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-weight: 500;
+}
+
+.timestamp {
+    color: var(--muted);
+}
+
+.shelf-names {
+    color: var(--muted);
+    font-size: 11px;
+    margin-top: 4px;
+    display: block;
+}
+
+.transfer-actions {
+    flex-shrink: 0;
+}
+
+.detail-btn {
+    background: rgba(77,163,255,0.1);
+    color: var(--accent);
+    border: 1px solid rgba(77,163,255,0.3);
+    border-radius: 6px;
+    padding: 8px 12px;
+    font-size: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.detail-btn:hover {
+    background: rgba(77,163,255,0.2);
+    border-color: var(--accent);
+}
+
+/* Transfer Detail Modal */
+.transfer-detail-header {
+    margin-bottom: 24px;
+}
+
+.detail-flow {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    justify-content: center;
+    margin-bottom: 20px;
+}
+
+.detail-shelf {
+    background: rgba(31,42,68,0.2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    min-width: 150px;
+}
+
+.detail-shelf.source {
+    border-color: var(--warning);
+}
+
+.detail-shelf.target {
+    border-color: var(--success);
+}
+
+.detail-shelf .shelf-code {
+    font-size: 18px;
+    font-weight: bold;
+    color: var(--accent);
+    margin: 8px 0 4px 0;
+}
+
+.detail-shelf .shelf-name {
+    font-size: 12px;
+    color: var(--muted);
+}
+
+.detail-arrow {
+    font-size: 24px;
+    color: var(--accent);
+}
+
+.transfer-summary-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    background: rgba(31,42,68,0.1);
+    padding: 16px;
+    border-radius: 8px;
+}
+
+.stat-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.05);
+    border-radius: 6px;
+}
+
+.stat-label {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.stat-value {
+    color: var(--fg);
+    font-weight: bold;
+}
+
+.stat-value.success {
+    color: var(--success);
+}
+
+.stat-value.error {
+    color: var(--danger);
+}
+
+.products-detail-section {
+    margin-top: 24px;
+}
+
+.products-detail-section h3 {
+    color: var(--accent);
+    margin-bottom: 16px;
+}
+
+.product-details-list {
+    max-height: 300px;
+    overflow-y: auto;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(31,42,68,0.05);
+}
+
+.product-detail-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.product-detail-item:last-child {
+    border-bottom: none;
+}
+
+.product-detail-info {
+    flex: 1;
+}
+
+.product-detail-info .product-name {
+    font-weight: bold;
+    color: var(--fg);
+    margin-bottom: 4px;
+}
+
+.product-detail-info .product-package {
+    color: var(--muted);
+    font-size: 13px;
+    margin-bottom: 2px;
+}
+
+.product-detail-info .product-barcode {
+    color: var(--muted);
+    font-size: 11px;
+    font-family: 'Courier New', monospace;
+}
+
+.product-detail-quantity {
+    flex-shrink: 0;
+}
+
+.quantity-transferred {
+    background: var(--success);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: bold;
+}
+
+.no-product-details {
+    text-align: center;
+    color: var(--muted);
+    padding: 32px;
+    font-style: italic;
 }
 
 /* Responsive */

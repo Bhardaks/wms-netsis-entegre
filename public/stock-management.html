@@ -160,6 +160,24 @@
         </tbody>
       </table>
     </div>
+    
+    <!-- Pagination Controls -->
+    <div class="pagination-container" id="paginationContainer" style="display: none;">
+      <div class="pagination-info">
+        <span id="paginationInfo">Toplam 0 kayıt</span>
+      </div>
+      <div class="pagination-controls">
+        <button class="pagination-btn" id="prevPageBtn" disabled>
+          <span>‹</span> Önceki
+        </button>
+        <div class="pagination-numbers" id="paginationNumbers">
+          <!-- Page numbers will be inserted here -->
+        </div>
+        <button class="pagination-btn" id="nextPageBtn" disabled>
+          Sonraki <span>›</span>
+        </button>
+      </div>
+    </div>
   </section>
 
   <!-- Son Stok Hareketleri -->
@@ -415,19 +433,121 @@
 <script type="module">
 const API = {
   stock: {
-    list: (filters = {}) => {
-      const params = new URLSearchParams(filters);
-      return fetch(`/api/stock?${params}`).then(r => r.json());
+    list: async (filters = {}) => {
+      try {
+        const params = new URLSearchParams(filters);
+        const response = await fetch(`/api/stock?${params}`);
+        if (!response.ok) {
+          console.error('Stock list API error:', response.status);
+          return []; // Return empty array on error
+        }
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.data || data.stocks || []);
+      } catch (error) {
+        console.error('Stock list fetch error:', error);
+        return [];
+      }
     },
-    adjust: (data) => fetch('/api/stock/adjust', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(data)}).then(r => r.json()),
-    movements: (limit = 50) => fetch(`/api/stock/movements?limit=${limit}`).then(r => r.json()),
-    summary: () => fetch('/api/stock/summary').then(r => r.json())
+    adjust: async (data) => {
+      try {
+        const response = await fetch('/api/stock/adjust', {
+          method: 'POST', 
+          headers: {'Content-Type': 'application/json'}, 
+          body: JSON.stringify(data)
+        });
+        return await response.json();
+      } catch (error) {
+        console.error('Stock adjust error:', error);
+        return { success: false, error: error.message };
+      }
+    },
+    movements: async (limit = 50) => {
+      try {
+        const response = await fetch(`/api/stock/movements?limit=${limit}`);
+        if (!response.ok) {
+          console.error('Stock movements API error:', response.status);
+          return [];
+        }
+        const data = await response.json();
+        return Array.isArray(data) ? data : (data.data || data.movements || []);
+      } catch (error) {
+        console.error('Stock movements fetch error:', error);
+        return [];
+      }
+    },
+    summary: async () => {
+      try {
+        const response = await fetch('/api/stock/summary');
+        if (!response.ok) {
+          console.error('Stock summary API error:', response.status);
+          return { total_products: 0, low_stock_items: 0, out_of_stock_items: 0, todays_movements: 0 };
+        }
+        const data = await response.json();
+        return data || { total_products: 0, low_stock_items: 0, out_of_stock_items: 0, todays_movements: 0 };
+      } catch (error) {
+        console.error('Stock summary fetch error:', error);
+        return { total_products: 0, low_stock_items: 0, out_of_stock_items: 0, todays_movements: 0 };
+      }
+    }
   },
-  products: () => fetch('/api/products').then(r => r.json()),
-  locations: () => fetch('/api/shelves').then(r => r.json()),
-  packages: (sku) => fetch(`/api/stock/${sku}/packages`).then(r => r.json()),
-  packageLocations: (barcode) => fetch(`/api/stock/package/${barcode}/locations`).then(r => r.json()),
-  shelfMovements: (barcode, shelfCode) => fetch(`/api/stock/package/${barcode}/shelf/${shelfCode}/movements`).then(r => r.json())
+  products: async () => {
+    try {
+      const response = await fetch('/api/products');
+      const data = await response.json();
+      return Array.isArray(data) ? data : (data.data || data.products || []);
+    } catch (error) {
+      console.error('Products fetch error:', error);
+      return [];
+    }
+  },
+  locations: async () => {
+    try {
+      const response = await fetch('/api/shelves');
+      const data = await response.json();
+      return Array.isArray(data) ? data : (data.data || data.shelves || []);
+    } catch (error) {
+      console.error('Locations fetch error:', error);
+      return [];
+    }
+  },
+  packages: async (sku) => {
+    try {
+      const response = await fetch(`/api/stock/${sku}/packages`);
+      if (!response.ok) {
+        console.error('Packages API error:', response.status);
+        return { success: false, packages: [] };
+      }
+      const data = await response.json();
+      return data; // Return the full response object with success and packages
+    } catch (error) {
+      console.error('Packages fetch error:', error);
+      return { success: false, packages: [] };
+    }
+  },
+  packageLocations: async (barcode) => {
+    try {
+      const response = await fetch(`/api/stock/package/${barcode}/locations`);
+      if (!response.ok) {
+        console.error('Package locations API error:', response.status);
+        return { success: false, locations: [] };
+      }
+      const data = await response.json();
+      return data; // Return the full response object with success and locations
+    } catch (error) {
+      console.error('Package locations fetch error:', error);
+      return { success: false, locations: [] };
+    }
+  },
+  shelfMovements: async (barcode, shelfCode) => {
+    try {
+      const response = await fetch(`/api/stock/package/${barcode}/shelf/${shelfCode}/movements`);
+      const data = await response.json();
+      return Array.isArray(data) ? data : (data.data || data.movements || []);
+    } catch (error) {
+      console.error('Shelf movements fetch error:', error);
+      return [];
+    }
+  }
 };
 
 let currentAdjustmentItem = null;
@@ -436,6 +556,11 @@ let currentShelfAdjustment = null;
 let varianceData = null;
 let varianceMode = false;
 let currentVarianceIndex = 0;
+
+// Pagination variables
+let allStockData = [];
+let currentPage = 1;
+const itemsPerPage = 20;
 
 // Sayfa yüklendiğinde
 document.addEventListener('DOMContentLoaded', () => {
@@ -446,6 +571,22 @@ document.addEventListener('DOMContentLoaded', () => {
   loadStockList();
   loadRecentMovements();
   loadLocationFilter();
+  
+  // Pagination event listeners
+  document.getElementById('prevPageBtn').addEventListener('click', () => {
+    if (currentPage > 1) {
+      currentPage--;
+      renderPaginatedStock();
+    }
+  });
+  
+  document.getElementById('nextPageBtn').addEventListener('click', () => {
+    const totalPages = Math.ceil(allStockData.length / itemsPerPage);
+    if (currentPage < totalPages) {
+      currentPage++;
+      renderPaginatedStock();
+    }
+  });
 });
 
 // Variance mode kontrolü
@@ -514,7 +655,7 @@ function setupVarianceMode() {
 // Stok özetini yükle
 async function loadStockSummary() {
   try {
-    const summary = await API.stock.summary();
+    const summary = await API.summary();
     
     document.getElementById('totalProducts').textContent = summary.total_products || 0;
     document.getElementById('lowStockItems').textContent = summary.low_stock_items || 0;
@@ -532,12 +673,36 @@ async function loadStockList(filters = {}) {
     // Variance mode'da ise variance ürünlerini filtrele
     if (varianceMode && filters.filter === 'variance') {
       const varianceStockData = await getVarianceStockData();
-      renderStockTable(varianceStockData);
+      allStockData = varianceStockData;
+      currentPage = 1;
+      renderPaginatedStock();
       return;
     }
     
-    const stockData = await API.stock.list(filters);
-    renderStockTable(stockData);
+    // Try stock API first, fallback to products API if it fails
+    let stockData = await API.stock.list(filters);
+    
+    // If stock API returns empty or fails, try to get basic data from products API
+    if (!stockData || stockData.length === 0) {
+      console.log('Stock API returned empty, trying products API as fallback...');
+      const products = await API.products();
+      
+      // Convert products to basic stock format
+      stockData = products.map(product => ({
+        product_id: product.id,
+        sku: product.sku,
+        product_name: product.name,
+        main_product_quantity: product.inventory_quantity || 0,
+        package_count: 1,
+        location_count: 1,
+        is_netsis_fallback: true
+      }));
+    }
+    
+    // Store all data and reset to first page
+    allStockData = stockData;
+    currentPage = 1;
+    renderPaginatedStock();
     
   } catch (error) {
     console.error('Stok listesi yüklenemedi:', error);
@@ -550,6 +715,7 @@ async function loadStockList(filters = {}) {
           </div>
         </td>
       </tr>`;
+    document.getElementById('paginationContainer').style.display = 'none';
   }
 }
 
@@ -557,7 +723,15 @@ async function loadStockList(filters = {}) {
 function renderStockTable(stockData) {
   const tbody = document.getElementById('stockTableBody');
   
-  if (!stockData || stockData.length === 0) {
+  // Ensure stockData is an array
+  if (!stockData) {
+    stockData = [];
+  } else if (!Array.isArray(stockData)) {
+    console.warn('stockData is not an array:', typeof stockData, stockData);
+    stockData = stockData.data || stockData.stocks || [];
+  }
+  
+  if (stockData.length === 0) {
     tbody.innerHTML = `
       <tr class="empty-state">
         <td colspan="7">
@@ -615,6 +789,103 @@ function renderStockTable(stockData) {
   }).join('');
   
   tbody.innerHTML = rowsHtml;
+}
+
+// Paginated stock rendering
+function renderPaginatedStock() {
+  const totalItems = allStockData.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+  
+  // Calculate start and end indices for current page
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = Math.min(startIndex + itemsPerPage, totalItems);
+  
+  // Get current page data
+  const currentPageData = allStockData.slice(startIndex, endIndex);
+  
+  // Render table with current page data
+  renderStockTable(currentPageData);
+  
+  // Update pagination controls
+  updatePaginationControls(totalItems, totalPages);
+}
+
+// Update pagination controls
+function updatePaginationControls(totalItems, totalPages) {
+  const paginationContainer = document.getElementById('paginationContainer');
+  const paginationInfo = document.getElementById('paginationInfo');
+  const prevBtn = document.getElementById('prevPageBtn');
+  const nextBtn = document.getElementById('nextPageBtn');
+  const paginationNumbers = document.getElementById('paginationNumbers');
+  
+  if (totalItems === 0) {
+    paginationContainer.style.display = 'none';
+    return;
+  }
+  
+  // Show pagination container
+  paginationContainer.style.display = 'flex';
+  
+  // Update info text
+  const startItem = (currentPage - 1) * itemsPerPage + 1;
+  const endItem = Math.min(currentPage * itemsPerPage, totalItems);
+  paginationInfo.textContent = `${startItem}-${endItem} / ${totalItems} kayıt`;
+  
+  // Update prev/next buttons
+  prevBtn.disabled = currentPage <= 1;
+  nextBtn.disabled = currentPage >= totalPages;
+  
+  // Generate page numbers
+  paginationNumbers.innerHTML = generatePageNumbers(currentPage, totalPages);
+  
+  // Add event listeners to page numbers
+  document.querySelectorAll('.pagination-number').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      const page = parseInt(e.target.dataset.page);
+      if (page && page !== currentPage) {
+        currentPage = page;
+        renderPaginatedStock();
+      }
+    });
+  });
+}
+
+// Generate page numbers HTML
+function generatePageNumbers(current, total) {
+  if (total <= 1) return '';
+  
+  let pages = [];
+  const delta = 2; // Show 2 pages on each side of current page
+  
+  // Always show first page
+  pages.push(1);
+  
+  // Show pages around current page
+  for (let i = Math.max(2, current - delta); i <= Math.min(total - 1, current + delta); i++) {
+    if (!pages.includes(i)) pages.push(i);
+  }
+  
+  // Always show last page
+  if (total > 1 && !pages.includes(total)) pages.push(total);
+  
+  // Generate HTML with ellipsis where needed
+  let html = '';
+  let lastPage = 0;
+  
+  pages.forEach(page => {
+    // Add ellipsis if there's a gap
+    if (page > lastPage + 1) {
+      html += '<span class="pagination-ellipsis">...</span>';
+    }
+    
+    // Add page number
+    const activeClass = page === current ? 'active' : '';
+    html += `<button class="pagination-number ${activeClass}" data-page="${page}">${page}</button>`;
+    
+    lastPage = page;
+  });
+  
+  return html;
 }
 
 // Stok durumu belirle
@@ -1046,35 +1317,70 @@ function closeShelfAdjustmentModal() {
 
 // Package details toggle
 window.togglePackageDetails = async (sku) => {
+  console.log('togglePackageDetails called with SKU:', sku);
+  
+  // Escape the SKU for safe use in CSS selectors
+  const escapedSku = sku.replace(/[!"#$%&'()*+,./:;<=>?@[\]^`{|}~]/g, '\\$&');
+  
   const detailsRow = document.getElementById(`packages-${sku}`);
-  const expandIcon = document.querySelector(`[data-sku="${sku}"] .expand-icon`);
+  const expandIcon = document.querySelector(`[data-sku="${escapedSku}"] .expand-icon`);
+  
+  console.log('detailsRow:', detailsRow);
+  console.log('expandIcon:', expandIcon);
+  console.log('escapedSku:', escapedSku);
+  
+  if (!detailsRow) {
+    console.error('Details row not found for SKU:', sku);
+    return;
+  }
   
   if (detailsRow.style.display === 'none') {
     // Expand
-    expandIcon.textContent = '▼';
+    if (expandIcon) expandIcon.textContent = '▼';
     detailsRow.style.display = 'table-row';
     
     // Load package details
     try {
+      console.log('Fetching packages for SKU:', sku);
       const response = await API.packages(sku);
-      if (response.success) {
+      console.log('API response:', response);
+      
+      if (response && response.success) {
         renderPackageDetails(sku, response.packages);
+      } else {
+        console.error('API returned unsuccessful response:', response);
+        const container = document.querySelector(`#packages-${sku} .package-details-container`);
+        if (container) {
+          container.innerHTML = '<div class="no-packages">❌ Paket detayları yüklenemedi</div>';
+        }
       }
     } catch (error) {
       console.error('Paket detayları yüklenemedi:', error);
+      const container = document.querySelector(`#packages-${sku} .package-details-container`);
+      if (container) {
+        container.innerHTML = '<div class="no-packages">❌ Hata oluştu: ' + error.message + '</div>';
+      }
     }
   } else {
     // Collapse
-    expandIcon.textContent = '▶';
+    if (expandIcon) expandIcon.textContent = '▶';
     detailsRow.style.display = 'none';
   }
 };
 
 // Render package details
 function renderPackageDetails(sku, packages) {
+  console.log('renderPackageDetails called with SKU:', sku, 'packages:', packages);
   const container = document.querySelector(`#packages-${sku} .package-details-container`);
+  console.log('container found:', container);
+  
+  if (!container) {
+    console.error('Package details container not found for SKU:', sku);
+    return;
+  }
   
   if (!packages || packages.length === 0) {
+    console.log('No packages found for SKU:', sku);
     container.innerHTML = '<div class="no-packages">❌ Bu ürüne ait paket bulunamadı</div>';
     return;
   }
@@ -1100,7 +1406,7 @@ function renderPackageDetails(sku, packages) {
     </div>
   `).join('');
   
-  container.innerHTML = `
+  const finalHtml = `
     <div class="packages-header">
       <h4>📦 ${sku} - Paket Detayları</h4>
     </div>
@@ -1108,31 +1414,50 @@ function renderPackageDetails(sku, packages) {
       ${packagesHtml}
     </div>
   `;
+  
+  console.log('Setting container innerHTML:', finalHtml);
+  container.innerHTML = finalHtml;
+  console.log('Container after setting innerHTML:', container);
 }
 
 // Show package locations
 window.showPackageLocations = async (barcode, packageNumber) => {
+  console.log('showPackageLocations called with barcode:', barcode, 'packageNumber:', packageNumber);
   try {
     const response = await API.packageLocations(barcode);
-    if (response.success) {
+    console.log('API.packageLocations response:', response);
+    
+    if (response && response.success) {
       showLocationModal(packageNumber, barcode, response.locations);
+    } else {
+      console.error('API returned unsuccessful response:', response);
+      alert('Lokasyon detayları yüklenemedi: ' + (response.error || 'Bilinmeyen hata'));
     }
   } catch (error) {
     console.error('Lokasyon detayları yüklenemedi:', error);
-    alert('Lokasyon detayları yüklenemedi!');
+    alert('Lokasyon detayları yüklenemedi: ' + error.message);
   }
 };
 
 // Show location modal
 function showLocationModal(packageNumber, barcode, locations) {
+  console.log('showLocationModal called with:', {packageNumber, barcode, locations});
+  
   const modal = document.getElementById('packageLocationModal');
   const title = document.getElementById('locationModalTitle');
   const container = document.getElementById('locationsContainer');
   
-  title.textContent = `📦 ${packageNumber} (${barcode}) - Raf Lokasyonları`;
+  console.log('Modal elements:', {modal, title, container});
+  
+  if (title) {
+    title.textContent = `📦 ${packageNumber} (${barcode}) - Raf Lokasyonları`;
+  }
   
   if (!locations || locations.length === 0) {
-    container.innerHTML = '<div class="no-locations">❌ Bu paket için aktif lokasyon bulunamadı</div>';
+    console.log('No locations found');
+    if (container) {
+      container.innerHTML = '<div class="no-locations">❌ Bu paket için aktif lokasyon bulunamadı</div>';
+    }
   } else {
     const locationsHtml = locations.map(loc => `
       <div class="location-item">
@@ -1156,10 +1481,19 @@ function showLocationModal(packageNumber, barcode, locations) {
       </div>
     `).join('');
     
-    container.innerHTML = locationsHtml;
+    console.log('Locations HTML generated:', locationsHtml);
+    if (container) {
+      container.innerHTML = locationsHtml;
+      console.log('Container content set');
+    }
   }
   
-  modal.style.display = 'flex';
+  if (modal) {
+    modal.style.display = 'flex';
+    console.log('Modal displayed');
+  } else {
+    console.error('Modal not found!');
+  }
 }
 
 // Open shelf adjustment modal
@@ -1267,17 +1601,20 @@ function showError(message) {
   console.log('ERROR:', message);
 }
 
-// Mobile navigation toggle
-document.getElementById('mobileNavToggle').addEventListener('click', () => {
-  const menu = document.getElementById('mobileNavMenu');
-  menu.classList.toggle('show');
-});
+// Mobile navigation toggle (optional)
+const mobileNavToggle = document.getElementById('mobileNavToggle');
+if (mobileNavToggle) {
+  mobileNavToggle.addEventListener('click', () => {
+    const menu = document.getElementById('mobileNavMenu');
+    if (menu) menu.classList.toggle('show');
+  });
+}
 
 // Close mobile menu when clicking outside
 document.addEventListener('click', (e) => {
   const nav = document.getElementById('mobileNav');
   const menu = document.getElementById('mobileNavMenu');
-  if (!nav.contains(e.target)) {
+  if (nav && menu && !nav.contains(e.target)) {
     menu.classList.remove('show');
   }
 });
@@ -1726,6 +2063,92 @@ document.addEventListener('DOMContentLoaded', () => {
 .stock-status.out-of-stock {
   background: rgba(220, 53, 69, 0.2);
   color: #dc3545;
+}
+
+/* Pagination Styles */
+.pagination-container {
+  margin-top: 20px;
+  padding: 20px 0;
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+}
+
+.pagination-info {
+  color: var(--fg);
+  font-size: 0.9rem;
+}
+
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.pagination-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+
+.pagination-btn:hover:not(:disabled) {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.pagination-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.pagination-numbers {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pagination-number {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--fg);
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  min-width: 40px;
+  text-align: center;
+  transition: all 0.2s ease;
+}
+
+.pagination-number:hover {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.pagination-number.active {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+  font-weight: 600;
+}
+
+.pagination-ellipsis {
+  padding: 8px 4px;
+  color: var(--fg);
+  font-size: 0.9rem;
 }
 
 .table-actions {
@@ -2290,6 +2713,32 @@ document.addEventListener('DOMContentLoaded', () => {
     flex-direction: column;
     gap: 10px;
     text-align: center;
+  }
+  
+  .pagination-container {
+    flex-direction: column;
+    gap: 15px;
+    text-align: center;
+  }
+  
+  .pagination-controls {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+  
+  .pagination-numbers {
+    flex-wrap: wrap;
+  }
+  
+  .pagination-btn {
+    font-size: 0.8rem;
+    padding: 6px 12px;
+  }
+  
+  .pagination-number {
+    font-size: 0.8rem;
+    padding: 6px 10px;
+    min-width: 35px;
   }
   
   .modal-actions {
