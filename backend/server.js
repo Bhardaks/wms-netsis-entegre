@@ -276,6 +276,7 @@ async function initDatabase() {
           aisle TEXT,
           level INTEGER,
           capacity INTEGER DEFAULT 100,
+          current_usage INTEGER DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `);
