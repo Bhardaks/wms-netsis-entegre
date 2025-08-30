@@ -509,7 +509,16 @@ const $ = (s) => document.querySelector(s);
 const $$ = (s) => document.querySelectorAll(s);
 
 const API = {
-  listOrders: () => fetch('/api/orders').then(r => r.json()),
+  listOrders: () => {
+    console.log('🌐 Fetching /api/orders...');
+    return fetch('/api/orders').then(r => {
+      console.log('📡 Response status:', r.status);
+      return r.json();
+    }).catch(error => {
+      console.error('🚨 API Error:', error);
+      throw error;
+    });
+  },
   getOrder: (id) => fetch('/api/orders/' + id).then(r => r.json()),
   createPick: (order_id) => fetch('/api/picks', {
     method: 'POST',
@@ -581,8 +590,10 @@ async function loadNetsisOrders() {
 // Siparişleri yükle - Sadece WMS veritabanından
 async function loadOrders() {
   try {
+    console.log('🔄 Loading orders from API...');
     // WMS API'sinden tüm siparişleri yükle
     const wmsResponse = await API.listOrders();
+    console.log('📦 Orders loaded:', wmsResponse?.length || 0, 'orders');
     allOrders = wmsResponse || [];
     
     // Netsis siparişlerini yükle (şimdilik boş)
@@ -590,8 +601,13 @@ async function loadOrders() {
     
     updateCounts();
     filterAndDisplayOrders();
+    console.log('✅ Orders display updated');
   } catch (error) {
-    console.error('Error loading orders:', error);
+    console.error('❌ Error loading orders:', error);
+    // Error durumunda boş dizi göster
+    allOrders = [];
+    updateCounts();
+    filterAndDisplayOrders();
   }
 }
 
