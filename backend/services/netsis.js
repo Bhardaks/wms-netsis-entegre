@@ -3,7 +3,11 @@ const httpntlm = require('httpntlm');
 
 class NetsisAPI {
   constructor() {
-    this.baseURL = process.env.NETSIS_API_URL || 'http://93.89.67.130:2626';
+    // Clean baseURL - remove trailing slash to prevent double slash
+    // Default to correct Netsis NetOpenX REST port 2626
+    let baseURL = process.env.NETSIS_API_URL || 'http://93.89.67.130:2626';
+    this.baseURL = baseURL.endsWith('/') ? baseURL.slice(0, -1) : baseURL;
+    
     this.username = process.env.NETSIS_USERNAME;
     this.password = process.env.NETSIS_PASSWORD;
     this.dbType = process.env.NETSIS_DB_TYPE || 'vtMSSQL';
@@ -560,7 +564,7 @@ class NetsisAPI {
       formData.append('password', this.password);
       formData.append('branchcode', this.branchCode);
       formData.append('dbname', this.dbName);
-      formData.append('dbuser', this.dbUser);
+      formData.append('dbuser', this.dbUser || 'TEMELSET');
       formData.append('dbpassword', this.dbPassword || '');
       formData.append('dbtype', dbTypeMap[this.dbType] || 1); // 1 for MSSQL
       
@@ -571,7 +575,7 @@ class NetsisAPI {
         NetsisPassword: this.password,
         DbType: dbTypeMap[this.dbType] || 1,
         DbName: this.dbName,
-        DbUser: this.dbUser,
+        DbUser: this.dbUser || 'TEMELSET',
         DbPassword: this.dbPassword || ""
       };
 
@@ -667,14 +671,37 @@ class NetsisAPI {
         }
 
         if (!anySuccess) {
-          // Railway might block external connections - provide a graceful fallback
+          // Check if port 8080 worked (orders endpoint)
+          console.log('🚨 Netsis API port 2626 timeout - checking port 8080 orders endpoint');
+          
+          try {
+            const ordersTest = await axios.get('http://93.89.67.130:8080/orders.json', {
+              timeout: 5000,
+              validateStatus: () => true
+            });
+            
+            if (ordersTest.status === 200) {
+              console.log('✅ Port 8080 orders endpoint accessible - using hybrid mode');
+              console.log('⚠️ HYBRID MODE: Port 8080 for orders, mock for authentication');
+              
+              // Set hybrid mode instead of full offline
+              this.hybridMode = true;
+              this.ordersEndpoint = 'http://93.89.67.130:8080';
+              this.accessToken = 'hybrid-mode-8080';
+              this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000;
+              
+              return true;
+            }
+          } catch (ordersError) {
+            console.log('❌ Port 8080 orders endpoint also failed:', ordersError.message);
+          }
+          
+          // Complete network block - offline mode
           console.log('🚨 RAILWAY NETWORK BLOCK: All external connections failed');
           console.log('🔄 FALLBACK: Switching to offline/mock mode for Railway');
           
-          // Don't throw error - instead return mock success
           console.log('⚠️ WARNING: Running in Railway offline mode - Netsis integration disabled');
           
-          // Set a flag that this is running in offline mode
           this.railwayOfflineMode = true;
           this.accessToken = 'railway-offline-mode';
           this.tokenExpiry = Date.now() + 24 * 60 * 60 * 1000; // 24 hours
