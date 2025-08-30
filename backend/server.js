@@ -25,9 +25,22 @@ dbBackup.autoBackup().catch(err => {
   console.warn('⚠️ Could not create startup backup:', err.message);
 });
 
-// Debug middleware - Log all requests
+// Debug middleware - Log all requests with error handling
 app.use((req, res, next) => {
   console.log(`📝 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  
+  // Railway 502 error prevention - Add timeout handling
+  req.setTimeout(60000, () => {
+    console.error(`🚨 Request timeout: ${req.method} ${req.path}`);
+    if (!res.headersSent) {
+      res.status(502).json({ 
+        error: 'Request timeout', 
+        message: 'Railway request timeout - try again',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+  
   next();
 });
 
@@ -2506,9 +2519,19 @@ app.post('/api/picks', async (req, res) => {
 
 app.get('/api/picks/:id', async (req, res) => {
   const { id } = req.params;
-  const pick = await get('SELECT * FROM picks WHERE id=?', [id]);
-  if (!pick) return res.status(404).json({ error: 'Pick not found' });
-  const order = await get('SELECT * FROM orders WHERE id=?', [pick.order_id]);
+  
+  try {
+    console.log(`🔍 Pick ${id} loading started`);
+    const startTime = Date.now();
+    
+    const pick = await get('SELECT * FROM picks WHERE id=?', [id]);
+    if (!pick) {
+      console.log(`❌ Pick ${id} not found`);
+      return res.status(404).json({ error: 'Pick not found' });
+    }
+    
+    console.log(`✅ Pick ${id} found, loading order...`);
+    const order = await get('SELECT * FROM orders WHERE id=?', [pick.order_id]);
   const items = await all(`
     SELECT oi.*, p.color as product_color 
     FROM order_items oi 
@@ -2569,8 +2592,30 @@ app.get('/api/picks/:id', async (req, res) => {
     }
   }
   
-  const scans = await all('SELECT * FROM pick_scans WHERE pick_id=?', [id]);
-  res.json({ pick, order, items, scans });
+    const scans = await all('SELECT * FROM pick_scans WHERE pick_id=?', [id]);
+    
+    const endTime = Date.now();
+    console.log(`✅ Pick ${id} loaded successfully in ${endTime - startTime}ms`);
+    
+    res.json({ pick, order, items, scans });
+    
+  } catch (error) {
+    console.error(`❌ Pick ${id} loading failed:`, {
+      error: error.message,
+      stack: error.stack?.substring(0, 500),
+      timestamp: new Date().toISOString()
+    });
+    
+    // Railway 502 prevention
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Pick loading failed', 
+        message: error.message,
+        pickId: id,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
 });
 
 // Lokasyon teyit endpoint'i

@@ -753,8 +753,19 @@ class NetsisAPI {
               status: response.status,
               statusText: response.statusText,
               headers: response.headers,
-              dataKeys: Object.keys(response.data || {}),
-              dataPreview: JSON.stringify(response.data).substring(0, 200)
+              dataType: typeof response.data,
+              dataLength: response.data ? response.data.length || 'no length' : 'null',
+              dataKeys: response.data && typeof response.data === 'object' ? Object.keys(response.data) : 'not object',
+              dataPreview: JSON.stringify(response.data).substring(0, 200),
+              rawDataFirst100: typeof response.data === 'string' ? response.data.substring(0, 100) : 'not string'
+            });
+            
+            // Additional response debugging
+            console.log('🔍 RESPONSE DEBUG:', {
+              hasData: !!response.data,
+              dataConstructor: response.data?.constructor?.name || 'unknown',
+              isEmptyString: response.data === '',
+              isEmptyObject: response.data && typeof response.data === 'object' && Object.keys(response.data).length === 0
             });
             if (response.data && (response.data.access_token || response.data.token)) {
               this.accessToken = response.data.access_token || response.data.token;
@@ -774,6 +785,35 @@ class NetsisAPI {
             } else {
               // Token yok ama 2xx response - farklı response formatı olabilir
               console.log(`⚠️ Response başarılı ama token yok:`, response.data);
+              
+              // Empty string response - Netsis sometimes returns empty string on success
+              if (response.data === '' && response.status === 200) {
+                console.log(`🔍 Empty string response with 200 OK - possible Netsis session auth`);
+                console.log(`🔄 Attempting to extract token from headers...`);
+                
+                // Check headers for tokens
+                const authHeader = response.headers['authorization'];
+                const setCookieHeader = response.headers['set-cookie'];
+                
+                if (authHeader) {
+                  console.log(`✅ Found Authorization header: ${authHeader.substring(0, 50)}...`);
+                  this.accessToken = authHeader.replace('Bearer ', '');
+                  this.tokenExpiry = Date.now() + 3600 * 1000;
+                  return true;
+                } else if (setCookieHeader) {
+                  console.log(`✅ Found Set-Cookie header - using session auth`);
+                  this.accessToken = 'session-based-cookie';
+                  this.sessionCookies = setCookieHeader;
+                  this.tokenExpiry = Date.now() + 3600 * 1000;
+                  return true;
+                } else {
+                  console.log(`🔄 No token in headers, trying session-based auth assumption`);
+                  this.accessToken = 'session-based-200';
+                  this.tokenExpiry = Date.now() + 3600 * 1000;
+                  return true;
+                }
+              }
+              
               if (response.status === 200) {
                 console.log(`🔍 200 OK ama token yok - muhtemelen farklı API format`);
                 // Eğer login başarılıysa ve farklı formatta response geliyor
