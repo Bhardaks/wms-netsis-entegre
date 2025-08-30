@@ -176,6 +176,18 @@ async function initDatabase() {
         ('SSH-01-01', 'SSH Servis Alanı')
       `);
       console.log('✅ Essential locations inserted');
+      
+      // Picks table - Required for orders query
+      await run(`
+        CREATE TABLE IF NOT EXISTS picks (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_id INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Picks table created');
     }
     
     // Users tablosu oluştur
@@ -1564,9 +1576,10 @@ app.get('/api/debug/wix/order/:orderNumber', async (req, res) => {
 
 // ---- Products ----
 app.get('/api/products', async (req, res) => {
+  let rows;
+  
   try {
     // Railway: Simplified query for in-memory database compatibility
-    let rows;
     if (isRailway) {
       // Simple query for Railway in-memory database
       rows = await all(`SELECT * FROM products ORDER BY id DESC`);
@@ -1594,21 +1607,29 @@ app.get('/api/products', async (req, res) => {
     });
   }
   
-  for (const r of rows) {
-    // Get all packages for this product
-    const allPackages = await all('SELECT * FROM product_packages WHERE product_id=? ORDER BY id', [r.id]);
-    
-    // Include all packages regardless of shelf stock for service requests
-    r.packages = allPackages.map(pkg => ({
-      ...pkg,
-      shelf_location: null,
-      shelf_name: null
-    }));
-    
-    const locs = await all(`SELECT l.code FROM product_locations pl JOIN locations l ON l.id=pl.location_id WHERE pl.product_id=? ORDER BY l.code`, [r.id]);
-    r.location_codes = locs.map(x=>x.code);
+  try {
+    for (const r of rows) {
+      // Get all packages for this product
+      const allPackages = await all('SELECT * FROM product_packages WHERE product_id=? ORDER BY id', [r.id]);
+      
+      // Include all packages regardless of shelf stock for service requests
+      r.packages = allPackages.map(pkg => ({
+        ...pkg,
+        shelf_location: null,
+        shelf_name: null
+      }));
+      
+      const locs = await all(`SELECT l.code FROM product_locations pl JOIN locations l ON l.id=pl.location_id WHERE pl.product_id=? ORDER BY l.code`, [r.id]);
+      r.location_codes = locs.map(x=>x.code);
+    }
+    res.json(rows);
+  } catch (packageError) {
+    console.error('❌ Products package error:', packageError);
+    res.status(500).json({ 
+      error: 'Error retrieving product packages',
+      details: isRailway ? 'Railway package error' : packageError.message
+    });
   }
-  res.json(rows);
 });
 
 app.post('/api/products', async (req, res) => {
@@ -5416,7 +5437,7 @@ app.listen(PORT, '0.0.0.0', async () => {
       const tables = await all("SELECT name FROM sqlite_master WHERE type='table'");
       console.log('📋 Railway: Available tables:', tables.map(t => t.name).sort().join(', '));
       
-      const requiredTables = ['products', 'orders', 'users', 'locations'];
+      const requiredTables = ['products', 'orders', 'users', 'locations', 'picks', 'product_packages'];
       const missingTables = requiredTables.filter(table => 
         !tables.some(t => t.name === table)
       );
