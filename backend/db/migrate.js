@@ -73,6 +73,8 @@ async function runMigration(externalDb = null) {
     await ensureColumn(db, 'order_items', 'unit_type', 'unit_type TEXT');
     await ensureColumn(db, 'order_items', 'vat_rate', 'vat_rate REAL');
     await ensureColumn(db, 'shelves', 'current_usage', 'current_usage INTEGER DEFAULT 0');
+    await ensureColumn(db, 'shelf_packages', 'last_updated', 'last_updated DATETIME DEFAULT CURRENT_TIMESTAMP');
+    await ensureColumn(db, 'shelf_packages', 'assigned_by', 'assigned_by TEXT');
 
     // Insert essential locations
     await runSql(`
