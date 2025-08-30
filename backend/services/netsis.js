@@ -534,8 +534,16 @@ class NetsisAPI {
 
   // OAuth2 Authentication - NetOpenX REST format
   async authenticate() {
+    console.log('🚨 RAILWAY DEBUG: Authentication function called');
+    console.log('🚨 RAILWAY DEBUG: Current timestamp:', new Date().toISOString());
+    console.log('🚨 RAILWAY DEBUG: Process env NODE_ENV:', process.env.NODE_ENV);
+    console.log('🚨 RAILWAY DEBUG: Available memory:', process.memoryUsage());
+    
     try {
-      console.log('🔐 Netsis OAuth2 kimlik doğrulama başlatılıyor...');
+      console.log('🔐 RAILWAY DEBUG: Starting Netsis OAuth2 authentication...');
+      console.log('🔐 RAILWAY DEBUG: BaseURL:', this.baseURL);
+      console.log('🔐 RAILWAY DEBUG: Username present:', !!this.username);
+      console.log('🔐 RAILWAY DEBUG: Password present:', !!this.password);
       
       // NetOpenX DbType enum değerler
       const dbTypeMap = {
@@ -573,6 +581,31 @@ class NetsisAPI {
         `${this.baseURL}/token`,
         `${this.baseURL}/api/token`
       ];
+
+      // RAILWAY NETWORK PRE-CHECK
+      console.log('🌐 RAILWAY DEBUG: Testing basic network connectivity first...');
+      try {
+        const axios = require('axios');
+        const basicTest = await axios.get(this.baseURL, { 
+          timeout: 5000,
+          validateStatus: () => true // Accept any status
+        });
+        console.log('🌐 RAILWAY DEBUG: Basic network test result:', {
+          status: basicTest.status,
+          statusText: basicTest.statusText,
+          headers: Object.keys(basicTest.headers || {}).join(',')
+        });
+      } catch (networkErr) {
+        console.log('🚨 RAILWAY DEBUG: Basic network test FAILED:', {
+          message: networkErr.message,
+          code: networkErr.code,
+          errno: networkErr.errno,
+          syscall: networkErr.syscall,
+          address: networkErr.address,
+          port: networkErr.port
+        });
+        throw new Error(`Network unreachable: ${networkErr.message} (${networkErr.code})`);
+      }
 
       let lastError = null;
       
@@ -745,32 +778,55 @@ class NetsisAPI {
           }
           
         } catch (error) {
-          console.log(`⚠️ ${endpoint} başarısız: ${error.response?.status} - ${error.message}`);
-          lastError = error;
+          console.log('🚨 RAILWAY DEBUG: Caught error in auth loop:', {
+            endpoint: endpoint,
+            errorType: typeof error,
+            errorConstructor: error?.constructor?.name,
+            message: error?.message || 'undefined message',
+            status: error?.response?.status || 'no status',
+            code: error?.code || 'no code',
+            errno: error?.errno || 'no errno',
+            syscall: error?.syscall || 'no syscall',
+            stack: error?.stack?.substring(0, 200) + '...' || 'no stack'
+          });
+          
+          console.log(`⚠️ ${endpoint} başarısız: ${error?.response?.status || 'UNKNOWN_STATUS'} - ${error?.message || 'UNDEFINED_ERROR'}`);
+          lastError = error || new Error('Undefined error occurred');
           continue;
         }
       }
       
-      throw new Error(`All auth endpoints failed. Last error: ${lastError?.message}`);
+      const finalErrorMessage = lastError?.message || lastError?.toString() || 'Completely undefined error';
+      throw new Error(`All auth endpoints failed. Last error: ${finalErrorMessage}`);
       
     } catch (error) {
-      console.error('❌ Netsis kimlik doğrulama hatası:', {
-        message: error.message,
-        status: error.response?.status,
-        statusText: error.response?.statusText,
-        data: error.response?.data,
-        config: {
-          url: error.config?.url,
-          method: error.config?.method,
-          timeout: error.config?.timeout
-        },
-        code: error.code,
-        errno: error.errno,
-        syscall: error.syscall,
-        hostname: error.hostname,
-        stack: error.stack
+      console.error('🚨 RAILWAY DEBUG: Main auth catch block - error details:', {
+        errorExists: !!error,
+        errorType: typeof error,
+        errorConstructor: error?.constructor?.name,
+        message: error?.message || 'UNDEFINED MESSAGE',
+        status: error?.response?.status || 'NO STATUS',
+        statusText: error?.response?.statusText || 'NO STATUS TEXT',
+        data: error?.response?.data || 'NO DATA',
+        config: error?.config ? {
+          url: error.config?.url || 'NO URL',
+          method: error.config?.method || 'NO METHOD',
+          timeout: error.config?.timeout || 'NO TIMEOUT'
+        } : 'NO CONFIG',
+        code: error?.code || 'NO CODE',
+        errno: error?.errno || 'NO ERRNO',
+        syscall: error?.syscall || 'NO SYSCALL',
+        hostname: error?.hostname || 'NO HOSTNAME',
+        stack: error?.stack?.substring(0, 300) || 'NO STACK',
+        isAxiosError: error?.isAxiosError || false
       });
-      throw new Error(`Netsis authentication failed: ${error.message} - Status: ${error.response?.status || 'N/A'} - Code: ${error.code || 'N/A'}`);
+      
+      const errorMessage = error?.message || error?.toString() || 'Completely undefined authentication error';
+      const statusCode = error?.response?.status || 'N/A';
+      const errorCode = error?.code || error?.errno || 'N/A';
+      
+      console.error('❌ RAILWAY DEBUG: Final error throw:', `Netsis authentication failed: ${errorMessage} - Status: ${statusCode} - Code: ${errorCode}`);
+      throw new Error(`Netsis authentication failed: ${errorMessage} - Status: ${statusCode} - Code: ${errorCode}`);
     }
   }
 

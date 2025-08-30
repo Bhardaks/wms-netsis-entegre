@@ -5236,15 +5236,44 @@ app.listen(PORT, '0.0.0.0', async () => {
   // Initialize database and users
   await initDatabase();
   
+  // RAILWAY DEBUG: Environment check
+  console.log('🚨 RAILWAY DEBUG: Server startup environment check:', {
+    NODE_ENV: process.env.NODE_ENV,
+    PORT: process.env.PORT,
+    NETSIS_API_URL: process.env.NETSIS_API_URL || 'MISSING',
+    NETSIS_USERNAME: process.env.NETSIS_USERNAME || 'MISSING',
+    NETSIS_PASSWORD: process.env.NETSIS_PASSWORD ? 'PRESENT' : 'MISSING',
+    NETSIS_DB_NAME: process.env.NETSIS_DB_NAME || 'MISSING',
+    timestamp: new Date().toISOString()
+  });
+
   // Test Netsis connection on startup
-  console.log('🔄 Netsis bağlantısı test ediliyor...');
-  const connectionTest = await netsisAPI.testConnection();
+  console.log('🔄 RAILWAY DEBUG: Starting Netsis connection test...');
   
-  if (connectionTest.success) {
+  let connectionTest = null;
+  try {
+    connectionTest = await netsisAPI.testConnection();
+    console.log('🚨 RAILWAY DEBUG: testConnection returned:', {
+      success: connectionTest?.success,
+      message: connectionTest?.message,
+      type: typeof connectionTest,
+      keys: connectionTest ? Object.keys(connectionTest).join(',') : 'null'
+    });
+  } catch (testError) {
+    console.log('🚨 RAILWAY DEBUG: testConnection threw error:', {
+      message: testError?.message || 'undefined message',
+      type: typeof testError,
+      constructor: testError?.constructor?.name || 'unknown',
+      stack: testError?.stack?.substring(0, 200) || 'no stack'
+    });
+    connectionTest = { success: false, message: testError?.message || 'Test connection threw undefined error' };
+  }
+  
+  if (connectionTest?.success) {
     console.log('✅ Netsis entegrasyonu aktif');
   } else {
     console.log('⚠️ Netsis bağlantısı başarısız, uygulama yerel modda çalışacak');
-    console.log('   Hata:', connectionTest.message);
+    console.log('   Hata:', connectionTest?.message || 'Undefined connection test error');
   }
   
   // Add color column to products table if not exists
