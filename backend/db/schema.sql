@@ -10,6 +10,11 @@ CREATE TABLE IF NOT EXISTS products (
   description TEXT,
   main_barcode TEXT,
   price REAL DEFAULT 0,
+  color TEXT,
+  main_product_name TEXT,
+  main_product_name_en TEXT,
+  wix_product_id TEXT,
+  wix_variant_id TEXT,
   netsis_id TEXT UNIQUE, -- Netsis'teki ürün ID'si
   netsis_code TEXT,      -- Netsis'teki ürün kodu
   netsis_data TEXT,      -- Netsis'ten gelen tüm JSON verisi
