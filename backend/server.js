@@ -1495,15 +1495,35 @@ app.get('/api/debug/wix/order/:orderNumber', async (req, res) => {
 
 // ---- Products ----
 app.get('/api/products', async (req, res) => {
-  // Use DISTINCT and GROUP BY to avoid duplicate SKUs (case-insensitive)
-  const rows = await all(`
-    SELECT p.* FROM products p
-    WHERE p.id IN (
-      SELECT MIN(id) FROM products 
-      GROUP BY UPPER(sku)
-    )
-    ORDER BY p.id DESC
-  `);
+  try {
+    // Railway: Simplified query for in-memory database compatibility
+    let rows;
+    if (isRailway) {
+      // Simple query for Railway in-memory database
+      rows = await all(`SELECT * FROM products ORDER BY id DESC`);
+      console.log(`📦 Railway: Retrieved ${rows.length} products`);
+    } else {
+      // Complex query for local database (avoid duplicate SKUs)
+      rows = await all(`
+        SELECT p.* FROM products p
+        WHERE p.id IN (
+          SELECT MIN(id) FROM products 
+          GROUP BY UPPER(sku)
+        )
+        ORDER BY p.id DESC
+      `);
+    }
+  } catch (error) {
+    console.error('❌ Products API error:', {
+      message: error.message,
+      code: error.code,
+      isRailway: isRailway
+    });
+    return res.status(500).json({ 
+      error: 'Database error retrieving products',
+      details: isRailway ? 'Railway database error' : error.message
+    });
+  }
   
   for (const r of rows) {
     // Get all packages for this product
