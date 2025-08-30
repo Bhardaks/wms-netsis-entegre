@@ -39,9 +39,17 @@ let db;
 let dbBackup;
 
 if (isRailway) {
-  // Railway: Use in-memory database
-  console.log('🚂 Railway: Using in-memory database');
-  db = new sqlite3.Database(':memory:');
+  // Railway: Use persistent file-based database
+  console.log('🚂 Railway: Using persistent file-based database');
+  const DB_PATH = process.env.DATABASE_PATH || '/app/data/wms.db';
+  
+  // Ensure data directory exists
+  const dataDir = path.dirname(DB_PATH);
+  if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+  }
+  
+  db = new sqlite3.Database(DB_PATH);
 } else {
   // Local: Use file-based database with backup
   const DatabaseBackup = require('./db/backup');
