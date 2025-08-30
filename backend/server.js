@@ -5477,6 +5477,63 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.log('ℹ️ Inventory count items table already exists');
   }
 
+  // Shelf packages table - Raf paket atamaları için
+  try {
+    await run(`
+      CREATE TABLE IF NOT EXISTS shelf_packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shelf_id INTEGER NOT NULL REFERENCES shelves(id),
+        package_id INTEGER NOT NULL REFERENCES product_packages(id),
+        quantity INTEGER NOT NULL DEFAULT 0,
+        assigned_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(shelf_id, package_id)
+      )
+    `);
+    console.log('✅ Shelf packages table created');
+  } catch (e) {
+    console.log('ℹ️ Shelf packages table already exists');
+  }
+
+  // Picks table - Pick işlemleri için
+  try {
+    await run(`
+      CREATE TABLE IF NOT EXISTS picks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES orders(id),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'partial', 'completed')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Picks table created');
+  } catch (e) {
+    console.log('ℹ️ Picks table already exists');
+  }
+
+  // Pick scans table - Pick scan kayıtları için
+  try {
+    await run(`
+      CREATE TABLE IF NOT EXISTS pick_scans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pick_id INTEGER NOT NULL REFERENCES picks(id),
+        order_item_id INTEGER NOT NULL REFERENCES order_items(id),
+        product_id INTEGER NOT NULL REFERENCES products(id),
+        package_id INTEGER NOT NULL REFERENCES product_packages(id),
+        barcode TEXT NOT NULL,
+        scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Pick scans table created');
+  } catch (e) {
+    console.log('ℹ️ Pick scans table already exists');
+  }
+
+  } catch (error) {
+    console.error('❌ Database initialization error:', error);
+  }
+}
+
 // ---- Inventory Count API Endpoints ----
 
 // Create new inventory count
