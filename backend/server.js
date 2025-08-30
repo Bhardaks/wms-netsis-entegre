@@ -12,18 +12,33 @@ const { netsisAPI } = require('./services/netsis');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Database Backup System
-const DatabaseBackup = require('./db/backup');
-const dbBackup = new DatabaseBackup();
+// Railway deployment check
+const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
+console.log(`🚂 Railway Environment: ${isRailway ? 'YES' : 'NO'}`);
 
-// DB
-const DB_PATH = path.join(__dirname, 'db', 'wms.db');
-const db = new sqlite3.Database(DB_PATH);
+// Database configuration for Railway
+let db;
+let dbBackup;
 
-// Create automatic backup on startup
-dbBackup.autoBackup().catch(err => {
-  console.warn('⚠️ Could not create startup backup:', err.message);
-});
+if (isRailway) {
+  // Railway: Use in-memory database
+  console.log('🚂 Railway: Using in-memory database');
+  db = new sqlite3.Database(':memory:');
+} else {
+  // Local: Use file-based database with backup
+  const DatabaseBackup = require('./db/backup');
+  dbBackup = new DatabaseBackup();
+  
+  const DB_PATH = path.join(__dirname, 'db', 'wms.db');
+  db = new sqlite3.Database(DB_PATH);
+}
+
+// Create automatic backup on startup (only for local)
+if (dbBackup) {
+  dbBackup.autoBackup().catch(err => {
+    console.warn('⚠️ Could not create startup backup:', err.message);
+  });
+}
 
 // Debug middleware - Log all requests with error handling
 app.use((req, res, next) => {
@@ -90,6 +105,8 @@ function get(sql, params=[]) {
 // ---- Database Init ----
 async function initDatabase() {
   try {
+    console.log(`🚂 Initializing database (Railway: ${isRailway ? 'YES' : 'NO'})`);
+    
     // Users tablosu oluştur
     await run(`
       CREATE TABLE IF NOT EXISTS users (
@@ -8171,9 +8188,16 @@ app.post('/api/sync/external-orders', requireAuth, async (req, res) => {
     if (localIP !== 'localhost') break;
   }
   
-  console.log(`🚀 WMS server started successfully!`);
-  console.log(`📱 Local access: http://localhost:${PORT}`);
-  console.log(`🌐 Network access: http://${localIP}:${PORT}`);
-  console.log(`📋 Test with mobile devices using: http://${localIP}:${PORT}`);
-  console.log(`🦓 Zebra terminals can connect to: http://${localIP}:${PORT}`);
+  if (isRailway) {
+    console.log(`🚂 Railway deployment started successfully!`);
+    console.log(`🌐 Service URL: https://wms-netsis-entegre.railway.app`);
+    console.log(`🔗 Health Check: /api/netsis/test`);
+    console.log(`📊 Debug Panel: /netsis-debug.html`);
+  } else {
+    console.log(`🚀 WMS server started successfully!`);
+    console.log(`📱 Local access: http://localhost:${PORT}`);
+    console.log(`🌐 Network access: http://${localIP}:${PORT}`);
+    console.log(`📋 Test with mobile devices using: http://${localIP}:${PORT}`);
+    console.log(`🦓 Zebra terminals can connect to: http://${localIP}:${PORT}`);
+  }
 });
