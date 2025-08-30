@@ -47,23 +47,99 @@ async function ensureColumn(db, table, col, defSql) {
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8');
     await runSql(schema);
 
-    // Essential tables and data for Railway
+    // Create users table since it's not in schema.sql
     await runSql(`
-      INSERT OR IGNORE INTO users (username, password, role, created_at, is_active) VALUES
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT UNIQUE NOT NULL,
+        password_hash TEXT NOT NULL,
+        role TEXT NOT NULL DEFAULT 'operator',
+        full_name TEXT,
+        email TEXT,
+        active INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_login DATETIME
+      );
+    `);
+
+    // Create role_permissions table
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS role_permissions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        role TEXT NOT NULL,
+        category TEXT NOT NULL,
+        subcategory TEXT,
+        permission TEXT NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(role, category, subcategory, permission)
+      );
+    `);
+
+    // Create locations table
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS locations (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        code TEXT UNIQUE NOT NULL,
+        name TEXT
+      );
+    `);
+
+    // Create service_requests table
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS service_requests (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        customer_name TEXT NOT NULL,
+        service_type TEXT NOT NULL,
+        required_part TEXT NOT NULL,
+        required_quantity INTEGER DEFAULT 1,
+        priority TEXT DEFAULT 'normal',
+        status TEXT DEFAULT 'pending',
+        package_id INTEGER,
+        package_number TEXT,
+        package_name TEXT,
+        package_barcode TEXT,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create package_openings table
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS package_openings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        package_id INTEGER NOT NULL,
+        service_request_id INTEGER,
+        opened_by TEXT NOT NULL,
+        opening_method TEXT DEFAULT 'partial',
+        source_location TEXT,
+        notes TEXT,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create ssh_inventory table
+    await runSql(`
+      CREATE TABLE IF NOT EXISTS ssh_inventory (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        part_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 0,
+        location TEXT DEFAULT 'SSH-01-01',
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        notes TEXT,
+        UNIQUE(part_name, location)
+      );
+    `);
+
+    // Essential data for Railway
+    await runSql(`
+      INSERT OR IGNORE INTO users (username, password_hash, role, created_at, active) VALUES
       ('admin', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', datetime('now'), 1);
       
       INSERT OR IGNORE INTO locations (code, name) VALUES 
       ('A1-01-359', 'A Blok 1. Koridor 359 Raf'),
       ('SSH-01-01', 'SSH Servis Alanı');
     `);
-
-    // Add required columns for existing functionality
-    await ensureColumn(db, 'products', 'wix_product_id', 'wix_product_id TEXT');
-    await ensureColumn(db, 'products', 'wix_variant_id', 'wix_variant_id TEXT');
-    await ensureColumn(db, 'orders', 'fulfillment_status', 'fulfillment_status TEXT');
-    await ensureColumn(db, 'orders', 'wix_order_id', 'wix_order_id TEXT');
-    await ensureColumn(db, 'orders', 'netsis_delivery_note_id', 'netsis_delivery_note_id TEXT');
-    await ensureColumn(db, 'orders', 'netsis_delivery_status', 'netsis_delivery_status TEXT DEFAULT \'pending\'');
 
     console.log('✅ Railway migration completed successfully');
     
