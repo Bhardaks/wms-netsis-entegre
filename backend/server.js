@@ -2998,7 +2998,7 @@ app.post('/api/picks/:id/verify-location', async (req, res) => {
 
 app.post('/api/picks/:id/scan', async (req, res) => {
   const { id } = req.params;
-  const { barcode, verifiedLocation } = req.body;
+  const { barcode, verifiedLocation, override_fifo, selected_shelf_id } = req.body;
   const pick = await get('SELECT * FROM picks WHERE id=?', [id]);
   if (!pick) return res.status(404).json({ error: 'Pick not found' });
 
@@ -3029,19 +3029,36 @@ app.post('/api/picks/:id/scan', async (req, res) => {
     return res.status(400).json({ error: 'Bu barkod bu sipariş için zaten yeterince okundu' });
   }
 
-  // FIFO: En eski tarihli raf atamasından bir paket çıkar (raftan çıkarma)
-  const oldestAssignment = await get(`
-    SELECT sp.* FROM shelf_packages sp
-    JOIN product_packages pp ON sp.package_id = pp.id
-    WHERE pp.id = ? AND sp.quantity > 0
-    ORDER BY sp.assigned_date ASC
-    LIMIT 1
-  `, [pkg.id]);
+  // FIFO or Non-FIFO: Choose which shelf to pick from
+  let targetAssignment;
+  
+  if (override_fifo && selected_shelf_id) {
+    // Non-FIFO: Pick from specific shelf (with warning)
+    targetAssignment = await get(`
+      SELECT sp.* FROM shelf_packages sp
+      JOIN product_packages pp ON sp.package_id = pp.id
+      WHERE pp.id = ? AND sp.shelf_id = ? AND sp.quantity > 0
+      LIMIT 1
+    `, [pkg.id, selected_shelf_id]);
+    
+    console.log(`⚠️ NON-FIFO OVERRIDE: Picking from specific shelf ${selected_shelf_id}`);
+  } else {
+    // FIFO: En eski tarihli raf atamasından bir paket çıkar (raftan çıkarma)
+    targetAssignment = await get(`
+      SELECT sp.* FROM shelf_packages sp
+      JOIN product_packages pp ON sp.package_id = pp.id
+      WHERE pp.id = ? AND sp.quantity > 0
+      ORDER BY sp.assigned_date ASC
+      LIMIT 1
+    `, [pkg.id]);
+    
+    console.log(`✅ FIFO: Picking from oldest assignment`);
+  }
 
-  if (oldestAssignment) {
+  if (targetAssignment) {
     // Raftan bir paket çıkar
-    await run(`UPDATE shelf_packages SET quantity = quantity - 1 WHERE id = ?`, [oldestAssignment.id]);
-    console.log(`📦 Removed 1 package from shelf package ${oldestAssignment.id} (FIFO)`);
+    await run(`UPDATE shelf_packages SET quantity = quantity - 1 WHERE id = ?`, [targetAssignment.id]);
+    console.log(`📦 Removed 1 package from shelf package ${targetAssignment.id} (${override_fifo ? 'NON-FIFO' : 'FIFO'})`);
   }
 
   // Record scan
@@ -4552,30 +4569,53 @@ app.get('/api/packages/:id/location', async (req, res) => {
   try {
     const packageId = req.params.id;
     
-    // Get actual shelf assignment from shelf_packages table (exclude SSH virtual areas)
-    const shelfAssignment = await get(`
-      SELECT s.shelf_code as location_code, s.shelf_name as location_name
+    // Get all shelf assignments for this package (FIFO order)
+    const allShelfAssignments = await all(`
+      SELECT 
+        sp.id as assignment_id,
+        sp.shelf_id,
+        sp.quantity,
+        sp.assigned_date,
+        s.shelf_code,
+        s.shelf_name
       FROM shelf_packages sp
       JOIN shelves s ON sp.shelf_id = s.id
       WHERE sp.package_id = ? AND sp.quantity > 0 AND s.shelf_code NOT LIKE 'SSH-%'
-      ORDER BY sp.last_updated DESC
-      LIMIT 1
+      ORDER BY sp.assigned_date ASC
     `, [packageId]);
     
-    console.log('📦 Package shelf assignment:', shelfAssignment);
+    console.log(`📦 Package ${packageId} has ${allShelfAssignments.length} shelf locations`);
     
-    if (shelfAssignment) {
-      res.json({
-        success: true,
-        location_code: shelfAssignment.location_code,
-        location_name: shelfAssignment.location_name
-      });
-    } else {
-      res.json({
-        success: false,
-        error: 'Paket lokasyonu bulunamadı'
+    if (allShelfAssignments.length === 0) {
+      return res.json({
+        location_code: null,
+        location_name: null,
+        all_locations: [],
+        message: 'Paket rafta bulunamadı'
       });
     }
+    
+    // FIFO: First location is the expected one
+    const expectedLocation = allShelfAssignments[0];
+    const shelfAssignment = {
+      location_code: expectedLocation.shelf_code,
+      location_name: expectedLocation.shelf_name
+    };
+    
+    console.log('📦 Expected FIFO location:', expectedLocation.shelf_code);
+    console.log('📦 All available locations:', allShelfAssignments.map(a => a.shelf_code));
+    
+    res.json({
+      success: true,
+      location_code: shelfAssignment.location_code,
+      location_name: shelfAssignment.location_name,
+      expected_location: expectedLocation,
+      all_locations: allShelfAssignments,
+      is_fifo_required: allShelfAssignments.length > 1,
+      fifo_message: allShelfAssignments.length > 1 
+        ? `⚠️ FIFO gerekli! İlk çıkar: ${expectedLocation.shelf_code}` 
+        : `✅ Tek lokasyon: ${expectedLocation.shelf_code}`
+    });
   } catch (error) {
     console.error('❌ Package location error:', error);
     res.status(500).json({ success: false, error: error.message });
