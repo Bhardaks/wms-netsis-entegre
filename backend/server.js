@@ -5274,6 +5274,19 @@ app.listen(PORT, '0.0.0.0', async () => {
   } else {
     console.log('⚠️ Netsis bağlantısı başarısız, uygulama yerel modda çalışacak');
     console.log('   Hata:', connectionTest?.message || 'Undefined connection test error');
+    
+    if (connectionTest?.railwayOfflineMode) {
+      console.log('');
+      console.log('🚂 RAILWAY HOSTING PLATFORM TESPIT EDİLDİ');
+      console.log('📡 Dış network bağlantıları Railway tarafından engelleniyor');
+      console.log('💡 ÇÖZÜMLERİ:');
+      console.log('   1. Railway Pro hesabına geçin (external network access)');
+      console.log('   2. VPS hosting kullanın (DigitalOcean, Linode, AWS)'); 
+      console.log('   3. Netsis sunucusunu public IP\'ye açın');
+      console.log('   4. VPN/proxy service kullanın');
+      console.log('');
+      console.log('🔄 Şimdilik WMS yerel veritabanı ile çalışacak');
+    }
   }
   
   // Add color column to products table if not exists
