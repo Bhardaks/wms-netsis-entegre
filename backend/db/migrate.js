@@ -77,6 +77,54 @@ async function runMigration(externalDb = null) {
     await ensureColumn(db, 'shelf_packages', 'assigned_by', 'assigned_by TEXT');
     await ensureColumn(db, 'product_packages', 'package_content', 'package_content TEXT');
 
+    // Fix inventory_count_items table - Remove foreign key constraints
+    console.log('🔧 Fixing inventory_count_items table...');
+    try {
+      // First disable foreign keys
+      await new Promise((resolve,reject)=>{
+        db.run('PRAGMA foreign_keys = OFF', [], (err)=>{
+          if (err) reject(err); else resolve();
+        });
+      });
+      
+      // Drop and recreate inventory_count_items without foreign keys
+      await new Promise((resolve,reject)=>{
+        db.run('DROP TABLE IF EXISTS inventory_count_items', [], (err)=>{
+          if (err) reject(err); else resolve();
+        });
+      });
+      
+      await new Promise((resolve,reject)=>{
+        db.run(`
+          CREATE TABLE IF NOT EXISTS inventory_count_items (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            count_id INTEGER NOT NULL,
+            product_id INTEGER NOT NULL,
+            sku TEXT NOT NULL,
+            product_name TEXT NOT NULL,
+            barcode TEXT,
+            package_barcode TEXT,
+            package_number TEXT,
+            location_code TEXT,
+            shelf_id INTEGER,
+            expected_quantity INTEGER NOT NULL DEFAULT 0,
+            counted_quantity INTEGER DEFAULT 0,
+            variance INTEGER DEFAULT 0,
+            status TEXT NOT NULL DEFAULT 'pending',
+            notes TEXT,
+            counted_date DATETIME,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          )
+        `, [], (err)=>{
+          if (err) reject(err); else resolve();
+        });
+      });
+      
+      console.log('✅ inventory_count_items table recreated without foreign keys');
+    } catch (err) {
+      console.log('⚠️ inventory_count_items fix failed:', err.message);
+    }
+
     // Insert essential locations
     await runSql(`
       INSERT OR IGNORE INTO locations (code, name) VALUES 

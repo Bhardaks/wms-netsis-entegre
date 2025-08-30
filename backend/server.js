@@ -49,7 +49,21 @@ if (isRailway) {
     fs.mkdirSync(dataDir, { recursive: true });
   }
   
-  db = new sqlite3.Database(DB_PATH);
+  db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+      console.error('❌ Railway database connection error:', err);
+    } else {
+      console.log('✅ Railway database connected');
+      // Disable foreign keys immediately after connection
+      db.run('PRAGMA foreign_keys = OFF', (pragmaErr) => {
+        if (pragmaErr) {
+          console.error('❌ Failed to disable foreign keys:', pragmaErr);
+        } else {
+          console.log('🔧 Railway: Foreign keys disabled globally');
+        }
+      });
+    }
+  });
 } else {
   // Local: Use file-based database with backup
   const DatabaseBackup = require('./db/backup');
