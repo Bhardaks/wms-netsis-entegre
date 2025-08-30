@@ -1,6 +1,7 @@
 require('dotenv').config();
 
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const cors = require('cors');
 const sqlite3 = require('sqlite3').verbose();
@@ -110,8 +111,20 @@ async function initDatabase() {
     console.log(`🚂 Initializing database (Railway: ${isRailway ? 'YES' : 'NO'})`);
     
     if (isRailway) {
-      // Railway: Create essential tables manually since migration may fail
-      console.log('🚂 Railway: Creating essential tables manually...');
+      // Railway: Try to run full schema.sql first
+      console.log('🚂 Railway: Attempting to run full schema...');
+      try {
+        const schemaPath = path.join(__dirname, 'db', 'schema.sql');
+        if (fs.existsSync(schemaPath)) {
+          const schema = fs.readFileSync(schemaPath, 'utf8');
+          await run(schema);
+          console.log('✅ Full schema applied successfully');
+        } else {
+          throw new Error('schema.sql not found');
+        }
+      } catch (schemaError) {
+        console.log('⚠️ Full schema failed, creating essential tables manually...');
+      }
       
       // Products table
       await run(`
@@ -143,6 +156,27 @@ async function initDatabase() {
         )
       `);
       console.log('✅ Orders table created');
+      
+      // Order items table
+      await run(`
+        CREATE TABLE IF NOT EXISTS order_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_id INTEGER NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+          product_id INTEGER NOT NULL REFERENCES products(id),
+          sku TEXT NOT NULL,
+          product_name TEXT NOT NULL,
+          quantity INTEGER NOT NULL,
+          picked_qty INTEGER NOT NULL DEFAULT 0,
+          line_number INTEGER,
+          warehouse_code TEXT,
+          description TEXT,
+          unit_type TEXT,
+          vat_rate REAL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(order_id, product_id)
+        )
+      `);
+      console.log('✅ Order items table created');
       
       // Product packages table
       await run(`
