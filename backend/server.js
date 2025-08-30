@@ -109,6 +109,75 @@ async function initDatabase() {
   try {
     console.log(`🚂 Initializing database (Railway: ${isRailway ? 'YES' : 'NO'})`);
     
+    if (isRailway) {
+      // Railway: Create essential tables manually since migration may fail
+      console.log('🚂 Railway: Creating essential tables manually...');
+      
+      // Products table
+      await run(`
+        CREATE TABLE IF NOT EXISTS products (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          sku TEXT UNIQUE NOT NULL,
+          name TEXT NOT NULL,
+          description TEXT,
+          main_barcode TEXT,
+          price REAL DEFAULT 0,
+          netsis_id TEXT UNIQUE,
+          netsis_code TEXT,
+          netsis_data TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Products table created');
+      
+      // Orders table  
+      await run(`
+        CREATE TABLE IF NOT EXISTS orders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_number TEXT UNIQUE NOT NULL,
+          customer_name TEXT,
+          status TEXT NOT NULL DEFAULT 'open',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Orders table created');
+      
+      // Product packages table
+      await run(`
+        CREATE TABLE IF NOT EXISTS product_packages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          product_id INTEGER NOT NULL,
+          package_name TEXT NOT NULL,
+          barcode TEXT NOT NULL,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          UNIQUE(product_id, barcode)
+        )
+      `);
+      console.log('✅ Product packages table created');
+      
+      // Locations table
+      await run(`
+        CREATE TABLE IF NOT EXISTS locations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          code TEXT UNIQUE NOT NULL,
+          name TEXT
+        )
+      `);
+      console.log('✅ Locations table created');
+      
+      // Insert essential data
+      await run(`
+        INSERT OR IGNORE INTO locations (code, name) VALUES 
+        ('A1-01-359', 'A Blok 1. Koridor 359 Raf'),
+        ('SSH-01-01', 'SSH Servis Alanı')
+      `);
+      console.log('✅ Essential locations inserted');
+    }
+    
     // Users tablosu oluştur
     await run(`
       CREATE TABLE IF NOT EXISTS users (
@@ -5339,6 +5408,33 @@ app.post('/api/admin/simulate-order-completion', requireRole(['admin']), async (
 app.listen(PORT, '0.0.0.0', async () => {
   // Initialize database and users
   await initDatabase();
+  
+  // Railway: Verify tables were created
+  if (isRailway) {
+    console.log('🔍 Railway: Verifying database tables...');
+    try {
+      const tables = await all("SELECT name FROM sqlite_master WHERE type='table'");
+      console.log('📋 Railway: Available tables:', tables.map(t => t.name).sort().join(', '));
+      
+      const requiredTables = ['products', 'orders', 'users', 'locations'];
+      const missingTables = requiredTables.filter(table => 
+        !tables.some(t => t.name === table)
+      );
+      
+      if (missingTables.length > 0) {
+        console.error('❌ Railway: Missing required tables:', missingTables);
+      } else {
+        console.log('✅ Railway: All required tables present');
+      }
+      
+      // Test a simple query
+      const productCount = await get('SELECT COUNT(*) as count FROM products');
+      console.log(`📦 Railway: Products table has ${productCount.count} records`);
+      
+    } catch (tableCheckError) {
+      console.error('❌ Railway: Table verification failed:', tableCheckError);
+    }
+  }
   
   // RAILWAY DEBUG: Environment check
   console.log('🚨 RAILWAY DEBUG: Server startup environment check:', {
