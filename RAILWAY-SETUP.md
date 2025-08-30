@@ -25,10 +25,35 @@ PORT=5000
 
 ## 🔧 Railway Setup Steps
 
-1. **Project Import**: GitHub repository'yi Railway'e import edin
-2. **Environment Variables**: Railway dashboard → Settings → Environment → Add variables yukarıdaki değerleri ekleyin
-3. **Build Command**: Railway otomatik olarak `npm install` ve `npm start` çalıştırır
-4. **Migration**: `railway.json` dosyasında migration otomatik çalışır
+### 1. Project Import
+GitHub repository'yi Railway'e import edin
+
+### 2. Environment Variables Setup ⚠️ KRİTİK
+Railway dashboard → Settings → Environment → Variables'a bu değerleri **AYNEN** ekleyin:
+
+**Variable Name** → **Value**
+```
+NETSIS_API_URL → http://93.89.67.130:2626
+NETSIS_USERNAME → NETSIS  
+NETSIS_PASSWORD → 141
+NETSIS_DB_TYPE → vtMSSQL
+NETSIS_DB_NAME → ZDENEME
+NETSIS_DB_USER → TEMELSET
+NETSIS_DB_PASSWORD → (boş bırakın)
+NETSIS_BRANCH_CODE → 0
+SESSION_SECRET → wms-netsis-production-secret-2024-change-this
+NODE_ENV → production
+RAILWAY_ENVIRONMENT → true
+```
+
+### 3. Build & Deploy
+- Railway otomatik olarak `npm install` ve migration çalıştırır
+- Deploy tamamlandıktan sonra health check yapın
+
+### 4. Verification
+Deploy sonrası mutlaka test edin:
+- Health Check: `https://your-app.railway.app/api/netsis/test`
+- Environment variables'ları kontrol edin
 
 ## 🩺 Health Check URLs
 
@@ -40,9 +65,21 @@ Deploy edildikten sonra bu URL'leri test edin:
 
 ## 🚨 Common Issues & Solutions
 
-### 1. Environment Variables Missing
+### 1. Environment Variables Missing ⚠️ EN YAYGINI
 **Problem**: Health check shows `MISSING` environment variables
-**Solution**: Railway dashboard'da tüm variables'ların eklendiğini doğrulayın
+**Symptoms**: 
+- `username=undefined&password=undefined` in logs
+- `404 Not Found` from Netsis API
+- All auth endpoints fail
+
+**Solution**: 
+1. Railway dashboard → Project → Settings → Environment
+2. **Variables** sekmesine tıklayın
+3. Her bir variable'ı **tek tek** ekleyin:
+   - Variable name: `NETSIS_API_URL` 
+   - Variable value: `http://93.89.67.130:2626`
+4. **Deploy** butonuna tıklayıp yeniden deploy edin
+5. Health check ile doğrulayın: `/api/netsis/test`
 
 ### 2. Network Connectivity Failed
 **Problem**: `Network connectivity failed` error
