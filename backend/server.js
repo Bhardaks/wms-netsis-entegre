@@ -4627,13 +4627,15 @@ app.post('/api/package-openings', async (req, res) => {
     // Handle transfer based on opening method
     if (source_location && opening_method !== 'ssh_used') {
       if (opening_method === 'complete') {
-        // Complete transfer - remove entire package from shelf
+        // Complete transfer - remove only the used quantity from shelf
         await run(`
           UPDATE shelf_packages 
-          SET quantity = 0
-          WHERE package_id = ? AND shelf_id = (SELECT id FROM shelves WHERE shelf_code = ?)
-        `, [package_id, source_location]);
+          SET quantity = quantity - ?
+          WHERE package_id = ? AND shelf_id = (SELECT id FROM shelves WHERE shelf_code = ?) 
+          AND quantity >= ?
+        `, [used_quantity, package_id, source_location, used_quantity]);
         
+        console.log(`📦 Complete transfer: Removed ${used_quantity} from shelf, not entire package`);
         // No SSH storage for complete transfer
       } else {
         // Partial opening - move used quantity to service, remainder to SSH
