@@ -31,16 +31,31 @@ if (isRailway) {
   
   const DB_PATH = path.join(__dirname, 'db', 'wms.db');
   db = new sqlite3.Database(DB_PATH);
-  
-  // Create automatic backup on startup (only for local)
+}
+
+// Create automatic backup on startup (only for local)
+if (dbBackup) {
   dbBackup.autoBackup().catch(err => {
     console.warn('⚠️ Could not create startup backup:', err.message);
   });
 }
 
-// Debug middleware - Log all requests
+// Debug middleware - Log all requests with error handling
 app.use((req, res, next) => {
   console.log(`📝 ${req.method} ${req.path} - ${new Date().toISOString()}`);
+  
+  // Railway 502 error prevention - Add timeout handling
+  req.setTimeout(60000, () => {
+    console.error(`🚨 Request timeout: ${req.method} ${req.path}`);
+    if (!res.headersSent) {
+      res.status(502).json({ 
+        error: 'Request timeout', 
+        message: 'Railway request timeout - try again',
+        timestamp: new Date().toISOString()
+      });
+    }
+  });
+  
   next();
 });
 
@@ -2521,9 +2536,19 @@ app.post('/api/picks', async (req, res) => {
 
 app.get('/api/picks/:id', async (req, res) => {
   const { id } = req.params;
-  const pick = await get('SELECT * FROM picks WHERE id=?', [id]);
-  if (!pick) return res.status(404).json({ error: 'Pick not found' });
-  const order = await get('SELECT * FROM orders WHERE id=?', [pick.order_id]);
+  
+  try {
+    console.log(`🔍 Pick ${id} loading started`);
+    const startTime = Date.now();
+    
+    const pick = await get('SELECT * FROM picks WHERE id=?', [id]);
+    if (!pick) {
+      console.log(`❌ Pick ${id} not found`);
+      return res.status(404).json({ error: 'Pick not found' });
+    }
+    
+    console.log(`✅ Pick ${id} found, loading order...`);
+    const order = await get('SELECT * FROM orders WHERE id=?', [pick.order_id]);
   const items = await all(`
     SELECT oi.*, p.color as product_color 
     FROM order_items oi 
@@ -2584,8 +2609,30 @@ app.get('/api/picks/:id', async (req, res) => {
     }
   }
   
-  const scans = await all('SELECT * FROM pick_scans WHERE pick_id=?', [id]);
-  res.json({ pick, order, items, scans });
+    const scans = await all('SELECT * FROM pick_scans WHERE pick_id=?', [id]);
+    
+    const endTime = Date.now();
+    console.log(`✅ Pick ${id} loaded successfully in ${endTime - startTime}ms`);
+    
+    res.json({ pick, order, items, scans });
+    
+  } catch (error) {
+    console.error(`❌ Pick ${id} loading failed:`, {
+      error: error.message,
+      stack: error.stack?.substring(0, 500),
+      timestamp: new Date().toISOString()
+    });
+    
+    // Railway 502 prevention
+    if (!res.headersSent) {
+      res.status(500).json({ 
+        error: 'Pick loading failed', 
+        message: error.message,
+        pickId: id,
+        timestamp: new Date().toISOString()
+      });
+    }
+  }
 });
 
 // Lokasyon teyit endpoint'i
@@ -5446,6 +5493,63 @@ app.listen(PORT, '0.0.0.0', async () => {
   } catch (e) {
     console.log('ℹ️ Inventory count items table already exists');
   }
+
+  // Shelf packages table - Raf paket atamaları için
+  try {
+    await run(`
+      CREATE TABLE IF NOT EXISTS shelf_packages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        shelf_id INTEGER NOT NULL REFERENCES shelves(id),
+        package_id INTEGER NOT NULL REFERENCES product_packages(id),
+        quantity INTEGER NOT NULL DEFAULT 0,
+        assigned_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(shelf_id, package_id)
+      )
+    `);
+    console.log('✅ Shelf packages table created');
+  } catch (e) {
+    console.log('ℹ️ Shelf packages table already exists');
+  }
+
+  // Picks table - Pick işlemleri için
+  try {
+    await run(`
+      CREATE TABLE IF NOT EXISTS picks (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL REFERENCES orders(id),
+        status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending', 'active', 'partial', 'completed')),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Picks table created');
+  } catch (e) {
+    console.log('ℹ️ Picks table already exists');
+  }
+
+  // Pick scans table - Pick scan kayıtları için
+  try {
+    await run(`
+      CREATE TABLE IF NOT EXISTS pick_scans (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        pick_id INTEGER NOT NULL REFERENCES picks(id),
+        order_item_id INTEGER NOT NULL REFERENCES order_items(id),
+        product_id INTEGER NOT NULL REFERENCES products(id),
+        package_id INTEGER NOT NULL REFERENCES product_packages(id),
+        barcode TEXT NOT NULL,
+        scanned_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log('✅ Pick scans table created');
+  } catch (e) {
+    console.log('ℹ️ Pick scans table already exists');
+  }
+
+} catch (error) {
+  console.error('❌ Database initialization error:', error);
+}
+}
 
 // ---- Inventory Count API Endpoints ----
 
