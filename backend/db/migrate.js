@@ -17,24 +17,33 @@ if (isRailway) {
 // Database Backup System - skip for Railway
 let dbBackup;
 if (!isRailway) {
-  const DatabaseBackup = require('./backup');
-  dbBackup = new DatabaseBackup(DB_PATH);
+  try {
+    const DatabaseBackup = require('./backup');
+    dbBackup = new DatabaseBackup(DB_PATH);
+  } catch (backupError) {
+    console.log('⚠️ Backup system not available:', backupError.message);
+  }
 }
 
 async function runMigration(externalDb = null) {
-  // Use external database if provided, otherwise create new one
-  const db = externalDb || new sqlite3.Database(DB_PATH);
-  
-  function runSql(sql) {
-    return new Promise((resolve, reject) => {
-      db.exec(sql, (err) => {
-        if (err) reject(err);
-        else resolve();
+  try {
+    console.log('🔧 Migration started with external DB:', !!externalDb);
+    
+    // Use external database if provided, otherwise create new one
+    const db = externalDb || new sqlite3.Database(DB_PATH);
+    console.log('🔧 Using database connection');
+    
+    function runSql(sql) {
+      return new Promise((resolve, reject) => {
+        db.exec(sql, (err) => {
+          if (err) reject(err);
+          else resolve();
+        });
       });
-    });
-  }
-  // helper: check/create column
-  async function ensureColumn(db, table, col, defSql) {
+    }
+    
+    // helper: check/create column
+    async function ensureColumn(db, table, col, defSql) {
     const has = await new Promise((resolve,reject)=>{
       db.all(`PRAGMA table_info(${table})`, [], (err, rows)=>{
         if (err) reject(err);

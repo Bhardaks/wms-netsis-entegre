@@ -113,10 +113,18 @@ async function initDatabase() {
     if (isRailway) {
       // Railway: Run full migration system
       console.log('🚂 Railway: Running full migration system...');
+      console.log('📁 Current working directory:', process.cwd());
+      console.log('📁 __dirname:', __dirname);
+      
       let migrationSuccess = false;
       try {
-        const runMigration = require('./db/migrate');
-        console.log('🔄 Loading migration module...');
+        // Try multiple migration paths
+        const migrationPath = path.join(__dirname, 'db', 'migrate.js');
+        console.log('🔍 Trying migration path:', migrationPath);
+        console.log('📂 Migration file exists:', fs.existsSync(migrationPath));
+        
+        const runMigration = require(migrationPath);
+        console.log('🔄 Migration module loaded successfully');
         await runMigration(db);
         console.log('✅ Railway: Full migration completed successfully');
         migrationSuccess = true;
@@ -257,6 +265,67 @@ async function initDatabase() {
         )
       `);
       console.log('✅ Picks table created');
+      
+      // Shelves table - For shelf management system
+      await run(`
+        CREATE TABLE IF NOT EXISTS shelves (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          shelf_code TEXT UNIQUE NOT NULL,
+          shelf_name TEXT,
+          zone TEXT,
+          aisle TEXT,
+          level INTEGER,
+          capacity INTEGER DEFAULT 100,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+      console.log('✅ Shelves table created');
+      
+      // Shelf packages table - Package assignments to shelves
+      await run(`
+        CREATE TABLE IF NOT EXISTS shelf_packages (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+          package_id INTEGER NOT NULL REFERENCES product_packages(id) ON DELETE CASCADE,
+          product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          quantity INTEGER NOT NULL DEFAULT 0,
+          assigned_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+          last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+          assigned_by TEXT,
+          UNIQUE(shelf_id, package_id)
+        )
+      `);
+      console.log('✅ Shelf packages table created');
+      
+      // Shelf movements table - Audit trail
+      await run(`
+        CREATE TABLE IF NOT EXISTS shelf_movements (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+          package_id INTEGER NOT NULL REFERENCES product_packages(id) ON DELETE CASCADE,
+          product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          movement_type TEXT NOT NULL,
+          quantity_change INTEGER NOT NULL,
+          previous_quantity INTEGER NOT NULL,
+          new_quantity INTEGER NOT NULL,
+          barcode_scanned TEXT,
+          notes TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          created_by TEXT
+        )
+      `);
+      console.log('✅ Shelf movements table created');
+      
+      // Insert essential shelf data
+      await run(`
+        INSERT OR IGNORE INTO shelves (shelf_code, shelf_name, zone, aisle, level) VALUES 
+        ('A1-01', 'A Bölgesi 1. Koridor Seviye 1', 'A', '1', 1),
+        ('A1-02', 'A Bölgesi 1. Koridor Seviye 2', 'A', '1', 2),
+        ('B1-01', 'B Bölgesi 1. Koridor Seviye 1', 'B', '1', 1),
+        ('B2-01', 'B Bölgesi 2. Koridor Seviye 1', 'B', '2', 1)
+      `);
+      console.log('✅ Essential shelf data inserted');
+      
       } // End of manual table creation
     } // End of Railway check
     
