@@ -554,7 +554,7 @@ class NetsisAPI {
       formData.append('dbname', this.dbName);
       formData.append('dbuser', this.dbUser);
       formData.append('dbpassword', this.dbPassword || '');
-      formData.append('dbtype', dbTypeMap[this.dbType] || 0); // 0 for MSSQL
+      formData.append('dbtype', dbTypeMap[this.dbType] || 1); // 1 for MSSQL
       
       // C# JLogin formatı (JSON için)
       const loginData = {
@@ -567,9 +567,11 @@ class NetsisAPI {
         DbPassword: this.dbPassword || ""
       };
 
-      // NetOpenX API v2 endpoints - başarılı endpoint
+      // NetOpenX API v2 endpoints - çoklu deneme
       const authEndpoints = [
-        `${this.baseURL}/api/v2/token`
+        `${this.baseURL}/api/v2/token`,
+        `${this.baseURL}/token`,
+        `${this.baseURL}/api/token`
       ];
 
       let lastError = null;
@@ -587,17 +589,37 @@ class NetsisAPI {
             headers: {
               'Content-Type': contentType,
               'Accept': 'application/json',
-              'Host': '93.89.67.130:2626'
+              'User-Agent': 'WMS-Netsis-Integration/1.0',
+              'Cache-Control': 'no-cache',
+              'Connection': 'keep-alive'
             },
-            timeout: 15000
+            timeout: 30000, // Railway için timeout artırıldı
+            maxRedirects: 0, // Redirect'leri engelle
+            validateStatus: (status) => status < 500 // 4xx hatalarını exception olarak görme
           };
           
           console.log(`📋 Request data:`, isTokenEndpoint ? formData.toString() : JSON.stringify(loginData, null, 2));
           console.log(`🔐 Auth endpoint: ${endpoint}`);
+          console.log(`📤 Request config:`, {
+            url: endpoint,
+            method: 'POST',
+            headers: config.headers,
+            timeout: config.timeout,
+            data: requestData,
+            contentType: contentType
+          });
           
           // Request gönder
           try {
+            console.log(`🚀 Sending request to ${endpoint}...`);
             const response = await axios.post(endpoint, requestData, config);
+            console.log(`📥 Response received:`, {
+              status: response.status,
+              statusText: response.statusText,
+              headers: response.headers,
+              dataKeys: Object.keys(response.data || {}),
+              dataPreview: JSON.stringify(response.data).substring(0, 200)
+            });
             if (response.data && (response.data.access_token || response.data.token)) {
               this.accessToken = response.data.access_token || response.data.token;
               this.refreshToken = response.data.refresh_token;
@@ -613,9 +635,56 @@ class NetsisAPI {
               console.log(`📅 Token süresi: ${new Date(this.tokenExpiry).toLocaleTimeString()}`);
               console.log(`🔄 Refresh token: ${this.refreshToken ? 'Mevcut' : 'Yok'}`);
               return true;
+            } else {
+              // Token yok ama 2xx response - farklı response formatı olabilir
+              console.log(`⚠️ Response başarılı ama token yok:`, response.data);
+              if (response.status === 200) {
+                console.log(`🔍 200 OK ama token yok - muhtemelen farklı API format`);
+                // Eğer login başarılıysa ve farklı formatta response geliyor
+                if (response.data && (response.data.success === true || response.data.result === 'success')) {
+                  console.log(`✅ Alternative auth success format detected`);
+                  this.accessToken = 'session-based'; // Session based auth
+                  this.tokenExpiry = Date.now() + 3600 * 1000; // 1 saat
+                  return true;
+                }
+              }
             }
           } catch (normalError) {
-            console.log(`⚠️ Normal auth başarısız, NTLM deneniyor...`);
+            // 400 Bad Request için özel hata analizi
+            if (normalError.response?.status === 400) {
+              console.log(`❌ HTTP 400 Bad Request - İstek formatı hatalı:`, {
+                endpoint: endpoint,
+                requestData: isTokenEndpoint ? formData.toString() : JSON.stringify(loginData, null, 2),
+                responseData: normalError.response?.data,
+                responseHeaders: normalError.response?.headers,
+                contentType: contentType
+              });
+              
+              // Farklı format denemesi
+              if (isTokenEndpoint) {
+                console.log(`🔄 400 hatası - Alternatif JSON format deneniyor...`);
+                try {
+                  const altConfig = {
+                    ...config,
+                    headers: {
+                      ...config.headers,
+                      'Content-Type': 'application/json'
+                    }
+                  };
+                  const altResponse = await axios.post(endpoint, loginData, altConfig);
+                  console.log(`✅ Alternatif JSON format başarılı!`);
+                  if (altResponse.data && (altResponse.data.access_token || altResponse.data.token)) {
+                    this.accessToken = altResponse.data.access_token || altResponse.data.token;
+                    this.tokenExpiry = Date.now() + (altResponse.data.expires_in || 3600) * 1000;
+                    return true;
+                  }
+                } catch (altError) {
+                  console.log(`⚠️ Alternatif JSON format da başarısız:`, altError.response?.status);
+                }
+              }
+            }
+            
+            console.log(`⚠️ Normal auth başarısız (${normalError.response?.status || normalError.code}), NTLM deneniyor...`);
             
             // NTLM Authentication dene
             try {
