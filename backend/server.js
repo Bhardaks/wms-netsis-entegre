@@ -177,6 +177,18 @@ async function initDatabase() {
       `);
       console.log('✅ Essential locations inserted');
       
+      // Product locations table - Junction for product inventory by location
+      await run(`
+        CREATE TABLE IF NOT EXISTS product_locations (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+          location_id INTEGER NOT NULL REFERENCES locations(id) ON DELETE CASCADE,
+          on_hand INTEGER NOT NULL DEFAULT 0,
+          UNIQUE(product_id, location_id)
+        )
+      `);
+      console.log('✅ Product locations table created');
+      
       // Picks table - Required for orders query
       await run(`
         CREATE TABLE IF NOT EXISTS picks (
