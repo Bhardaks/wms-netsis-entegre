@@ -11,13 +11,26 @@ const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
 console.log(`🚂 Railway Migration - Using database: ${DB_PATH}`);
 
-const db = new sqlite3.Database(DB_PATH);
+console.log('🗄️ Connecting to database:', DB_PATH);
+const db = new sqlite3.Database(DB_PATH, (err) => {
+  if (err) {
+    console.error('❌ Database connection error:', err);
+  } else {
+    console.log('✅ Database connected successfully');
+  }
+});
 
 function runSql(sql) {
   return new Promise((resolve, reject) => {
+    console.log(`📝 Executing SQL (${sql.length} chars)...`);
     db.exec(sql, (err) => {
-      if (err) reject(err);
-      else resolve();
+      if (err) {
+        console.error('❌ SQL execution error:', err);
+        reject(err);
+      } else {
+        console.log('✅ SQL executed successfully');
+        resolve();
+      }
     });
   });
 }
@@ -43,9 +56,16 @@ async function ensureColumn(db, table, col, defSql) {
 (async () => {
   try {
     console.log('🚂 Starting Railway migration...');
+    console.log('📁 Schema path:', SCHEMA_PATH);
+    console.log('📄 Reading schema file...');
     
     const schema = fs.readFileSync(SCHEMA_PATH, 'utf-8');
+    console.log(`📊 Schema file size: ${schema.length} characters`);
+    console.log('📋 Schema preview:', schema.substring(0, 200) + '...');
+    
+    console.log('🗄️ Executing schema SQL...');
     await runSql(schema);
+    console.log('✅ Schema SQL executed successfully');
 
     // Create users table since it's not in schema.sql
     await runSql(`
@@ -132,6 +152,7 @@ async function ensureColumn(db, table, col, defSql) {
     `);
 
     // Essential data for Railway
+    console.log('👤 Inserting essential data...');
     await runSql(`
       INSERT OR IGNORE INTO users (username, password_hash, role, created_at, active) VALUES
       ('admin', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', datetime('now'), 1);
@@ -140,6 +161,28 @@ async function ensureColumn(db, table, col, defSql) {
       ('A1-01-359', 'A Blok 1. Koridor 359 Raf'),
       ('SSH-01-01', 'SSH Servis Alanı');
     `);
+    console.log('✅ Essential data inserted');
+
+    // Verify tables were created
+    console.log('🔍 Verifying created tables...');
+    const tables = await new Promise((resolve, reject) => {
+      db.all("SELECT name FROM sqlite_master WHERE type='table'", [], (err, rows) => {
+        if (err) reject(err);
+        else resolve(rows);
+      });
+    });
+    
+    console.log('📋 Created tables:', tables.map(t => t.name).join(', '));
+    
+    const requiredTables = ['products', 'orders', 'users', 'locations'];
+    const missingTables = requiredTables.filter(table => 
+      !tables.some(t => t.name === table)
+    );
+    
+    if (missingTables.length > 0) {
+      console.error('❌ Missing required tables:', missingTables);
+      throw new Error(`Missing tables: ${missingTables.join(', ')}`);
+    }
 
     console.log('✅ Railway migration completed successfully');
     
