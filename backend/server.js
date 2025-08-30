@@ -3499,21 +3499,6 @@ app.get('/api/picks/:id/delivery-note.pdf', async (req, res) => {
 // ===== RAF YÖNETİMİ API ENDPOINTS =====
 
 // Tüm rafları listele
-app.get('/api/shelves', async (req, res) => {
-  try {
-    const shelves = await all(`
-      SELECT s.*, 
-             COALESCE(s.current_usage, 0) as current_usage
-      FROM shelves s
-      WHERE s.shelf_code NOT LIKE 'SSH-%'
-      ORDER BY s.zone, s.aisle, s.level
-    `);
-    res.json({ shelves });
-  } catch (error) {
-    console.error('Error fetching shelves:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
 
 // Belirli raf detayını getir
 app.get('/api/shelves/:shelfId', async (req, res) => {
@@ -4732,13 +4717,21 @@ app.post('/api/package-openings', async (req, res) => {
       `, [service_request_id]);
       
       // Mark an SSH inventory item as used for this service request
-      await run(`
-        UPDATE ssh_inventory 
-        SET is_available = 0, last_used_date = CURRENT_TIMESTAMP
+      const sshItem = await get(`
+        SELECT id FROM ssh_inventory 
         WHERE product_id = ? AND part_name LIKE ? AND is_available = 1
         ORDER BY created_date ASC
         LIMIT 1
       `, [serviceRequest.product_id, `%${serviceRequest.required_part}%`]);
+      
+      if (sshItem) {
+        await run(`
+          UPDATE ssh_inventory 
+          SET is_available = 0, last_used_date = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `, [sshItem.id]);
+        console.log(`🔧 SSH inventory item ${sshItem.id} marked as used`);
+      }
     }
 
     res.json({ success: true, id: result.lastID, message: 'Paket açma işlemi tamamlandı' });
@@ -7433,6 +7426,7 @@ app.get('/api/shelves', async (req, res) => {
         WHERE quantity > 0
         GROUP BY shelf_id
       ) usage ON s.id = usage.shelf_id
+      WHERE s.shelf_code NOT LIKE 'SSH-%'
       ORDER BY s.shelf_code ASC
     `);
     
