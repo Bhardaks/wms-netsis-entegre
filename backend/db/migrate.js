@@ -3,25 +3,36 @@ const fs = require('fs');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
 
-const DB_PATH = path.join(__dirname, 'wms.db');
+// Allow external database connection (for Railway)
+let DB_PATH = path.join(__dirname, 'wms.db');
 const SCHEMA_PATH = path.join(__dirname, 'schema.sql');
 
-// Database Backup System
-const DatabaseBackup = require('./backup');
-const dbBackup = new DatabaseBackup(DB_PATH);
-
-const db = new sqlite3.Database(DB_PATH);
-
-function runSql(sql) {
-  return new Promise((resolve, reject) => {
-    db.exec(sql, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
+// Check if running on Railway
+const isRailway = process.env.RAILWAY_ENVIRONMENT === 'production';
+if (isRailway) {
+  DB_PATH = ':memory:'; // Use in-memory database for Railway
+  console.log('🚂 Railway: Using in-memory database for migration');
 }
 
-(async () => {
+// Database Backup System - skip for Railway
+let dbBackup;
+if (!isRailway) {
+  const DatabaseBackup = require('./backup');
+  dbBackup = new DatabaseBackup(DB_PATH);
+}
+
+async function runMigration(externalDb = null) {
+  // Use external database if provided, otherwise create new one
+  const db = externalDb || new sqlite3.Database(DB_PATH);
+  
+  function runSql(sql) {
+    return new Promise((resolve, reject) => {
+      db.exec(sql, (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  }
   // helper: check/create column
   async function ensureColumn(db, table, col, defSql) {
     const has = await new Promise((resolve,reject)=>{
@@ -156,10 +167,30 @@ await runSql(`
 
 console.log('✅ Real location data added');
 
-    console.log('✅ Schema applied to', DB_PATH);
-    db.close();
+    console.log('✅ Schema applied successfully');
+    if (!externalDb) {
+      db.close();
+    }
+    return true;
   } catch (e) {
-    console.error('Migration failed:', e.message);
-    process.exit(1);
+    console.error('❌ Migration failed:', e.message);
+    if (!externalDb) {
+      db.close();
+    }
+    throw e;
   }
-})();
+}
+
+// Export the migration function
+module.exports = runMigration;
+
+// If run directly (not imported), execute migration
+if (require.main === module) {
+  runMigration().then(() => {
+    console.log('✅ Migration completed successfully');
+    process.exit(0);
+  }).catch((e) => {
+    console.error('❌ Migration failed:', e.message);
+    process.exit(1);
+  });
+}

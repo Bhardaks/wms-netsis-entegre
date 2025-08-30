@@ -111,22 +111,24 @@ async function initDatabase() {
     console.log(`🚂 Initializing database (Railway: ${isRailway ? 'YES' : 'NO'})`);
     
     if (isRailway) {
-      // Railway: Try to run full schema.sql first
-      console.log('🚂 Railway: Attempting to run full schema...');
+      // Railway: Run full migration system
+      console.log('🚂 Railway: Running full migration system...');
+      let migrationSuccess = false;
       try {
-        const schemaPath = path.join(__dirname, 'db', 'schema.sql');
-        if (fs.existsSync(schemaPath)) {
-          const schema = fs.readFileSync(schemaPath, 'utf8');
-          await run(schema);
-          console.log('✅ Full schema applied successfully');
-        } else {
-          throw new Error('schema.sql not found');
-        }
-      } catch (schemaError) {
-        console.log('⚠️ Full schema failed, creating essential tables manually...');
+        const runMigration = require('./db/migrate');
+        await runMigration(db);
+        console.log('✅ Railway: Full migration completed successfully');
+        migrationSuccess = true;
+      } catch (migrationError) {
+        console.error('❌ Railway: Migration failed:', migrationError.message);
+        console.log('⚠️ Falling back to manual essential tables...');
       }
       
-      // Products table
+      // Only run manual tables if migration failed
+      if (!migrationSuccess) {
+        console.log('🚂 Railway: Creating essential tables manually...');
+        
+        // Products table
       await run(`
         CREATE TABLE IF NOT EXISTS products (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -248,7 +250,8 @@ async function initDatabase() {
         )
       `);
       console.log('✅ Picks table created');
-    }
+      } // End of manual table creation
+    } // End of Railway check
     
     // Users tablosu oluştur
     await run(`
