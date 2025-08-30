@@ -118,6 +118,12 @@ async function initDatabase() {
   try {
     console.log(`🚂 Initializing database (Railway: ${isRailway ? 'YES' : 'NO'})`);
     
+    // Disable foreign key constraints for Railway to avoid issues
+    if (isRailway) {
+      await run('PRAGMA foreign_keys = OFF');
+      console.log('🔧 Railway: Foreign key constraints disabled');
+    }
+    
     if (isRailway) {
       // Railway: Run full migration system
       console.log('🚂 Railway: Running full migration system...');
@@ -5783,7 +5789,7 @@ app.listen(PORT, '0.0.0.0', async () => {
       CREATE TABLE IF NOT EXISTS inventory_count_items (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         count_id INTEGER NOT NULL REFERENCES inventory_counts(id),
-        product_id INTEGER NOT NULL REFERENCES products(id),
+        product_id INTEGER NOT NULL,
         product_name TEXT NOT NULL,
         sku TEXT NOT NULL,
         barcode TEXT,
