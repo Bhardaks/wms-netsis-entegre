@@ -2037,11 +2037,29 @@ app.get('/api/netsis/orders/:id', async (req, res) => {
 app.post('/api/netsis/sync/products', async (req, res) => {
   try {
     console.log('🔄 Netsis ürün senkronizasyonu başlatılıyor...');
+    console.log('🚂 Railway Environment:', {
+      isRailway: isRailway,
+      NODE_ENV: process.env.NODE_ENV,
+      NETSIS_API_URL: process.env.NETSIS_API_URL || 'MISSING',
+      NETSIS_USERNAME: process.env.NETSIS_USERNAME ? 'PRESENT' : 'MISSING',
+      NETSIS_PASSWORD: process.env.NETSIS_PASSWORD ? 'PRESENT' : 'MISSING',
+      NETSIS_DB_NAME: process.env.NETSIS_DB_NAME || 'MISSING'
+    });
     
     let syncCount = 0;
     const allProducts = [];
     
+    // Test Netsis authentication before iteration
+    console.log('🔐 Testing Netsis authentication...');
+    const authTest = await netsisAPI.testConnection();
+    console.log('🔐 Auth test result:', authTest);
+    
+    if (!authTest?.success) {
+      throw new Error(`Netsis authentication failed: ${authTest?.message || 'Unknown error'}`);
+    }
+    
     // Netsis API'den ürünleri iterator ile al
+    console.log('📦 Starting product iteration...');
     for await (const { item: product, version, source } of netsisAPI.iterateProducts()) {
         try {
         // Netsis'ten gelen ürün verilerini WMS formatına çevir
@@ -2144,8 +2162,22 @@ app.post('/api/netsis/sync/products', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Netsis product sync error:', error);
-    res.status(500).json({ success: false, error: error.message });
+    console.error('❌ Netsis product sync error:', {
+      message: error.message,
+      stack: isRailway ? 'Hidden in production' : error.stack,
+      name: error.name,
+      isAxiosError: error.isAxiosError,
+      response: error.response ? {
+        status: error.response.status,
+        statusText: error.response.statusText,
+        data: error.response.data
+      } : undefined
+    });
+    res.status(500).json({ 
+      success: false, 
+      error: error.message,
+      details: isRailway ? 'Check Railway logs for details' : error.stack 
+    });
   }
 });
 
