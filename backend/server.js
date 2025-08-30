@@ -12,6 +12,23 @@ const { netsisAPI } = require('./services/netsis');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// Railway stability: Handle uncaught exceptions and rejections
+process.on('uncaughtException', (error) => {
+  console.error('🚨 Uncaught Exception:', error);
+  // Don't exit in Railway - just log
+  if (!isRailway) {
+    process.exit(1);
+  }
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('🚨 Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit in Railway - just log
+  if (!isRailway) {
+    process.exit(1);
+  }
+});
+
 // Railway deployment check
 const isRailway = process.env.RAILWAY_ENVIRONMENT || process.env.NODE_ENV === 'production';
 console.log(`🚂 Railway Environment: ${isRailway ? 'YES' : 'NO'}`);
@@ -1192,12 +1209,32 @@ app.post('/api/sync/wix/all', async (req, res) => {
   }
 });
 // ---- Health ----
+// Railway health endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    environment: process.env.NODE_ENV
+  });
+});
+
 app.get('/api/health', async (req, res) => {
   try {
     const row = await get('SELECT 1 as ok', []);
-    res.json({ status: 'ok', db: !!row });
+    res.json({ 
+      status: 'ok', 
+      db: !!row,
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      memory: process.memoryUsage()
+    });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    console.error('Health check error:', e);
+    res.status(500).json({ 
+      error: e.message,
+      timestamp: new Date().toISOString()
+    });
   }
 });
 
@@ -8089,11 +8126,59 @@ app.post('/api/sync/external-orders', requireAuth, async (req, res) => {
     console.log(`🌐 Service URL: https://wms-netsis-entegre.railway.app`);
     console.log(`🔗 Health Check: /api/netsis/test`);
     console.log(`📊 Debug Panel: /netsis-debug.html`);
+    
+    // Railway: Memory monitoring to prevent crashes
+    setInterval(() => {
+      const memUsage = process.memoryUsage();
+      const memUsageMB = {
+        rss: Math.round(memUsage.rss / 1024 / 1024),
+        heapTotal: Math.round(memUsage.heapTotal / 1024 / 1024),
+        heapUsed: Math.round(memUsage.heapUsed / 1024 / 1024),
+        external: Math.round(memUsage.external / 1024 / 1024)
+      };
+      
+      // Log memory usage every 5 minutes
+      console.log(`🚂 Railway Memory Usage (MB):`, memUsageMB);
+      
+      // Warning if memory usage is high
+      if (memUsageMB.heapUsed > 400) {
+        console.warn(`⚠️ Railway: High memory usage detected: ${memUsageMB.heapUsed}MB`);
+        if (global.gc) {
+          global.gc();
+          console.log('🗑️ Railway: Forced garbage collection');
+        }
+      }
+    }, 5 * 60 * 1000); // Every 5 minutes
   } else {
     console.log(`🚀 WMS server started successfully!`);
     console.log(`📱 Local access: http://localhost:${PORT}`);
     console.log(`🌐 Network access: http://${localIP}:${PORT}`);
     console.log(`📋 Test with mobile devices using: http://${localIP}:${PORT}`);
     console.log(`🦓 Zebra terminals can connect to: http://${localIP}:${PORT}`);
+  }
+});
+
+// Railway: Graceful shutdown handling
+process.on('SIGTERM', () => {
+  console.log('🚂 Railway SIGTERM received, shutting down gracefully');
+  if (db && !isRailway) {
+    db.close(() => {
+      console.log('✅ Database closed');
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
+  }
+});
+
+process.on('SIGINT', () => {
+  console.log('🚂 Railway SIGINT received, shutting down gracefully');
+  if (db && !isRailway) {
+    db.close(() => {
+      console.log('✅ Database closed');
+      process.exit(0);
+    });
+  } else {
+    process.exit(0);
   }
 });
