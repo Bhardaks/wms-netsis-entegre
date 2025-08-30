@@ -3619,9 +3619,9 @@ app.post('/api/shelves/assign', async (req, res) => {
       // Yeni atama oluştur
       await run(`
         INSERT INTO shelf_packages 
-        (shelf_id, package_id, quantity, assigned_date, last_updated)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-      `, [shelf.id, package.id, quantity]);
+        (shelf_id, package_id, product_id, quantity, assigned_date, last_updated)
+        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+      `, [shelf.id, package.id, package.product_id, quantity]);
     }
     
     // Hareket kaydı şimdilik devre dışı (shelf_movements tablosu yok)
