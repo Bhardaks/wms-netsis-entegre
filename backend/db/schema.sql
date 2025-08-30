@@ -239,5 +239,53 @@ CREATE TABLE IF NOT EXISTS inventory_count_items (
   counted_by TEXT
 );
 
+-- Raflar tablosu
+CREATE TABLE IF NOT EXISTS shelves (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shelf_code TEXT UNIQUE NOT NULL,  -- Raf barkodu
+  shelf_name TEXT,                  -- Raf adı (A1-01, B2-15 vs)
+  zone TEXT,                        -- Bölge (A, B, C vs)
+  aisle TEXT,                       -- Koridor (1, 2, 3 vs)
+  level INTEGER,                    -- Seviye (1=alt, 2=orta, 3=üst)
+  capacity INTEGER DEFAULT 100,     -- Maksimum kapasite
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Raf-Paket ilişkileri tablosu
+CREATE TABLE IF NOT EXISTS shelf_packages (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+  package_id INTEGER NOT NULL REFERENCES product_packages(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  quantity INTEGER NOT NULL DEFAULT 0,      -- Bu rafta kaç adet var
+  assigned_date DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_updated DATETIME DEFAULT CURRENT_TIMESTAMP,
+  assigned_by TEXT,                         -- Kim yerleştirdi
+  UNIQUE(shelf_id, package_id)
+);
+
+-- Raf hareketleri tablosu (audit trail)
+CREATE TABLE IF NOT EXISTS shelf_movements (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  shelf_id INTEGER NOT NULL REFERENCES shelves(id) ON DELETE CASCADE,
+  package_id INTEGER NOT NULL REFERENCES product_packages(id) ON DELETE CASCADE,
+  product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+  movement_type TEXT NOT NULL,              -- 'IN' (giriş), 'OUT' (çıkış), 'TRANSFER' (transfer)
+  quantity_change INTEGER NOT NULL,        -- +5, -3, vs
+  previous_quantity INTEGER NOT NULL,      -- Önceki miktar
+  new_quantity INTEGER NOT NULL,           -- Yeni miktar
+  barcode_scanned TEXT,                    -- Okutulan barkod
+  notes TEXT,                              -- Notlar
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  created_by TEXT                          -- İşlemi yapan kişi
+);
+
+-- Index'ler performans için
+CREATE INDEX IF NOT EXISTS idx_shelves_code ON shelves(shelf_code);
+CREATE INDEX IF NOT EXISTS idx_shelf_packages_shelf ON shelf_packages(shelf_id);
+CREATE INDEX IF NOT EXISTS idx_shelf_packages_package ON shelf_packages(package_id);
+CREATE INDEX IF NOT EXISTS idx_shelf_movements_shelf ON shelf_movements(shelf_id);
+CREATE INDEX IF NOT EXISTS idx_shelf_movements_date ON shelf_movements(created_at);
+
 -- Optional Wix identifiers on products (ignored if columns already exist)
 -- These will be added via migrate.js if missing in an existing DB

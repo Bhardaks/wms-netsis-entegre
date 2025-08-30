@@ -116,11 +116,13 @@ async function initDatabase() {
       let migrationSuccess = false;
       try {
         const runMigration = require('./db/migrate');
+        console.log('🔄 Loading migration module...');
         await runMigration(db);
         console.log('✅ Railway: Full migration completed successfully');
         migrationSuccess = true;
       } catch (migrationError) {
         console.error('❌ Railway: Migration failed:', migrationError.message);
+        console.error('❌ Migration stack:', migrationError.stack);
         console.log('⚠️ Falling back to manual essential tables...');
       }
       
