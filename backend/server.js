@@ -167,6 +167,7 @@ async function initDatabase() {
           product_name TEXT NOT NULL,
           quantity INTEGER NOT NULL,
           picked_qty INTEGER NOT NULL DEFAULT 0,
+          unit_price REAL DEFAULT 0,
           line_number INTEGER,
           warehouse_code TEXT,
           description TEXT,
