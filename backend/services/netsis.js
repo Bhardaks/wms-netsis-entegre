@@ -19,7 +19,13 @@ class NetsisAPI {
       password: this.password ? '***' : 'undefined',
       dbName: this.dbName,
       dbUser: this.dbUser,
-      branchCode: this.branchCode
+      dbPassword: this.dbPassword ? '***' : 'undefined',
+      branchCode: this.branchCode,
+      dbType: this.dbType,
+      env: {
+        NODE_ENV: process.env.NODE_ENV,
+        ALL_ENV_VARS: Object.keys(process.env).filter(key => key.startsWith('NETSIS_'))
+      }
     });
     
     this.accessToken = null;
@@ -679,8 +685,23 @@ class NetsisAPI {
       throw new Error(`All auth endpoints failed. Last error: ${lastError?.message}`);
       
     } catch (error) {
-      console.error('❌ Netsis kimlik doğrulama hatası:', error.response?.data || error.message);
-      throw new Error(`Netsis authentication failed: ${error.message}`);
+      console.error('❌ Netsis kimlik doğrulama hatası:', {
+        message: error.message,
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        config: {
+          url: error.config?.url,
+          method: error.config?.method,
+          timeout: error.config?.timeout
+        },
+        code: error.code,
+        errno: error.errno,
+        syscall: error.syscall,
+        hostname: error.hostname,
+        stack: error.stack
+      });
+      throw new Error(`Netsis authentication failed: ${error.message} - Status: ${error.response?.status || 'N/A'} - Code: ${error.code || 'N/A'}`);
     }
   }
 

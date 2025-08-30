@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Netsis Debug - WMS System</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .debug-section {
+            margin: 20px 0;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .debug-section h3 {
+            color: #34495e;
+            margin-top: 0;
+        }
+        .btn {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .btn:hover {
+            background: #2980b9;
+        }
+        .btn.success {
+            background: #27ae60;
+        }
+        .btn.danger {
+            background: #e74c3c;
+        }
+        .btn.warning {
+            background: #f39c12;
+        }
+        .result {
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .result.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .result.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        .loading {
+            display: none;
+            color: #666;
+            font-style: italic;
+        }
+        .status-indicator {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status-healthy {
+            background: #27ae60;
+        }
+        .status-degraded {
+            background: #f39c12;
+        }
+        .status-unhealthy {
+            background: #e74c3c;
+        }
+        .json-viewer {
+            background: #2d3748;
+            color: #e2e8f0;
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Netsis Debug Panel</h1>
+        
+        <div class="debug-section">
+            <h3>🏥 System Health Check</h3>
+            <p>Comprehensive system diagnostics including environment variables, network connectivity, and API authentication.</p>
+            <button class="btn" onclick="runHealthCheck()">🩺 Run Health Check</button>
+            <div class="loading" id="health-loading">Running health check...</div>
+            <div id="health-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>🌐 Network Tests</h3>
+            <p>Test basic connectivity to Netsis API server.</p>
+            <button class="btn" onclick="testNetworkConnectivity()">🔌 Test Network</button>
+            <button class="btn warning" onclick="testDirectAPI()">📡 Direct API Call</button>
+            <div class="loading" id="network-loading">Testing network connectivity...</div>
+            <div id="network-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>🔐 Authentication Tests</h3>
+            <p>Test Netsis API authentication and token retrieval.</p>
+            <button class="btn" onclick="testAuthentication()">🔑 Test Auth</button>
+            <button class="btn warning" onclick="testCustomers()">👥 Test Customers API</button>
+            <button class="btn warning" onclick="testProducts()">📦 Test Products API</button>
+            <div class="loading" id="auth-loading">Testing authentication...</div>
+            <div id="auth-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>⚙️ Environment Info</h3>
+            <p>Current environment and configuration details.</p>
+            <button class="btn" onclick="showEnvironmentInfo()">🔍 Show Environment</button>
+            <div id="env-result"></div>
+        </div>
+
+        <div class="debug-section">
+            <h3>📊 Raw API Responses</h3>
+            <p>View raw responses from Netsis API endpoints.</p>
+            <button class="btn" onclick="viewRawResponse('/api/netsis/test')">🔍 Raw Health Check</button>
+            <button class="btn" onclick="viewRawResponse('/api/netsis/customers?limit=1')">👤 Raw Customer</button>
+            <button class="btn" onclick="viewRawResponse('/api/netsis/products?limit=1')">📦 Raw Product</button>
+            <div class="loading" id="raw-loading">Fetching raw response...</div>
+            <div id="raw-result"></div>
+        </div>
+    </div>
+
+    <script>
+        let currentAbortController = null;
+
+        function showLoading(elementId, show = true) {
+            const loading = document.getElementById(elementId);
+            if (loading) {
+                loading.style.display = show ? 'block' : 'none';
+            }
+        }
+
+        function showResult(elementId, content, type = 'info') {
+            const result = document.getElementById(elementId);
+            if (result) {
+                result.innerHTML = content;
+                result.className = `result ${type}`;
+            }
+        }
+
+        function formatJson(obj) {
+            return `<div class="json-viewer">${JSON.stringify(obj, null, 2)}</div>`;
+        }
+
+        async function runHealthCheck() {
+            showLoading('health-loading', true);
+            try {
+                const response = await fetch('/api/netsis/test');
+                const data = await response.json();
+                
+                let statusClass = 'info';
+                if (data.overall) {
+                    if (data.overall.status === 'HEALTHY') statusClass = 'success';
+                    else if (data.overall.status === 'DEGRADED') statusClass = 'warning';
+                    else statusClass = 'error';
+                }
+
+                const statusIcon = data.overall ? 
+                    `<span class="status-indicator status-${data.overall.status.toLowerCase()}"></span>` : '';
+                
+                const summary = data.overall ? 
+                    `${statusIcon}${data.overall.status}: ${data.overall.summary}` : 'Health check completed';
+
+                showResult('health-result', `${summary}\n\n${formatJson(data)}`, statusClass);
+            } catch (error) {
+                showResult('health-result', `Health check failed: ${error.message}`, 'error');
+            } finally {
+                showLoading('health-loading', false);
+            }
+        }
+
+        async function testNetworkConnectivity() {
+            showLoading('network-loading', true);
+            try {
+                const response = await fetch('/api/netsis/test');
+                const data = await response.json();
+                
+                const networkCheck = data.checks?.network;
+                if (networkCheck) {
+                    const status = networkCheck.status === 'PASSED' ? 'success' : 'error';
+                    showResult('network-result', 
+                        `Network Status: ${networkCheck.status}\n` +
+                        `Response Time: ${networkCheck.response_time_ms || 'N/A'}ms\n` +
+                        `Status Code: ${networkCheck.status_code || 'N/A'}\n\n` +
+                        formatJson(networkCheck), status);
+                } else {
+                    showResult('network-result', 'Network check data not available', 'error');
+                }
+            } catch (error) {
+                showResult('network-result', `Network test failed: ${error.message}`, 'error');
+            } finally {
+                showLoading('network-loading', false);
+            }
+        }
+
+        async function testDirectAPI() {
+            showLoading('network-loading', true);
+            try {
+                // Try to make a direct call to the Netsis API endpoint
+                const netsisUrl = 'http://93.89.67.130:2626';
+                const response = await fetch(netsisUrl, { 
+                    mode: 'no-cors' // This will limit what we can see but might work
+                });
+                showResult('network-result', 
+                    `Direct API call attempted to: ${netsisUrl}\n` +
+                    `Response type: ${response.type}\n` +
+                    `Status: ${response.status}\n` +
+                    `Note: CORS limitations may prevent detailed response viewing`, 'info');
+            } catch (error) {
+                showResult('network-result', `Direct API call failed: ${error.message}`, 'error');
+            } finally {
+                showLoading('network-loading', false);
+            }
+        }
+
+        async function testAuthentication() {
+            showLoading('auth-loading', true);
+            try {
+                const response = await fetch('/api/netsis/test');
+                const data = await response.json();
+                
+                const authCheck = data.checks?.netsis_auth;
+                if (authCheck) {
+                    const status = authCheck.status === 'PASSED' ? 'success' : 'error';
+                    showResult('auth-result', 
+                        `Authentication Status: ${authCheck.status}\n` +
+                        `Message: ${authCheck.message || 'N/A'}\n\n` +
+                        formatJson(authCheck), status);
+                } else {
+                    showResult('auth-result', 'Authentication check data not available', 'error');
+                }
+            } catch (error) {
+                showResult('auth-result', `Authentication test failed: ${error.message}`, 'error');
+            } finally {
+                showLoading('auth-loading', false);
+            }
+        }
+
+        async function testCustomers() {
+            showLoading('auth-loading', true);
+            try {
+                const response = await fetch('/api/netsis/customers?limit=1');
+                const data = await response.json();
+                
+                const status = data.success ? 'success' : 'error';
+                showResult('auth-result', 
+                    `Customers API Test: ${data.success ? 'SUCCESS' : 'FAILED'}\n` +
+                    `Records: ${data.customers ? data.customers.length : 0}\n\n` +
+                    formatJson(data), status);
+            } catch (error) {
+                showResult('auth-result', `Customers test failed: ${error.message}`, 'error');
+            } finally {
+                showLoading('auth-loading', false);
+            }
+        }
+
+        async function testProducts() {
+            showLoading('auth-loading', true);
+            try {
+                const response = await fetch('/api/netsis/products?limit=1');
+                const data = await response.json();
+                
+                const status = data.success ? 'success' : 'error';
+                showResult('auth-result', 
+                    `Products API Test: ${data.success ? 'SUCCESS' : 'FAILED'}\n` +
+                    `Records: ${data.products?.Data ? data.products.Data.length : 0}\n\n` +
+                    formatJson(data), status);
+            } catch (error) {
+                showResult('auth-result', `Products test failed: ${error.message}`, 'error');
+            } finally {
+                showLoading('auth-loading', false);
+            }
+        }
+
+        async function showEnvironmentInfo() {
+            const envInfo = {
+                timestamp: new Date().toISOString(),
+                user_agent: navigator.userAgent,
+                location: window.location.href,
+                screen: {
+                    width: screen.width,
+                    height: screen.height,
+                    colorDepth: screen.colorDepth
+                },
+                browser: {
+                    cookieEnabled: navigator.cookieEnabled,
+                    onLine: navigator.onLine,
+                    language: navigator.language,
+                    platform: navigator.platform
+                }
+            };
+
+            showResult('env-result', 
+                'Client Environment Information:\n\n' +
+                formatJson(envInfo), 'info');
+        }
+
+        async function viewRawResponse(endpoint) {
+            showLoading('raw-loading', true);
+            try {
+                const response = await fetch(endpoint);
+                const data = await response.json();
+                
+                const responseInfo = {
+                    endpoint: endpoint,
+                    status: response.status,
+                    statusText: response.statusText,
+                    headers: Object.fromEntries(response.headers.entries()),
+                    data: data
+                };
+
+                const status = response.ok ? 'success' : 'error';
+                showResult('raw-result', 
+                    `Raw Response from ${endpoint}:\n\n` +
+                    formatJson(responseInfo), status);
+            } catch (error) {
+                showResult('raw-result', `Failed to fetch ${endpoint}: ${error.message}`, 'error');
+            } finally {
+                showLoading('raw-loading', false);
+            }
+        }
+
+        // Auto-run health check on page load
+        window.addEventListener('load', () => {
+            setTimeout(runHealthCheck, 1000);
+        });
+    </script>
+</body>
+</html>

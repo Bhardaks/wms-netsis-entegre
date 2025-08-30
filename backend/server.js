@@ -1763,17 +1763,138 @@ app.get('/api/debug/packages-count', async (req, res) => {
 
 // ---- NETSIS API ENDPOINTS ----
 
-// Test Netsis connection
+// Test Netsis connection with detailed health check
 app.get('/api/netsis/test', async (req, res) => {
+  console.log('🩺 Netsis health check started...');
+  const healthCheck = {
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV,
+    server_location: req.hostname || 'unknown',
+    user_agent: req.get('User-Agent'),
+    ip: req.ip || req.connection.remoteAddress,
+    headers: req.headers,
+    env_vars_available: Object.keys(process.env).filter(key => key.startsWith('NETSIS_')),
+    checks: {}
+  };
+
   try {
-    const result = await netsisAPI.testConnection();
-    res.json(result);
+    // 1. Environment Variables Check
+    console.log('📋 Checking environment variables...');
+    healthCheck.checks.env_vars = {
+      status: 'checking',
+      details: {
+        NETSIS_API_URL: process.env.NETSIS_API_URL || 'MISSING',
+        NETSIS_USERNAME: process.env.NETSIS_USERNAME || 'MISSING',
+        NETSIS_PASSWORD: process.env.NETSIS_PASSWORD ? 'PRESENT' : 'MISSING',
+        NETSIS_DB_NAME: process.env.NETSIS_DB_NAME || 'MISSING',
+        NETSIS_DB_USER: process.env.NETSIS_DB_USER || 'MISSING',
+        NETSIS_DB_PASSWORD: process.env.NETSIS_DB_PASSWORD ? 'PRESENT' : 'MISSING',
+        NETSIS_BRANCH_CODE: process.env.NETSIS_BRANCH_CODE || 'MISSING'
+      }
+    };
+    
+    const missingEnvVars = Object.entries(healthCheck.checks.env_vars.details)
+      .filter(([key, value]) => value === 'MISSING')
+      .map(([key, value]) => key);
+    
+    if (missingEnvVars.length > 0) {
+      healthCheck.checks.env_vars.status = 'FAILED';
+      healthCheck.checks.env_vars.error = `Missing environment variables: ${missingEnvVars.join(', ')}`;
+      console.log('❌ Missing environment variables:', missingEnvVars);
+    } else {
+      healthCheck.checks.env_vars.status = 'PASSED';
+      console.log('✅ All environment variables present');
+    }
+
+    // 2. Network Connectivity Check
+    console.log('🌐 Testing network connectivity...');
+    healthCheck.checks.network = { status: 'checking' };
+    
+    try {
+      const axios = require('axios');
+      const startTime = Date.now();
+      const response = await axios.get(process.env.NETSIS_API_URL, { 
+        timeout: 10000,
+        validateStatus: () => true // Accept all status codes
+      });
+      const endTime = Date.now();
+      
+      healthCheck.checks.network = {
+        status: 'PASSED',
+        response_time_ms: endTime - startTime,
+        status_code: response.status,
+        status_text: response.statusText,
+        server_headers: response.headers
+      };
+      console.log(`✅ Network connectivity OK (${response.status}) - ${endTime - startTime}ms`);
+    } catch (networkError) {
+      healthCheck.checks.network = {
+        status: 'FAILED',
+        error: networkError.message,
+        code: networkError.code,
+        errno: networkError.errno,
+        syscall: networkError.syscall,
+        hostname: networkError.hostname
+      };
+      console.log('❌ Network connectivity failed:', networkError.message);
+    }
+
+    // 3. Netsis API Authentication Test
+    console.log('🔐 Testing Netsis API authentication...');
+    healthCheck.checks.netsis_auth = { status: 'checking' };
+    
+    try {
+      const result = await netsisAPI.testConnection();
+      healthCheck.checks.netsis_auth = {
+        status: result.success ? 'PASSED' : 'FAILED',
+        details: result,
+        message: result.message
+      };
+      console.log(`${result.success ? '✅' : '❌'} Netsis API test: ${result.message}`);
+    } catch (authError) {
+      healthCheck.checks.netsis_auth = {
+        status: 'FAILED',
+        error: authError.message,
+        stack: process.env.NODE_ENV === 'development' ? authError.stack : undefined
+      };
+      console.log('❌ Netsis API authentication failed:', authError.message);
+    }
+
+    // Overall health status
+    const allChecks = Object.values(healthCheck.checks);
+    const passedChecks = allChecks.filter(check => check.status === 'PASSED').length;
+    const failedChecks = allChecks.filter(check => check.status === 'FAILED').length;
+    
+    healthCheck.overall = {
+      status: failedChecks === 0 ? 'HEALTHY' : (passedChecks > 0 ? 'DEGRADED' : 'UNHEALTHY'),
+      total_checks: allChecks.length,
+      passed: passedChecks,
+      failed: failedChecks,
+      summary: failedChecks === 0 ? 'All systems operational' : 
+               `${failedChecks} of ${allChecks.length} checks failed`
+    };
+
+    console.log(`🏥 Health check completed: ${healthCheck.overall.status}`);
+    
+    // Return appropriate HTTP status
+    const statusCode = healthCheck.overall.status === 'HEALTHY' ? 200 : 
+                      healthCheck.overall.status === 'DEGRADED' ? 200 : 500;
+    
+    res.status(statusCode).json(healthCheck);
+    
   } catch (error) {
-    res.status(500).json({ 
-      success: false, 
-      message: 'Netsis test failed', 
-      error: error.message 
-    });
+    console.error('❌ Health check failed:', error);
+    healthCheck.checks.overall_error = {
+      status: 'FAILED',
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    };
+    healthCheck.overall = {
+      status: 'UNHEALTHY',
+      error: 'Health check process failed',
+      details: error.message
+    };
+    res.status(500).json(healthCheck);
   }
 });
 
