@@ -7431,7 +7431,7 @@ app.get('/api/shelves', async (req, res) => {
     `);
     
     console.log(`📦 Retrieved ${shelves.length} shelves`);
-    res.json(shelves);
+    res.json({ shelves });
   } catch (error) {
     console.error('❌ Error fetching shelves:', error);
     res.status(500).json({ 
