@@ -544,10 +544,21 @@ class NetsisAPI {
     console.log('🚨 RAILWAY DEBUG: Available memory:', process.memoryUsage());
     
     try {
+      // Runtime'da environment variables'ı yeniden oku (admin panel değişikliklerini yakala)
+      this.baseURL = (process.env.NETSIS_API_URL || 'http://93.89.67.130:2626').replace(/\/$/, '');
+      this.username = process.env.NETSIS_USERNAME;
+      this.password = process.env.NETSIS_PASSWORD;
+      this.dbName = process.env.NETSIS_DB_NAME;
+      this.dbUser = process.env.NETSIS_DB_USER;
+      this.dbPassword = process.env.NETSIS_DB_PASSWORD;
+      this.branchCode = parseInt(process.env.NETSIS_BRANCH_CODE) || 0;
+      this.dbType = process.env.NETSIS_DB_TYPE || 'vtMSSQL';
+      
       console.log('🔐 RAILWAY DEBUG: Starting Netsis OAuth2 authentication...');
       console.log('🔐 RAILWAY DEBUG: BaseURL:', this.baseURL);
       console.log('🔐 RAILWAY DEBUG: Username present:', !!this.username);
       console.log('🔐 RAILWAY DEBUG: Password present:', !!this.password);
+      console.log('🔐 RAILWAY DEBUG: DbName (runtime):', this.dbName);
       
       // NetOpenX DbType enum değerler
       const dbTypeMap = {
