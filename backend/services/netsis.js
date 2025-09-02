@@ -841,11 +841,24 @@ class NetsisAPI {
             if (normalError.response?.status === 400) {
               console.log(`❌ HTTP 400 Bad Request - İstek formatı hatalı:`, {
                 endpoint: endpoint,
+                dbName: this.dbName, // Database adını logla
                 requestData: isTokenEndpoint ? formData.toString() : JSON.stringify(loginData, null, 2),
                 responseData: normalError.response?.data,
                 responseHeaders: normalError.response?.headers,
                 contentType: contentType
               });
+              
+              // Database-specific error messages
+              const responseText = JSON.stringify(normalError.response?.data || {});
+              if (responseText.toLowerCase().includes('database') || responseText.toLowerCase().includes('db')) {
+                console.log(`🚨 DATABASE ERROR for ${this.dbName}:`, responseText);
+              }
+              if (responseText.toLowerCase().includes('not found') || responseText.toLowerCase().includes('invalid')) {
+                console.log(`🚨 POSSIBLE CAUSE: Database '${this.dbName}' may not exist on Netsis server`);
+              }
+              if (responseText.toLowerCase().includes('permission') || responseText.toLowerCase().includes('access')) {
+                console.log(`🚨 POSSIBLE CAUSE: No permission to access database '${this.dbName}'`);
+              }
               
               // Farklı format denemesi
               if (isTokenEndpoint) {
@@ -979,8 +992,28 @@ class NetsisAPI {
       const statusCode = error?.response?.status || 'N/A';
       const errorCode = error?.code || error?.errno || 'N/A';
       
+      // Database-specific error analysis
+      console.log(`🚨 DATABASE CONNECTION ANALYSIS for ${this.dbName}:`);
+      console.log(`✅ Working databases: ZDENEME, KOSEM2025`);
+      console.log(`❌ Failing database: ${this.dbName}`);
+      
+      if (this.dbName && this.dbName !== 'ZDENEME' && this.dbName !== 'KOSEM2025') {
+        console.log(`🔍 POSSIBLE CAUSES for ${this.dbName}:`);
+        console.log(`   1. Database '${this.dbName}' does not exist on Netsis server`);
+        console.log(`   2. Database '${this.dbName}' requires different user credentials`);
+        console.log(`   3. Database '${this.dbName}' has different access permissions`);
+        console.log(`   4. Database '${this.dbName}' is case-sensitive (try: ${this.dbName.toUpperCase()})`);
+        console.log(`   5. Database '${this.dbName}' requires special dbUser parameter`);
+        
+        console.log(`💡 SUGGESTED TESTS:`);
+        console.log(`   1. Contact Netsis admin to verify database '${this.dbName}' exists`);
+        console.log(`   2. Try database name: '${this.dbName.toUpperCase()}'`);
+        console.log(`   3. Try different dbUser (current: ${this.dbUser || 'TEMELSET'})`);
+        console.log(`   4. Check if database requires different credentials`);
+      }
+      
       console.error('❌ RAILWAY DEBUG: Final error throw:', `Netsis authentication failed: ${errorMessage} - Status: ${statusCode} - Code: ${errorCode}`);
-      throw new Error(`Netsis authentication failed: ${errorMessage} - Status: ${statusCode} - Code: ${errorCode}`);
+      throw new Error(`Database connection failed for '${this.dbName}': ${errorMessage} (Status: ${statusCode})`);
     }
   }
 

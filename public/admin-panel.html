@@ -171,6 +171,12 @@
       <div class="form-group">
         <label for="netsisDbName">Veritabanı Adı</label>
         <input type="text" id="netsisDbName" placeholder="DBNAME" />
+        <div class="db-quick-buttons" style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap;">
+          <button type="button" class="btn-db-quick" data-db="ZDENEME" style="background: #28a745; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">✅ ZDENEME</button>
+          <button type="button" class="btn-db-quick" data-db="KOSEM2025" style="background: #28a745; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">✅ KOSEM2025</button>
+          <button type="button" class="btn-db-quick" data-db="ARVESAVRUPA" style="background: #dc3545; color: white; padding: 4px 8px; border: none; border-radius: 4px; font-size: 12px; cursor: pointer;">❌ ARVESAVRUPA</button>
+        </div>
+        <small style="color: #666; margin-top: 4px; display: block;">Quick test: Click database name to auto-fill and test</small>
       </div>
     </div>
     
@@ -935,7 +941,33 @@ async function testNetsisConnection() {
     const result = await response.json();
     
     resultDiv.className = 'test-result ' + (result.success ? 'success' : 'error');
-    resultDiv.textContent = result.message || result.error;
+    
+    if (result.success) {
+      resultDiv.textContent = result.message || 'Bağlantı başarılı';
+    } else {
+      // Detailed error display for database connection issues
+      const dbName = document.getElementById('netsisDbName').value || 'Unknown';
+      const errorMsg = result.error || result.message || 'Bilinmeyen hata';
+      
+      let detailedError = `❌ Database '${dbName}' bağlantısı başarısız:\n\n`;
+      detailedError += `Hata: ${errorMsg}\n\n`;
+      
+      if (dbName === 'ARVESAVRUPA') {
+        detailedError += `🔍 ARVESAVRUPA VERİTABANI SORUN ÇÖZME:\n`;
+        detailedError += `1. Veritabanı adını kontrol edin (BÜYÜK/küçük harf duyarlı olabilir)\n`;
+        detailedError += `2. ARVESAVRUPA → ARVESAVRUPA (büyük harfler deneyin)\n`;
+        detailedError += `3. Netsis admin'den database ismini teyit edin\n`;
+        detailedError += `4. Farklı dbUser deneyin (TEMELSET yerine başka kullanıcı)\n`;
+        detailedError += `5. Database'e erişim izniniz olup olmadığını kontrol edin\n\n`;
+        detailedError += `✅ Çalışan: ZDENEME, KOSEM2025\n`;
+        detailedError += `❌ Çalışmayan: ARVESAVRUPA`;
+      } else {
+        detailedError += `💡 Öneri: Önce ZDENEME veya KOSEM2025 ile test edin`;
+      }
+      
+      resultDiv.innerHTML = detailedError.replace(/\n/g, '<br>');
+    }
+    
     resultDiv.classList.remove('hidden');
     
     // Update status indicator
@@ -1057,6 +1089,28 @@ async function testNetsisOrders() {
 document.getElementById('testNetsisConnection').addEventListener('click', testNetsisConnection);
 document.getElementById('saveNetsisConfig').addEventListener('click', saveNetsisConfig);
 document.getElementById('testNetsisOrders').addEventListener('click', testNetsisOrders);
+
+// Quick database test buttons
+document.querySelectorAll('.btn-db-quick').forEach(btn => {
+  btn.addEventListener('click', async function(e) {
+    e.preventDefault();
+    const dbName = this.getAttribute('data-db');
+    
+    // Auto-fill database name
+    document.getElementById('netsisDbName').value = dbName;
+    
+    // Auto-test the connection
+    this.disabled = true;
+    this.textContent = '🔄 Testing...';
+    
+    try {
+      await testNetsisConnection();
+    } finally {
+      this.disabled = false;
+      this.textContent = this.getAttribute('data-db');
+    }
+  });
+});
 
 // Utility functions
 function getRoleDisplayName(role) {
