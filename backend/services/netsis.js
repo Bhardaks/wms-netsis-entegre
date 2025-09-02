@@ -38,6 +38,27 @@ class NetsisAPI {
     this.refreshTokenExpiry = null;
   }
 
+  // Runtime config refresh - Admin panel değişikliklerini yakala
+  refreshConfigFromEnv() {
+    const oldDbName = this.dbName;
+    
+    this.baseURL = (process.env.NETSIS_API_URL || 'http://93.89.67.130:2626').replace(/\/$/, '');
+    this.username = process.env.NETSIS_USERNAME;
+    this.password = process.env.NETSIS_PASSWORD;
+    this.dbName = process.env.NETSIS_DB_NAME;
+    this.dbUser = process.env.NETSIS_DB_USER;
+    this.dbPassword = process.env.NETSIS_DB_PASSWORD;
+    this.branchCode = parseInt(process.env.NETSIS_BRANCH_CODE) || 0;
+    this.dbType = process.env.NETSIS_DB_TYPE || 'vtMSSQL';
+    
+    if (oldDbName !== this.dbName) {
+      console.log(`🔄 Database config updated: ${oldDbName} → ${this.dbName}`);
+      // Clear tokens to force re-authentication with new database
+      this.accessToken = null;
+      this.refreshToken = null;
+    }
+  }
+
   // Generate short document number that fits Netsis 15-character limit
   generateShortDocumentNumber(orderNumber) {
     if (!orderNumber) {
@@ -160,6 +181,9 @@ class NetsisAPI {
     try {
       console.log('🔄 Converting order to delivery note:', orderData.order_number);
       
+      // Runtime'da config güncelle (irsaliye oluşturma öncesi)
+      this.refreshConfigFromEnv();
+      
       // Ensure we have a valid token
       const authResult = await this.authenticate();
       if (!authResult) {
@@ -249,18 +273,67 @@ class NetsisAPI {
       // Add delay to prevent rate limiting
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Call NetOpenXRest API TopluSiparisToIrsFat endpoint  
-      const response = await axios.post(
-        `${this.baseURL}/api/v2/ItemSlips/TopluSiparisToIrsFat`,
-        deliveryNoteData,
-        {
-          headers: {
-            'Authorization': `Bearer ${this.accessToken}`,
-            'Content-Type': 'application/json'
-          },
-          timeout: 45000
+      // Database-specific endpoint selection
+      let endpointUrl;
+      if (this.dbName === 'ARVESAVRUPA') {
+        // ARVESAVRUPA için alternative endpoints dene
+        const arvesEndpoints = [
+          `/api/v2/ItemSlips/TopluSiparisToIrsFat`,
+          `/api/ItemSlips/TopluSiparisToIrsFat`,
+          `/ItemSlips/TopluSiparisToIrsFat`,
+          `/api/v1/ItemSlips/TopluSiparisToIrsFat`
+        ];
+        
+        console.log('🔍 ARVESAVRUPA: Trying multiple endpoints...');
+        
+        for (const endpoint of arvesEndpoints) {
+          try {
+            console.log(`📡 ARVESAVRUPA: Testing ${endpoint}`);
+            endpointUrl = `${this.baseURL}${endpoint}`;
+            
+            const response = await axios.post(endpointUrl, deliveryNoteData, {
+              headers: {
+                'Authorization': `Bearer ${this.accessToken}`,
+                'Content-Type': 'application/json'
+              },
+              timeout: 45000
+            });
+            
+            console.log(`✅ ARVESAVRUPA: Endpoint ${endpoint} successful!`);
+            
+            if (response.data && response.data.IsSuccessful !== false) {
+              console.log('✅ ARVESAVRUPA TopluSiparisToIrsFat successful');
+              return {
+                success: true,
+                delivery_note: response.data,
+                delivery_note_id: response.data.ResultId || response.data.BelgeId || this.generateShortDocumentNumber(orderData.order_number),
+                message: 'ARVESAVRUPA İrsaliyesi oluşturuldu',
+                method: `ARVESAVRUPA-${endpoint}`,
+                netsis_response: response.data
+              };
+            }
+            
+          } catch (endpointError) {
+            console.log(`❌ ARVESAVRUPA: Endpoint ${endpoint} failed:`, endpointError.response?.status || endpointError.message);
+            continue;
+          }
         }
-      );
+        
+        throw new Error('All ARVESAVRUPA endpoints failed');
+        
+      } else {
+        // Diğer database'ler için default endpoint
+        endpointUrl = `${this.baseURL}/api/v2/ItemSlips/TopluSiparisToIrsFat`;
+      }
+      
+      // Call NetOpenXRest API TopluSiparisToIrsFat endpoint  
+      const response = await axios.post(endpointUrl, deliveryNoteData, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        timeout: 45000
+      });
 
       if (response.data && response.data.IsSuccessful !== false) {
         console.log('✅ TopluSiparisToIrsFat successful (but may have wrong quantities)');
@@ -293,8 +366,11 @@ class NetsisAPI {
   // NEW: Manual ItemSlips delivery note creation with exact quantities
   async createManualDeliveryNote(orderData) {
     try {
+      // Runtime config refresh için manual delivery note creation
+      this.refreshConfigFromEnv();
       console.log('🔧 Creating manual delivery note with WMS quantities');
       console.log('📦 Order:', orderData.order_number);
+      console.log('🗄️ Using database:', this.dbName);
       console.log('📋 Items:', JSON.stringify(orderData.items, null, 2));
 
       const today = new Date();
