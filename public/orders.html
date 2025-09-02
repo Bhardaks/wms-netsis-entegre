@@ -476,7 +476,8 @@
 
     <!-- Sekmeler -->
     <div class="tabs" style="margin-bottom:16px">
-      <button class="tab-btn active" data-tab="ongoing">Devam Eden Siparişler (<span id="ongoingCount">0</span>)</button>
+      <button class="tab-btn active" data-tab="ongoing">Devam Eden (<span id="ongoingCount">0</span>)</button>
+      <button class="tab-btn" data-tab="partial">Kısmi Toplama (<span id="partialCount">0</span>)</button>
       <button class="tab-btn" data-tab="completed">Tamamlanan (<span id="completedCount">0</span>)</button>
     </div>
 
@@ -561,6 +562,11 @@ function categorizeOrder(order) {
     return 'completed';
   }
   
+  // Kısmi toplama tab'ı için
+  if (order.fulfillment_status === 'PARTIALLY_FULFILLED') {
+    return 'partial';
+  }
+  
   return 'ongoing';
 }
 
@@ -614,9 +620,11 @@ async function loadOrders() {
 // Sayaç güncellemeleri - Sadece WMS siparişleri
 function updateCounts() {
   const ongoingCount = allOrders.filter(o => categorizeOrder(o) === 'ongoing').length;
+  const partialCount = allOrders.filter(o => categorizeOrder(o) === 'partial').length;
   const completedCount = allOrders.filter(o => categorizeOrder(o) === 'completed').length;
   
   $('#ongoingCount').textContent = ongoingCount;
+  $('#partialCount').textContent = partialCount;
   $('#completedCount').textContent = completedCount;
 }
 
@@ -626,6 +634,8 @@ function filterAndDisplayOrders() {
   
   if (currentTab === 'ongoing') {
     filteredOrders = allOrders.filter(o => categorizeOrder(o) === 'ongoing');
+  } else if (currentTab === 'partial') {
+    filteredOrders = allOrders.filter(o => categorizeOrder(o) === 'partial');
   } else if (currentTab === 'completed') {
     filteredOrders = allOrders.filter(o => categorizeOrder(o) === 'completed');
   } else {
@@ -633,9 +643,8 @@ function filterAndDisplayOrders() {
     filteredOrders = allOrders.filter(o => categorizeOrder(o) === 'ongoing');
   }
   
-  // Durum filtresi - Tamamlanan sekmesinde durum filtresini uygulama, çünkü tamamlanan siparişlerin 
-  // status'ü 'open' olabilir ama fulfillment_status'ü 'FULFILLED' olabilir
-  if (statusFilter !== 'all' && currentTab !== 'completed') {
+  // Durum filtresi - Tamamlanan ve kısmi toplama sekmelerinde durum filtresini uygulama
+  if (statusFilter !== 'all' && currentTab !== 'completed' && currentTab !== 'partial') {
     filteredOrders = filteredOrders.filter(o => o.status === statusFilter);
   }
   

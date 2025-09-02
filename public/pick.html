@@ -232,7 +232,7 @@
 <header>
   <div style="display:flex;justify-content:space-between;align-items:center;padding:16px;position:relative;">
     <h1>Toplama</h1>
-    <button id="exitPick" class="exit-btn" title="Çıkış yapmak için mouse ile 2 kez üzerine gelin" style="background:#dc3545;color:white;padding:12px 24px;border:none;border-radius:6px;font-weight:bold;cursor:pointer;position:fixed;top:20px;right:20px;z-index:99999;box-shadow:0 4px 8px rgba(0,0,0,0.3);">Çıkış (2x hover)</button>
+    <button id="exitPick" class="exit-btn" title="Çıkış yapmak için tıklayın" style="background:#dc3545;color:white;padding:12px 24px;border:none;border-radius:6px;font-weight:bold;cursor:pointer;position:fixed;top:20px;right:20px;z-index:99999;box-shadow:0 4px 8px rgba(0,0,0,0.3);">Çıkış</button>
   </div>
 </header>
 
@@ -1229,33 +1229,19 @@ if (isZebraDevice) {
 const exitBtn = document.getElementById('exitPick');
 
 if (exitBtn) {
-  ['mousedown', 'touchstart', 'click', 'pointerdown'].forEach(eventType => {
-    exitBtn.addEventListener(eventType, function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      handleExit();
-    });
+  // Sadece click event'i kullan, hover ile exit tetiklenmesi iptal edildi
+  exitBtn.addEventListener('click', function(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleExit();
   });
   
   exitBtn.style.pointerEvents = 'all';
   exitBtn.style.zIndex = '9999';
   
-  let hoverCount = 0;
-  let hoverTimeout = null;
-  
+  // Hover sadece visual feedback için kullan, exit trigger etmez
   exitBtn.addEventListener('mouseenter', () => {
-    hoverCount++;
     exitBtn.style.backgroundColor = '#b02a37';
-    
-    if (hoverTimeout) clearTimeout(hoverTimeout);
-    hoverTimeout = setTimeout(() => {
-      hoverCount = 0;
-    }, 1000);
-    
-    if (hoverCount >= 2) {
-      hoverCount = 0;
-      handleExit();
-    }
   });
   
   exitBtn.addEventListener('mouseleave', () => {
