@@ -364,18 +364,11 @@ async function loadPick(){
         const cls = (it.picked_qty>=it.quantity) ? 'completed' : (it.picked_qty > 0 ? 'partial' : '');
         const statusIcon = (it.picked_qty>=it.quantity) ? '✅' : (it.picked_qty > 0 ? '🔄' : '⏳');
         
-        // Bu item için toplanan paket sayısını hesapla (mevcut session)
-        const currentSessionScans = pickData.scans
-          .filter(scan => scan.order_item_id === it.id)
-          .length;
-        
-        // Önceki session'lardan toplanan paket sayısı - picked_qty'den hesapla
-        const previouslyPickedPackages = it.packages && it.packages.length > 0 
+        // Bu item için toplanan paket sayısını hesapla
+        // picked_qty zaten tüm scan'ları (önceki + şu anki) include ediyor
+        const totalPickedPackages = it.packages && it.packages.length > 0 
           ? it.picked_qty * it.packages.reduce((sum, pkg) => sum + (pkg.quantity || 1), 0)
           : it.picked_qty;
-        
-        // Toplam toplanan paket sayısı (önceki + şu anki)
-        const totalPickedPackages = previouslyPickedPackages + currentSessionScans;
         
         // Bu item için toplam gerekli paket sayısını hesapla
         const totalRequiredPackages = it.packages 
@@ -404,15 +397,10 @@ async function loadPick(){
         const statusIcon = (it.picked_qty>=it.quantity) ? '✅' : (it.picked_qty > 0 ? '🔄' : '⏳');
         
         // Mobile için de aynı hesaplamayı yap
-        const currentSessionScans = pickData.scans
-          .filter(scan => scan.order_item_id === it.id)
-          .length;
-        
-        const previouslyPickedPackages = it.packages && it.packages.length > 0 
+        // picked_qty zaten tüm scan'ları include ediyor
+        const totalPickedPackages = it.packages && it.packages.length > 0 
           ? it.picked_qty * it.packages.reduce((sum, pkg) => sum + (pkg.quantity || 1), 0)
           : it.picked_qty;
-        
-        const totalPickedPackages = previouslyPickedPackages + currentSessionScans;
         
         const totalRequiredPackages = it.packages 
           ? it.packages.reduce((sum, pkg) => sum + (pkg.quantity * it.quantity), 0)
