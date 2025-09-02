@@ -8375,7 +8375,7 @@ app.post('/api/sync/external-orders', requireAuth, async (req, res) => {
         // Transform external order to WMS format
         const orderData = {
           order_number: orderNumber,
-          customer_name: externalOrder.cariKodu,
+          customer_name: externalOrder.cariIsmi || externalOrder.cariKodu, // Cari ismi öncelikli
           customer_code: externalOrder.cariKodu,
           order_date: externalOrder.siparisTarihi,
           total_amount: externalOrder.toplamTutar,

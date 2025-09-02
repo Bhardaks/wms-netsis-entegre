@@ -643,9 +643,11 @@ function filterAndDisplayOrders() {
   if (searchTerm.trim()) {
     const term = searchTerm.toLowerCase().trim();
     filteredOrders = filteredOrders.filter(o => {
-      const customerName = o.customer_name || o.customer_code || '';
+      // Arama için de aynı öncelik sırasını kullan
+      const customerDisplay = o.cariIsmi || o.cari_ismi || o.customer_name || o.customer_code || '';
+      const cleanedCustomerName = cleanCustomerName(customerDisplay);
       return o.order_number.toLowerCase().includes(term) ||
-             cleanCustomerName(customerName).toLowerCase().includes(term);
+             cleanedCustomerName.toLowerCase().includes(term);
     });
   }
   
@@ -714,7 +716,9 @@ function displayOrders(orders) {
       }).slice(0, 3).join('<br>') + (items.length > 3 ? '<br>+ ' + (items.length - 3) + ' kalem daha...' : '');
     }
     
-    const rawCustomerName = cleanCustomerName(o.customer_name);
+    // Müşteri ismi öncelikli gösterim - önce cari ismi, sonra customer_name, sonra customer_code
+    const customerDisplay = o.cariIsmi || o.cari_ismi || o.customer_name || o.customer_code || 'Bilinmeyen Müşteri';
+    const rawCustomerName = cleanCustomerName(customerDisplay);
     const displayCustomerName = rawCustomerName && rawCustomerName.length > 25 
       ? rawCustomerName.substring(0, 25) + '...'
       : rawCustomerName;
@@ -847,7 +851,9 @@ function displayOrders(orders) {
         }).slice(0, 2).join('\n') + (items.length > 2 ? '\n+ ' + (items.length - 2) + ' kalem daha...' : '');
       }
       
-      const rawCustomerName = cleanCustomerName(o.customer_name);
+      // Mobile için de müşteri ismi öncelikli gösterim
+      const customerDisplay = o.cariIsmi || o.cari_ismi || o.customer_name || o.customer_code || 'Bilinmeyen Müşteri';
+      const rawCustomerName = cleanCustomerName(customerDisplay);
       const displayCustomerName = rawCustomerName && rawCustomerName.length > 30 
         ? rawCustomerName.substring(0, 30) + '...'
         : rawCustomerName;
