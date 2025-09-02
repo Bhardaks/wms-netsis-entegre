@@ -5,7 +5,8 @@
   "type": "commonjs",
   "scripts": {
     "dev": "NODE_ENV=development node backend/server.js",
-    "start": "NODE_ENV=production node deployment-db-setup.js && node backend/server.js",
+    "start": "NODE_ENV=production node backend/server.js",
+    "start:full": "NODE_ENV=production node deployment-db-setup.js && node backend/server.js",
     "migrate": "node backend/db/migrate.js",
     "migrate:railway": "node backend/db/migrate-railway.js",
     "seed": "node backend/db/seed.js",
