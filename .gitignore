@@ -2,9 +2,35 @@ node_modules/
 .env
 *.log
 .DS_Store
+
+# Database files - kept out of version control
 backend/db/wms.db
 backend/db/wms.db-shm
 backend/db/wms.db-wal
+
+# Database backups - too many and should be handled separately
 backend/db/backups/
+
+# Development and temporary files
 temp/
 uploads/
+*.tmp
+*.temp
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS generated files
+Thumbs.db
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+
+# Database exports (should be manually copied when needed)
+wms_export_*.db

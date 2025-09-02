@@ -5,10 +5,15 @@
   "type": "commonjs",
   "scripts": {
     "dev": "NODE_ENV=development node backend/server.js",
-    "start": "NODE_ENV=production node backend/server.js",
+    "start": "NODE_ENV=production node deployment-db-setup.js && node backend/server.js",
     "migrate": "node backend/db/migrate.js",
     "migrate:railway": "node backend/db/migrate-railway.js",
-    "seed": "node backend/db/seed.js"
+    "seed": "node backend/db/seed.js",
+    "db:setup": "node deployment-db-setup.js",
+    "db:backup": "node -e \"const DbManager = require('./backend/db/database-manager'); new DbManager().createBackup('manual').then(r => console.log(r));\"",
+    "db:restore": "node -e \"const DbManager = require('./backend/db/database-manager'); const name = process.argv[2]; if(!name) {console.log('Usage: npm run db:restore backup_name.db'); process.exit(1);} new DbManager().restoreFromBackup(name).then(r => console.log(r));\"",
+    "db:list": "node -e \"const DbManager = require('./backend/db/database-manager'); new DbManager().listBackups().then(r => r.success && r.backups.forEach(b => console.log(b.name + ' - ' + b.age)));\"",
+    "db:export": "node -e \"const DbManager = require('./backend/db/database-manager'); new DbManager().exportDatabase().then(r => console.log(r));\""
   },
   "dependencies": {
     "axios": "^1.7.2",
