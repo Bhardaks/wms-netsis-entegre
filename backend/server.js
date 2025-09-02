@@ -8367,7 +8367,10 @@ app.post('/api/sync/external-orders', requireAuth, async (req, res) => {
         // Check if order already exists
         const existingOrder = await get(`SELECT id FROM orders WHERE order_number = ?`, [orderNumber]);
         if (existingOrder) {
-          console.log(`⏭️ Order ${orderNumber} already exists, skipping...`);
+          // Update existing order's customer_name to use cariIsmi
+          const newCustomerName = externalOrder.cariIsmi || externalOrder.cariKodu;
+          await run(`UPDATE orders SET customer_name = ? WHERE order_number = ?`, [newCustomerName, orderNumber]);
+          console.log(`🔄 Order ${orderNumber} customer updated: ${newCustomerName}`);
           skipped++;
           continue;
         }
