@@ -981,10 +981,16 @@ function displayNetsisOrders(orders) {
     const orderDate = new Date(o.sync_tarihi).toLocaleDateString('tr-TR');
     const totalAmount = parseFloat(o.toplam_tutar || 0).toFixed(2);
     
+    // Cari ismi öncelikli gösterim - cariIsmi varsa onu, yoksa cari_kodu göster
+    const customerDisplay = o.cariIsmi || o.cari_ismi || o.cari_kodu || 'N/A';
+    const customerDisplayShort = customerDisplay.length > 25 
+      ? customerDisplay.substring(0, 25) + '...'
+      : customerDisplay;
+    
     return `
       <tr>
         <td><strong>${o.siparis_no}</strong></td>
-        <td>${o.cari_kodu || 'N/A'}</td>
+        <td>${customerDisplayShort}</td>
         <td><span class="status-badge status-new">Yeni</span></td>
         <td>-</td>
         <td>${orderDate}</td>
@@ -1003,6 +1009,12 @@ function displayNetsisOrders(orders) {
       const orderDate = new Date(o.sync_tarihi).toLocaleDateString('tr-TR');
       const totalAmount = parseFloat(o.toplam_tutar || 0).toFixed(2);
       
+      // Mobile için de cari ismi öncelikli gösterim
+      const customerDisplay = o.cariIsmi || o.cari_ismi || o.cari_kodu || 'N/A';
+      const customerDisplayMobile = customerDisplay.length > 30 
+        ? customerDisplay.substring(0, 30) + '...'
+        : customerDisplay;
+      
       return `
         <div class="order-card">
           <div class="order-header">
@@ -1013,7 +1025,7 @@ function displayNetsisOrders(orders) {
           <div class="order-info">
             <div class="info-row">
               <div class="info-label">Müşteri:</div>
-              <div class="info-value"><strong>${o.cari_kodu || 'N/A'}</strong></div>
+              <div class="info-value"><strong>${customerDisplayMobile}</strong></div>
             </div>
             <div class="info-row">
               <div class="info-label">Tarih:</div>
@@ -1058,10 +1070,16 @@ function displayExternalOrders(orders) {
       `• ${item.stokKodu} x${item.miktar}`
     ).join('<br>') + (o.items.length > 3 ? '<br>...' : '') : 'Kalem yok';
     
+    // Harici siparişler için de cari ismi öncelikli gösterim
+    const customerDisplay = o.customer_name || o.cariIsmi || o.cari_ismi || o.customer_code || 'N/A';
+    const customerDisplayShort = customerDisplay.length > 25 
+      ? customerDisplay.substring(0, 25) + '...'
+      : customerDisplay;
+    
     return `
       <tr>
         <td><strong>#${o.order_number}</strong></td>
-        <td>${o.customer_code}</td>
+        <td>${customerDisplayShort}</td>
         <td><span class="status-badge status-open">Harici</span></td>
         <td><div class="order-items">${itemCount} kalem<br>${itemDetails}</div></td>
         <td>${orderDate}</td>
@@ -1081,6 +1099,12 @@ function displayExternalOrders(orders) {
       const totalAmount = parseFloat(o.total_amount || 0).toFixed(2);
       const itemCount = o.items ? o.items.length : 0;
       
+      // Mobile harici siparişler için de cari ismi öncelikli gösterim
+      const customerDisplay = o.customer_name || o.cariIsmi || o.cari_ismi || o.customer_code || 'N/A';
+      const customerDisplayMobile = customerDisplay.length > 30 
+        ? customerDisplay.substring(0, 30) + '...'
+        : customerDisplay;
+      
       return `
         <div class="order-card">
           <div class="order-header">
@@ -1091,7 +1115,7 @@ function displayExternalOrders(orders) {
           <div class="order-info">
             <div class="info-row">
               <div class="info-label">Müşteri:</div>
-              <div class="info-value"><strong>${o.customer_code}</strong></div>
+              <div class="info-value"><strong>${customerDisplayMobile}</strong></div>
             </div>
             <div class="info-row">
               <div class="info-label">Tarih:</div>
