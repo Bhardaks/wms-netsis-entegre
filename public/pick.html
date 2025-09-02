@@ -364,10 +364,18 @@ async function loadPick(){
         const cls = (it.picked_qty>=it.quantity) ? 'completed' : (it.picked_qty > 0 ? 'partial' : '');
         const statusIcon = (it.picked_qty>=it.quantity) ? '✅' : (it.picked_qty > 0 ? '🔄' : '⏳');
         
-        // Bu item için toplanan paket sayısını hesapla
-        const scannedPackagesForItem = pickData.scans
+        // Bu item için toplanan paket sayısını hesapla (mevcut session)
+        const currentSessionScans = pickData.scans
           .filter(scan => scan.order_item_id === it.id)
           .length;
+        
+        // Önceki session'lardan toplanan paket sayısı - picked_qty'den hesapla
+        const previouslyPickedPackages = it.packages && it.packages.length > 0 
+          ? it.picked_qty * it.packages.reduce((sum, pkg) => sum + (pkg.quantity || 1), 0)
+          : it.picked_qty;
+        
+        // Toplam toplanan paket sayısı (önceki + şu anki)
+        const totalPickedPackages = previouslyPickedPackages + currentSessionScans;
         
         // Bu item için toplam gerekli paket sayısını hesapla
         const totalRequiredPackages = it.packages 
@@ -381,7 +389,7 @@ async function loadPick(){
           <td><span class="package-count">${it.packages ? it.packages.length : 0} paket</span></td>
           <td class="picked-cell">
             ${totalRequiredPackages > 0 
-              ? `<strong>${scannedPackagesForItem}/${totalRequiredPackages}</strong> paket`
+              ? `<strong>${totalPickedPackages}/${totalRequiredPackages}</strong> paket`
               : `<strong>${it.picked_qty}</strong> set`
             }
           </td>
@@ -395,9 +403,16 @@ async function loadPick(){
         const cls = (it.picked_qty>=it.quantity) ? 'completed' : (it.picked_qty > 0 ? 'partial' : '');
         const statusIcon = (it.picked_qty>=it.quantity) ? '✅' : (it.picked_qty > 0 ? '🔄' : '⏳');
         
-        const scannedPackagesForItem = pickData.scans
+        // Mobile için de aynı hesaplamayı yap
+        const currentSessionScans = pickData.scans
           .filter(scan => scan.order_item_id === it.id)
           .length;
+        
+        const previouslyPickedPackages = it.packages && it.packages.length > 0 
+          ? it.picked_qty * it.packages.reduce((sum, pkg) => sum + (pkg.quantity || 1), 0)
+          : it.picked_qty;
+        
+        const totalPickedPackages = previouslyPickedPackages + currentSessionScans;
         
         const totalRequiredPackages = it.packages 
           ? it.packages.reduce((sum, pkg) => sum + (pkg.quantity * it.quantity), 0)
@@ -422,7 +437,7 @@ async function loadPick(){
               <span class="mobile-item-detail-label">Toplanan</span>
               <span class="mobile-item-detail-value">
                 ${totalRequiredPackages > 0 
-                  ? `${scannedPackagesForItem}/${totalRequiredPackages}`
+                  ? `${totalPickedPackages}/${totalRequiredPackages}`
                   : it.picked_qty
                 }
               </span>
